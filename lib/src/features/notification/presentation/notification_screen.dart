@@ -196,6 +196,8 @@ class NotificationScreen extends StatelessWidget {
                   ),
                 );
               },
+              // Bottom Spacer
+              footer: const SizedBox(height: 120),
             ),
           ),
         ],

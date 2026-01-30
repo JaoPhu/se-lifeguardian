@@ -89,8 +89,8 @@ class StatusScreen extends ConsumerWidget {
                   topLeft: Radius.circular(0),
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                 children: [
                   
                   // Status Card
@@ -155,59 +155,59 @@ class StatusScreen extends ConsumerWidget {
                   const SizedBox(height: 24),
 
                   // Activity Summary
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).cardColor,
-                        borderRadius: BorderRadius.circular(32),
-                        border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.1)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardColor,
+                      borderRadius: BorderRadius.circular(32),
+                      border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.1)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Activity Summary',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0D9488),
                           ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Activity Summary',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF0D9488),
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        if (healthState.status == HealthStatus.none || healthState.events.isEmpty)
+                          const SizedBox(
+                            height: 100,
+                            child: Center(
+                              child: Text('No information.', style: TextStyle(color: Colors.grey)),
                             ),
+                          )
+                        else
+                          ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            padding: EdgeInsets.zero,
+                            itemCount: healthState.events.length > 4 ? 4 : healthState.events.length,
+                            separatorBuilder: (context, index) => const SizedBox(height: 12),
+                            itemBuilder: (context, index) {
+                              final event = healthState.events[index];
+                              return _buildActivityItem(
+                                context, 
+                                "${event.thaiLabel}${event.duration != null ? " (${event.duration})" : ""}", 
+                                _getIconForType(event.type), 
+                                event.isCritical
+                              );
+                            },
                           ),
-                          const SizedBox(height: 16),
-                          
-                          if (healthState.status == HealthStatus.none || healthState.events.isEmpty)
-                            const Expanded(
-                              child: Center(
-                                child: Text('No information.', style: TextStyle(color: Colors.grey)),
-                              ),
-                            )
-                          else
-                            Expanded(
-                              child: ListView.separated(
-                                padding: EdgeInsets.zero,
-                                itemCount: healthState.events.length > 4 ? 4 : healthState.events.length,
-                                separatorBuilder: (context, index) => const SizedBox(height: 12),
-                                itemBuilder: (context, index) {
-                                  final event = healthState.events[index];
-                                  return _buildActivityItem(
-                                    context, 
-                                    "${event.thaiLabel}${event.duration != null ? " (${event.duration})" : ""}", 
-                                    _getIconForType(event.type), 
-                                    event.isCritical
-                                  );
-                                },
-                              ),
-                            ),
-                        ],
-                      ),
+                      ],
                     ),
                   ),
 
@@ -237,6 +237,7 @@ class StatusScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 120),
                 ],
               ),
             ),

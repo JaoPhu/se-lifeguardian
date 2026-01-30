@@ -81,8 +81,8 @@ class EventsScreen extends ConsumerWidget {
                   topLeft: Radius.circular(0),
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                 children: [
                   
                   // Horizontal Gallery (Stickman/Snapshot Previews)
@@ -131,19 +131,22 @@ class EventsScreen extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Expanded(
-                    child: events.isEmpty
-                      ? const Center(child: Text('No events detected yet.', style: TextStyle(color: Colors.grey)))
-                      : ListView.separated(
-                          padding: EdgeInsets.zero,
-                          itemCount: events.length,
-                          separatorBuilder: (context, index) => const SizedBox(height: 12),
-                          itemBuilder: (context, index) {
-                            final event = events[index];
-                            return _buildEventListItem(context, event);
-                          },
-                        ),
-                  ),
+                  events.isEmpty
+                    ? const SizedBox(
+                        height: 100,
+                        child: Center(child: Text('No events detected yet.', style: TextStyle(color: Colors.grey)))
+                      )
+                    : ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        padding: EdgeInsets.zero,
+                        itemCount: events.length,
+                        separatorBuilder: (context, index) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final event = events[index];
+                          return _buildEventListItem(context, event);
+                        },
+                      ),
 
                   const SizedBox(height: 24),
 
@@ -171,6 +174,7 @@ class EventsScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 120),
                 ],
               ),
             ),
