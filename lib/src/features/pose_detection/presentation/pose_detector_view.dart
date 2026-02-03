@@ -193,32 +193,37 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
     final height = _imageSize?.height ?? 1920;
     final centerX = width / 2;
     
-    // Number of people to detect (n = 1 to 3)
-    final numPeople = 1 + _random.nextInt(3);
+    // Support dynamic N persons (e.g., up to 6 for the demo)
+    final numPeople = 1 + _random.nextInt(5);
     final List<PersonPose> mockPersons = [];
     
     final personColors = [
-      const Color(0xFF0D9488), // Teal
-      Colors.orange,
-      Colors.blue,
+        const Color(0xFF0D9488), // Teal
+        Colors.orange,
+        Colors.blue,
+        Colors.purple,
+        Colors.pink,
+        Colors.amber,
     ];
 
     for (int i = 0; i < numPeople; i++) {
       // Offset each person slightly but keep them in the "focus" (center area)
-      final offsetX = (i - (numPeople - 1) / 2) * (width * 0.25);
+      // Use a wider spread for more people
+      final spread = width * 0.15;
+      final offsetX = (i - (numPeople - 1) / 2) * spread;
       final personCenterX = centerX + offsetX;
-      final verticalStart = height * 0.2;
+      final verticalStart = height * 0.2 + (i % 3) * (height * 0.05); // Slight vertical stagger
       
       final landmarks = {
         PoseLandmarkType.nose: PoseLandmark(type: PoseLandmarkType.nose, x: personCenterX, y: verticalStart, z: 0, likelihood: 0.9),
-        PoseLandmarkType.leftShoulder: PoseLandmark(type: PoseLandmarkType.leftShoulder, x: personCenterX - width * 0.1, y: verticalStart + height * 0.05, z: 0, likelihood: 0.9),
-        PoseLandmarkType.rightShoulder: PoseLandmark(type: PoseLandmarkType.rightShoulder, x: personCenterX + width * 0.1, y: verticalStart + height * 0.05, z: 0, likelihood: 0.9),
-        PoseLandmarkType.leftHip: PoseLandmark(type: PoseLandmarkType.leftHip, x: personCenterX - width * 0.08, y: verticalStart + height * 0.2, z: 0, likelihood: 0.9),
-        PoseLandmarkType.rightHip: PoseLandmark(type: PoseLandmarkType.rightHip, x: personCenterX + width * 0.08, y: verticalStart + height * 0.2, z: 0, likelihood: 0.9),
-        PoseLandmarkType.leftKnee: PoseLandmark(type: PoseLandmarkType.leftKnee, x: personCenterX - width * 0.08, y: verticalStart + height * 0.35, z: 0, likelihood: 0.9),
-        PoseLandmarkType.rightKnee: PoseLandmark(type: PoseLandmarkType.rightKnee, x: personCenterX + width * 0.08, y: verticalStart + height * 0.35, z: 0, likelihood: 0.9),
-        PoseLandmarkType.leftAnkle: PoseLandmark(type: PoseLandmarkType.leftAnkle, x: personCenterX - width * 0.08, y: verticalStart + height * 0.5, z: 0, likelihood: 0.9),
-        PoseLandmarkType.rightAnkle: PoseLandmark(type: PoseLandmarkType.rightAnkle, x: personCenterX + width * 0.08, y: verticalStart + height * 0.5, z: 0, likelihood: 0.9),
+        PoseLandmarkType.leftShoulder: PoseLandmark(type: PoseLandmarkType.leftShoulder, x: personCenterX - width * 0.08, y: verticalStart + height * 0.05, z: 0, likelihood: 0.9),
+        PoseLandmarkType.rightShoulder: PoseLandmark(type: PoseLandmarkType.rightShoulder, x: personCenterX + width * 0.08, y: verticalStart + height * 0.05, z: 0, likelihood: 0.9),
+        PoseLandmarkType.leftHip: PoseLandmark(type: PoseLandmarkType.leftHip, x: personCenterX - width * 0.07, y: verticalStart + height * 0.2, z: 0, likelihood: 0.9),
+        PoseLandmarkType.rightHip: PoseLandmark(type: PoseLandmarkType.rightHip, x: personCenterX + width * 0.07, y: verticalStart + height * 0.2, z: 0, likelihood: 0.9),
+        PoseLandmarkType.leftKnee: PoseLandmark(type: PoseLandmarkType.leftKnee, x: personCenterX - width * 0.07, y: verticalStart + height * 0.35, z: 0, likelihood: 0.9),
+        PoseLandmarkType.rightKnee: PoseLandmark(type: PoseLandmarkType.rightKnee, x: personCenterX + width * 0.07, y: verticalStart + height * 0.35, z: 0, likelihood: 0.9),
+        PoseLandmarkType.leftAnkle: PoseLandmark(type: PoseLandmarkType.leftAnkle, x: personCenterX - width * 0.07, y: verticalStart + height * 0.5, z: 0, likelihood: 0.9),
+        PoseLandmarkType.rightAnkle: PoseLandmark(type: PoseLandmarkType.rightAnkle, x: personCenterX + width * 0.07, y: verticalStart + height * 0.5, z: 0, likelihood: 0.9),
       };
 
       mockPersons.add(PersonPose(
@@ -286,10 +291,13 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
       final poses = await _poseService.detect(inputImage);
       
       final List<PersonPose> detectedPersons = [];
-      const List<Color> personColors = [
-        Color(0xFF0D9488), // Teal
+      final List<Color> personColors = [
+        const Color(0xFF0D9488), // Teal
         Colors.orange,
         Colors.blue,
+        Colors.purple,
+        Colors.pink,
+        Colors.amber,
       ];
 
       for (int i = 0; i < poses.length; i++) {
