@@ -156,7 +156,7 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
   }
 
   void _startMockAnalysis() {
-    _analysisTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+    _analysisTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
       if (!mounted) return;
       if (_isPaused) return;
 
@@ -168,12 +168,12 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
       }
       
       setState(() {
-        // Occasionally trigger a fall for the demo
-        if (_random.nextDouble() < 0.1) {
+        // Occasionally trigger a fall for the demo (less frequent now with 50ms interval)
+        if (_random.nextDouble() < 0.01) {
           _isLaying = true;
           _isWalking = false;
           _statusText = "FALL DETECTED!";
-        } else {
+        } else if (_random.nextDouble() < 0.05) {
           _isLaying = false;
           _isWalking = _random.nextBool();
           _statusText = _isWalking ? "Walking / Active" : "Standing";
@@ -188,13 +188,13 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
   }
 
   List<PersonPose> _generateMockPersons() {
-    // Standard 16:9 vertical resolution if size is null
     final width = _imageSize?.width ?? 1080;
     final height = _imageSize?.height ?? 1920;
     final centerX = width / 2;
+    final time = DateTime.now().millisecondsSinceEpoch / 1000.0;
     
-    // Support dynamic N persons (e.g., up to 6 for the demo)
-    final numPeople = 1 + _random.nextInt(5);
+    // Support dynamic N persons (e.g., up to 4 for more realism)
+    final numPeople = 1 + _random.nextInt(3);
     final List<PersonPose> mockPersons = [];
     
     final personColors = [
@@ -202,29 +202,68 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
         Colors.orange,
         Colors.blue,
         Colors.purple,
-        Colors.pink,
-        Colors.amber,
     ];
 
     for (int i = 0; i < numPeople; i++) {
-      // Offset each person slightly but keep them in the "focus" (center area)
-      // Use a wider spread for more people
-      final spread = width * 0.15;
+      // Offset each person to the center focus area
+      final spread = width * 0.18;
       final offsetX = (i - (numPeople - 1) / 2) * spread;
-      final personCenterX = centerX + offsetX;
-      final verticalStart = height * 0.2 + (i % 3) * (height * 0.05); // Slight vertical stagger
+      final personCenterX = centerX + offsetX + math.sin(time + i) * 10; // Slight horizontal sway
+      final verticalBase = height * 0.25 + (i % 2) * (height * 0.05);
       
-      final landmarks = {
-        PoseLandmarkType.nose: PoseLandmark(type: PoseLandmarkType.nose, x: personCenterX, y: verticalStart, z: 0, likelihood: 0.9),
-        PoseLandmarkType.leftShoulder: PoseLandmark(type: PoseLandmarkType.leftShoulder, x: personCenterX - width * 0.08, y: verticalStart + height * 0.05, z: 0, likelihood: 0.9),
-        PoseLandmarkType.rightShoulder: PoseLandmark(type: PoseLandmarkType.rightShoulder, x: personCenterX + width * 0.08, y: verticalStart + height * 0.05, z: 0, likelihood: 0.9),
-        PoseLandmarkType.leftHip: PoseLandmark(type: PoseLandmarkType.leftHip, x: personCenterX - width * 0.07, y: verticalStart + height * 0.2, z: 0, likelihood: 0.9),
-        PoseLandmarkType.rightHip: PoseLandmark(type: PoseLandmarkType.rightHip, x: personCenterX + width * 0.07, y: verticalStart + height * 0.2, z: 0, likelihood: 0.9),
-        PoseLandmarkType.leftKnee: PoseLandmark(type: PoseLandmarkType.leftKnee, x: personCenterX - width * 0.07, y: verticalStart + height * 0.35, z: 0, likelihood: 0.9),
-        PoseLandmarkType.rightKnee: PoseLandmark(type: PoseLandmarkType.rightKnee, x: personCenterX + width * 0.07, y: verticalStart + height * 0.35, z: 0, likelihood: 0.9),
-        PoseLandmarkType.leftAnkle: PoseLandmark(type: PoseLandmarkType.leftAnkle, x: personCenterX - width * 0.07, y: verticalStart + height * 0.5, z: 0, likelihood: 0.9),
-        PoseLandmarkType.rightAnkle: PoseLandmark(type: PoseLandmarkType.rightAnkle, x: personCenterX + width * 0.07, y: verticalStart + height * 0.5, z: 0, likelihood: 0.9),
-      };
+      // Animation factors
+      final breathing = math.sin(time * 1.5 + i) * 5;
+      final armSwing = math.sin(time * 2.0 + i) * 15;
+      
+      final landmarks = <PoseLandmarkType, PoseLandmark>{};
+
+      // Helper to add landmark
+      void add(PoseLandmarkType type, double x, double y) {
+        landmarks[type] = PoseLandmark(type: type, x: x, y: y, z: 0, likelihood: 0.95);
+      }
+
+      // Torso & Head
+      add(PoseLandmarkType.nose, personCenterX, verticalBase + breathing);
+      add(PoseLandmarkType.leftEye, personCenterX - 15, verticalBase - 10 + breathing);
+      add(PoseLandmarkType.rightEye, personCenterX + 15, verticalBase - 10 + breathing);
+      add(PoseLandmarkType.leftEar, personCenterX - 30, verticalBase - 5 + breathing);
+      add(PoseLandmarkType.rightEar, personCenterX + 30, verticalBase - 5 + breathing);
+
+      // Shoulders & Arms
+      final shoulderY = verticalBase + height * 0.08 + breathing;
+      final shoulderWidth = width * 0.09;
+      add(PoseLandmarkType.leftShoulder, personCenterX - shoulderWidth, shoulderY);
+      add(PoseLandmarkType.rightShoulder, personCenterX + shoulderWidth, shoulderY);
+      
+      final elbowY = shoulderY + height * 0.12;
+      add(PoseLandmarkType.leftElbow, personCenterX - shoulderWidth - 20 + armSwing, elbowY);
+      add(PoseLandmarkType.rightElbow, personCenterX + shoulderWidth + 20 - armSwing, elbowY);
+      
+      final wristY = elbowY + height * 0.1;
+      add(PoseLandmarkType.leftWrist, personCenterX - shoulderWidth - 30 + armSwing * 1.2, wristY);
+      add(PoseLandmarkType.rightWrist, personCenterX + shoulderWidth + 30 - armSwing * 1.2, wristY);
+
+      // Hips & Legs
+      final hipY = shoulderY + height * 0.25;
+      final hipWidth = width * 0.07;
+      add(PoseLandmarkType.leftHip, personCenterX - hipWidth, hipY);
+      add(PoseLandmarkType.rightHip, personCenterX + hipWidth, hipY);
+      
+      final kneeY = hipY + height * 0.18;
+      add(PoseLandmarkType.leftKnee, personCenterX - hipWidth - 5, kneeY);
+      add(PoseLandmarkType.rightKnee, personCenterX + hipWidth + 5, kneeY);
+      
+      final ankleY = kneeY + height * 0.18;
+      add(PoseLandmarkType.leftAnkle, personCenterX - hipWidth - 10, ankleY);
+      add(PoseLandmarkType.rightAnkle, personCenterX + hipWidth + 10, ankleY);
+
+      // Hands & Feet (Simplified)
+      add(PoseLandmarkType.leftPinky, personCenterX - shoulderWidth - 35, wristY + 10);
+      add(PoseLandmarkType.rightPinky, personCenterX + shoulderWidth + 35, wristY + 10);
+      add(PoseLandmarkType.leftHeel, personCenterX - hipWidth - 20, ankleY + 10);
+      add(PoseLandmarkType.rightHeel, personCenterX + hipWidth + 20, ankleY + 10);
+      add(PoseLandmarkType.leftFootIndex, personCenterX - hipWidth - 30, ankleY + 20);
+      add(PoseLandmarkType.rightFootIndex, personCenterX + hipWidth + 30, ankleY + 20);
 
       mockPersons.add(PersonPose(
         landmarks: landmarks,
