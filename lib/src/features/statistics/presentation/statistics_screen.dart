@@ -5,6 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../../pose_detection/data/health_status_provider.dart';
 import '../domain/simulation_event.dart';
+import '../../notification/presentation/notification_bell.dart';
 
 class StatisticsScreen extends ConsumerStatefulWidget {
   const StatisticsScreen({super.key});
@@ -33,10 +34,9 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF0D9488),
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: const Color(0xFF0D9488),
               onPrimary: Colors.white,
-              onSurface: Colors.black,
             ),
           ),
           child: child!,
@@ -94,9 +94,10 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
 
   List<PieChartSectionData> _getPieSections(List<SimulationEvent> events) {
     if (events.isEmpty) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
       return [
         PieChartSectionData(
-          color: const Color(0xFFE8EBF0),
+          color: isDark ? Colors.white10 : const Color(0xFFE8EBF0),
           value: 1,
           radius: 90,
           showTitle: false,
@@ -156,9 +157,10 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       ));
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return sections.isEmpty ? [
       PieChartSectionData(
-        color: const Color(0xFFE8EBF0),
+        color: isDark ? Colors.white10 : const Color(0xFFE8EBF0),
         value: 1,
         radius: 90,
         showTitle: false,
@@ -192,27 +194,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                 ),
                 Row(
                   children: [
-                    GestureDetector(
-                      onTap: () => context.push('/notifications'),
-                      child: Stack(
-                        children: [
-                          const Icon(Icons.notifications, color: Colors.white, size: 24),
-                          Positioned(
-                            right: 0,
-                            top: 0,
-                            child: Container(
-                              width: 10,
-                              height: 10,
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: const Color(0xFF0D9488), width: 2),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    const NotificationBell(color: Colors.white, whiteBorder: true),
                     const SizedBox(width: 16),
                     GestureDetector(
                       onTap: () => context.push('/profile'),
@@ -445,11 +427,11 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: Theme.of(context).cardColor,
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.03),
+                            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03),
                             blurRadius: 20,
                             offset: const Offset(0, 10),
                           ),
@@ -458,27 +440,31 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'Weekly',
                             style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF1E293B),
+                              color: isDark ? Colors.white : const Color(0xFF1E293B),
                             ),
                           ),
                           const SizedBox(height: 30),
-                          const Row(
+                          Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              _WeeklyBarItem(label: 'Mon'),
-                              _WeeklyBarItem(label: 'Tue'),
-                              _WeeklyBarItem(label: 'Wed'),
-                              _WeeklyBarItem(label: 'Thu'),
-                              _WeeklyBarItem(label: 'Fri'),
-                              _WeeklyBarItem(label: 'Sat'),
-                              _WeeklyBarItem(label: 'Sun'),
-                            ],
+                            children: List.generate(7, (index) {
+                              final date = DateTime.now().subtract(Duration(days: 6 - index));
+                              final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+                              final score = healthState.dailyScores[dateStr] ?? 1000.0;
+                              final labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                              final label = labels[date.weekday - 1];
+                              
+                              return _WeeklyBarItem(
+                                label: label,
+                                value: score / 1000, 
+                                isToday: index == 6,
+                              );
+                            }),
                           ),
                           const SizedBox(height: 25),
                           const Center(
@@ -536,29 +522,59 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
 
 class _WeeklyBarItem extends StatelessWidget {
   final String label;
-  const _WeeklyBarItem({required this.label});
+  final double value;
+  final bool isToday;
+
+  const _WeeklyBarItem({
+    required this.label,
+    this.value = 0.5,
+    this.isToday = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    const double maxHeight = 140;
     return Column(
       children: [
-        // แท่งกราฟ (Bar)
-        Container(
-          width: 14,
-          height: 140, // ความสูงคงที่ตามรูปตัวอย่างที่ส่งมา
-          decoration: BoxDecoration(
-            color: const Color(0xFFE2E8F0), // สีเทาอ่อนของแท่งกราฟ
-            borderRadius: BorderRadius.circular(10),
-          ),
+        Stack(
+          alignment: Alignment.bottomCenter,
+          children: [
+            // Background track
+            Container(
+              width: 14,
+              height: maxHeight,
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.dark 
+                    ? Colors.grey.shade800 
+                    : const Color(0xFFE2E8F0),
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            // Value bar
+            Container(
+              width: 14,
+              height: maxHeight * value,
+              decoration: BoxDecoration(
+                color: isToday ? const Color(0xFF0D9488) : const Color(0xFF94A3B8),
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: isToday ? [
+                  BoxShadow(
+                    color: const Color(0xFF0D9488).withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  )
+                ] : null,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
-        // ชื่อวัน
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF64748B),
+            fontWeight: isToday ? FontWeight.bold : FontWeight.w600,
+            color: isToday ? const Color(0xFF0D9488) : const Color(0xFF64748B),
           ),
         ),
       ],

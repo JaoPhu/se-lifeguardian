@@ -30,19 +30,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: Padding(
           padding: const EdgeInsets.only(left: 16.0),
           child: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
+            icon: Icon(Icons.arrow_back_ios_new, color: isDark ? Colors.white : Colors.black, size: 20),
             onPressed: () => context.pop(),
             style: IconButton.styleFrom(
-              backgroundColor: Colors.white,
+              backgroundColor: Theme.of(context).cardColor,
               shape: const CircleBorder(),
-              side: BorderSide(color: Colors.grey.shade200),
+              side: BorderSide(color: isDark ? Colors.grey.shade700 : Colors.grey.shade200),
             ),
           ),
         ),
@@ -149,7 +149,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     backgroundColor: const Color(0xFF0D9488),
                     foregroundColor: Colors.white,
                     elevation: 4,
-                    shadowColor: const Color(0xFF0D9488).withOpacity(0.4),
+                    shadowColor: const Color(0xFF0D9488).withValues(alpha: 0.4),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -198,7 +198,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     Expanded(
                       child: SocialButton(
                         label: 'Apple',
-                        icon: const Icon(Icons.apple, color: Colors.black, size: 24),
+                        icon: Icon(Icons.apple, color: isDark ? Colors.white : Colors.black, size: 24),
                         onPressed: () => AuthService().signInWithApple(),
                       ),
                     ),
@@ -216,11 +216,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   GestureDetector(
                     onTap: () => context.pushReplacement('/login'),
-                    child: const Text(
+                    child: Text(
                       'Login',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF111827),
+                        color: isDark ? Colors.white : const Color(0xFF111827),
                       ),
                     ),
                   ),

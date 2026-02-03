@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+import '../../pose_detection/presentation/pose_painter.dart';
 
 class AIDebugScreen extends StatefulWidget {
   const AIDebugScreen({super.key});
@@ -24,6 +24,8 @@ class _AIDebugScreenState extends State<AIDebugScreen> {
   double _minConfidence = 0.5;
   List<Pose> _poses = [];
   CustomPaint? _customPaint;
+  Size? _imageSize;
+  InputImageRotation? _imageRotation;
 
   @override
   void initState() {
@@ -103,6 +105,8 @@ class _AIDebugScreenState extends State<AIDebugScreen> {
       if (mounted) {
         setState(() {
           _poses = poses;
+          _imageSize = inputImage.metadata?.size;
+          _imageRotation = inputImage.metadata?.rotation;
           _checkFallStatus(poses);
         });
       }
@@ -228,9 +232,16 @@ class _AIDebugScreenState extends State<AIDebugScreen> {
           ),
 
           // Pose Painter Overlay
-          if (_poses.isNotEmpty && _isDetecting)
+          if (_poses.isNotEmpty && _isDetecting && _imageSize != null && _imageRotation != null)
             CustomPaint(
-              painter: PosePainter(_poses, _minConfidence, _controller!.description.lensDirection),
+              painter: PosePainter(
+                _poses.first.landmarks,
+                _imageSize!,
+                _imageRotation!,
+                _controller!.description.lensDirection,
+                isLaying: _statusText.contains('FALL'),
+                isWalking: false,
+              ),
               child: Container(),
             ),
 
@@ -405,47 +416,3 @@ class _AIDebugScreenState extends State<AIDebugScreen> {
   }
 }
 
-class PosePainter extends CustomPainter {
-  PosePainter(this.poses, this.minConfidence, this.lensDirection);
-
-  final List<Pose> poses;
-  final double minConfidence;
-  final CameraLensDirection lensDirection;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4.0
-      ..color = Colors.green;
-
-    final paintRed = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4.0
-      ..color = Colors.red;
-
-    for (final pose in poses) {
-      pose.landmarks.forEach((_, landmark) {
-        // Adjust x coordinate for mirroring if front camera
-        // Since we are drawing on camera preview which might be mirrored/rotated,
-        // we need coordinate transformation. 
-        // For simplicity in this demo, we'll draw raw coordinates scaled to canvas.
-         canvas.drawCircle(
-            Offset(
-              landmark.x * size.width / 480, // Assuming 480 width input? 
-              // Actual coordinate mapping is complex without InputImage metadata.
-              // We'll trust the painter to try best effort or use a library utility.
-              // Given time constraints, we'll draw simplistic dots.
-              landmark.y * size.height / 640 // Assuming 640 height?
-            ),
-            1,
-            paint);
-      });
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant PosePainter oldDelegate) {
-    return oldDelegate.poses != poses;
-  }
-}

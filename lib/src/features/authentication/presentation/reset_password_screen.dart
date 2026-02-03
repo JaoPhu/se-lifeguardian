@@ -19,23 +19,23 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     _confirmPasswordController.dispose();
     super.dispose();
   }
-
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: Padding(
           padding: const EdgeInsets.only(left: 16.0),
           child: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
+            icon: Icon(Icons.arrow_back_ios_new, color: isDark ? Colors.white : Colors.black, size: 20),
             onPressed: () => context.pop(),
             style: IconButton.styleFrom(
-              backgroundColor: Colors.white,
+              backgroundColor: isDark ? Colors.grey.shade800 : Colors.white,
               shape: const CircleBorder(),
-              side: BorderSide(color: Colors.grey.shade200),
+              side: BorderSide(color: isDark ? Colors.grey.shade700 : Colors.grey.shade200),
             ),
           ),
         ),
@@ -94,7 +94,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                     backgroundColor: const Color(0xFF0D9488),
                     foregroundColor: Colors.white,
                     elevation: 4,
-                    shadowColor: const Color(0xFF0D9488).withValues(alpha: 0.4),
+                    shadowColor: Color(0xFF0D9488).withValues(alpha: 0.4),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),

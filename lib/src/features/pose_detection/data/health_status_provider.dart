@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../statistics/domain/simulation_event.dart';
 
 enum HealthStatus { normal, warning, emergency, none }
@@ -9,20 +12,32 @@ class HealthState {
   final HealthStatus status;
   final String currentActivity; // 'standing', 'walking', 'sitting', 'laying', 'falling'
   final List<SimulationEvent> events;
+  final Map<String, double> dailyScores; // "YYYY-MM-DD" -> score
 
-  HealthState({
+  HealthState ({
     required this.score,
     required this.status,
     required this.currentActivity,
     required this.events,
+    required this.dailyScores,
   });
 
   factory HealthState.initial() {
+    final now = DateTime.now();
+    final mockScores = <String, double>{};
+    // Initialize with some mock data for the week
+    for (int i = 7; i >= 1; i--) {
+      final date = now.subtract(Duration(days: i));
+      final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+      mockScores[dateStr] = 700.0 + (i * 20); // Variety in scores
+    }
+
     return HealthState(
       score: 1000,
       status: HealthStatus.none,
       currentActivity: 'standing',
       events: [],
+      dailyScores: mockScores,
     );
   }
 
@@ -31,12 +46,38 @@ class HealthState {
     HealthStatus? status,
     String? currentActivity,
     List<SimulationEvent>? events,
+    Map<String, double>? dailyScores,
   }) {
     return HealthState(
       score: score ?? this.score,
       status: status ?? this.status,
       currentActivity: currentActivity ?? this.currentActivity,
       events: events ?? this.events,
+      dailyScores: dailyScores ?? this.dailyScores,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'score': score,
+      'status': status.index,
+      'currentActivity': currentActivity,
+      'events': events.map((e) => e.toJson()).toList(),
+      'dailyScores': dailyScores,
+    };
+  }
+
+  factory HealthState.fromJson(Map<String, dynamic> json) {
+    return HealthState(
+      score: json['score'] as int,
+      status: HealthStatus.values[json['status'] as int? ?? 0],
+      currentActivity: json['currentActivity'] as String? ?? 'standing',
+      events: (json['events'] as List? ?? [])
+          .map((e) => SimulationEvent.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      dailyScores: (json['dailyScores'] as Map<String, dynamic>?)?.map(
+            (k, v) => MapEntry(k, (v as num).toDouble()),
+          ) ?? {},
     );
   }
 }
@@ -45,7 +86,31 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
   Timer? _timer;
 
   HealthStatusNotifier() : super(HealthState.initial()) {
+    _loadState();
     _startTimer();
+  }
+
+  static const _storageKey = 'health_state_v1';
+
+  Future<void> _loadState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString(_storageKey);
+      if (jsonStr != null) {
+        state = HealthState.fromJson(json.decode(jsonStr) as Map<String, dynamic>);
+      }
+    } catch (e) {
+      debugPrint("Error loading health state: $e");
+    }
+  }
+
+  Future<void> _saveState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_storageKey, json.encode(state.toJson()));
+    } catch (e) {
+      debugPrint("Error saving health state: $e");
+    }
   }
 
   void _startTimer() {
@@ -61,6 +126,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
   void stopMonitoring() {
     state = state.copyWith(status: HealthStatus.none);
+    _saveState();
   }
 
   void updateActivity(String activity) {
@@ -96,6 +162,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         status: state.status == HealthStatus.none ? HealthStatus.normal : state.status,
       );
     }
+    _saveState();
   }
 
   void _updateScoreBasedOnActivity() {
@@ -125,10 +192,17 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
     int newScore = (state.score + change).round().clamp(0, 1000);
     
     if (newScore != state.score) {
+      final now = DateTime.now();
+      final dateStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+      final updatedDailyScores = Map<String, double>.from(state.dailyScores);
+      updatedDailyScores[dateStr] = newScore.toDouble();
+
       state = state.copyWith(
         score: newScore,
         status: _getStatus(newScore),
+        dailyScores: updatedDailyScores,
       );
+      _saveState();
     }
   }
 

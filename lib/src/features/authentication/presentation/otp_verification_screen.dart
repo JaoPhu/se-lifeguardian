@@ -39,20 +39,21 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: Padding(
           padding: const EdgeInsets.only(left: 16.0),
           child: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
+            icon: Icon(Icons.arrow_back_ios_new, color: isDark ? Colors.white : Colors.black, size: 20),
             onPressed: () => context.pop(),
             style: IconButton.styleFrom(
-              backgroundColor: Colors.white,
+              backgroundColor: isDark ? Colors.grey.shade800 : Colors.white,
               shape: const CircleBorder(),
-              side: BorderSide(color: Colors.grey.shade200),
+              side: BorderSide(color: isDark ? Colors.grey.shade700 : Colors.grey.shade200),
             ),
           ),
         ),
@@ -66,9 +67,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
               const SizedBox(height: 16),
               Align(
                 alignment: Alignment.centerLeft,
-                child: Text(
+                child: const Text(
                   'OTP Verification',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF0D9488),
@@ -83,33 +84,33 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
+                  color: isDark ? Colors.grey.shade900 : Colors.grey.shade50,
                   shape: BoxShape.circle,
                 ),
-                child: const Center(
-                  child: Icon(Icons.lock_person_outlined, size: 60, color: Color(0xFF111827)),
+                child: Center(
+                  child: Icon(Icons.lock_person_outlined, size: 60, color: isDark ? Colors.grey.shade300 : const Color(0xFF111827)),
                 ),
               ),
 
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'Verification',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF111827),
+                  color: isDark ? Colors.white : const Color(0xFF111827),
                 ),
               ),
               const SizedBox(height: 12),
               RichText(
                 textAlign: TextAlign.center,
-                text: const TextSpan(
+                text: TextSpan(
                   text: 'Enter the 4-digit that we have sent via the phone number ',
-                  style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.5),
+                  style: const TextStyle(fontSize: 14, color: Colors.grey, height: 1.5),
                   children: [
                     TextSpan(
                       text: 'xxxx@gmail.com',
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
+                      style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87),
                     ),
                   ],
                 ),
@@ -178,7 +179,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     backgroundColor: const Color(0xFF0D9488),
                     foregroundColor: Colors.white,
                     elevation: 4,
-                    shadowColor: const Color(0xFF0D9488).withValues(alpha: 0.4),
+                    shadowColor: Color(0xFF0D9488).withValues(alpha: 0.4),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),

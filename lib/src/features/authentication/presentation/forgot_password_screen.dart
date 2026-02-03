@@ -20,20 +20,21 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: Padding(
           padding: const EdgeInsets.only(left: 16.0),
           child: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
+            icon: Icon(Icons.arrow_back_ios_new, color: isDark ? Colors.white : Colors.black, size: 20),
             onPressed: () => context.pop(),
             style: IconButton.styleFrom(
-              backgroundColor: Colors.white,
+              backgroundColor: isDark ? Colors.grey.shade800 : Colors.white,
               shape: const CircleBorder(),
-              side: BorderSide(color: Colors.grey.shade200),
+              side: BorderSide(color: isDark ? Colors.grey.shade700 : Colors.grey.shade200),
             ),
           ),
         ),
@@ -47,9 +48,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               const SizedBox(height: 16),
               Align(
                 alignment: Alignment.centerLeft,
-                child: Text(
+                child: const Text(
                   'Forgot password',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF0D9488),
@@ -64,21 +65,21 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
+                  color: isDark ? Colors.grey.shade900 : Colors.grey.shade50,
                   shape: BoxShape.circle,
                 ),
-                child: const Center(
-                  child: Icon(Icons.mark_email_read_outlined, size: 60, color: Color(0xFF111827)),
+                child: Center(
+                  child: Icon(Icons.mark_email_read_outlined, size: 60, color: isDark ? Colors.grey.shade300 : const Color(0xFF111827)),
                 ),
               ),
 
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'Verify Email',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF111827),
+                  color: isDark ? Colors.white : const Color(0xFF111827),
                 ),
               ),
               const SizedBox(height: 12),
@@ -113,7 +114,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     backgroundColor: const Color(0xFF0D9488),
                     foregroundColor: Colors.white,
                     elevation: 4,
-                    shadowColor: const Color(0xFF0D9488).withValues(alpha: 0.4),
+                    shadowColor: Color(0xFF0D9488).withValues(alpha: 0.4),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),

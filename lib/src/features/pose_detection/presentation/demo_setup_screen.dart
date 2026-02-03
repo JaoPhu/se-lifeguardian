@@ -1,6 +1,56 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:video_player/video_player.dart';
+import 'dart:io';
+import '../../notification/presentation/notification_bell.dart';
+
+class VideoPreview extends StatefulWidget {
+  final String videoPath;
+  const VideoPreview({super.key, required this.videoPath});
+
+  @override
+  State<VideoPreview> createState() => _VideoPreviewState();
+}
+
+class _VideoPreviewState extends State<VideoPreview> {
+  VideoPlayerController? _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
+
+  @override
+  void didUpdateWidget(VideoPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.videoPath != widget.videoPath) {
+      _initialize();
+    }
+  }
+
+  Future<void> _initialize() async {
+    await _controller?.dispose();
+    _controller = VideoPlayerController.file(File(widget.videoPath));
+    await _controller!.initialize();
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_controller == null || !_controller!.value.isInitialized) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF0D9488)));
+    }
+    return VideoPlayer(_controller!);
+  }
+}
 
 class DemoSetupScreen extends StatefulWidget {
   const DemoSetupScreen({super.key});
@@ -28,8 +78,9 @@ class _DemoSetupScreenState extends State<DemoSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         children: [
           // Header
@@ -62,7 +113,7 @@ class _DemoSetupScreenState extends State<DemoSetupScreen> {
                 ),
                 Row(
                   children: [
-                    const Icon(Icons.notifications, color: Colors.white, size: 24),
+                    const NotificationBell(color: Colors.white, whiteBorder: true),
                     const SizedBox(width: 16),
                     Container(
                       width: 36,
@@ -92,9 +143,9 @@ class _DemoSetupScreenState extends State<DemoSetupScreen> {
                 Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Theme.of(context).cardColor,
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.grey.shade100),
+                    border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade100),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -114,33 +165,14 @@ class _DemoSetupScreenState extends State<DemoSetupScreen> {
                         onTap: _pickVideo,
                         child: Container(
                           height: 200,
+                          width: double.infinity,
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade200,
+                            color: isDark ? Colors.white12 : Colors.grey.shade200,
                             borderRadius: BorderRadius.circular(20),
                           ),
+                          clipBehavior: Clip.antiAlias,
                           child: _videoPath != null 
-                            ? Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  // In real app, show video thumbnail or player here
-                                  Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.black,
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: const Center(
-                                      child: Icon(Icons.videocam, color: Colors.white, size: 48),
-                                    ),
-                                  ),
-                                  Positioned(
-                                    bottom: 8,
-                                    child: Text(
-                                      _videoPath!.split('/').last,
-                                      style: const TextStyle(color: Colors.white, fontSize: 10),
-                                    ),
-                                  ),
-                                ],
-                              )
+                            ? VideoPreview(videoPath: _videoPath!)
                             : Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -176,7 +208,7 @@ class _DemoSetupScreenState extends State<DemoSetupScreen> {
                   controller: _cameraNameController,
                   decoration: InputDecoration(
                     filled: true,
-                    fillColor: Colors.grey.shade50,
+                    fillColor: isDark ? Colors.white10 : Colors.grey.shade50,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -184,7 +216,7 @@ class _DemoSetupScreenState extends State<DemoSetupScreen> {
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: Colors.grey.shade200),
+                      borderSide: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -245,7 +277,9 @@ class _DemoSetupScreenState extends State<DemoSetupScreen> {
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: _videoPath != null ? () {} : null, // Disabled if no video
+                    onPressed: _videoPath != null ? () {
+                      context.push('/analysis', extra: _videoPath);
+                    } : null, // Disabled if no video
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF0D9488),
                       disabledBackgroundColor: Colors.grey.shade200,
@@ -305,18 +339,18 @@ class _DemoSetupScreenState extends State<DemoSetupScreen> {
         height: 56,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: Colors.grey.shade50,
+          color: isDark ? Colors.white10 : Colors.grey.shade50,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
               text,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF374151),
+                color: isDark ? Colors.white : const Color(0xFF374151),
                 fontSize: 13,
               ),
             ),

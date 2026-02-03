@@ -102,7 +102,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               _keepLoggedIn = value ?? false;
                             });
                           },
-                          activeColor: const Color(0xFF1F2937), // gray-800
+                        activeColor: const Color(0xFF0D9488), // Consistent Teal
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                         ),
                       ),
@@ -118,7 +118,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   TextButton(
                     onPressed: () => context.push('/forgot-password'),
-                    style: TextButton.styleFrom(foregroundColor: const Color(0xFF374151)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: isDark ? Colors.grey.shade400 : const Color(0xFF374151),
+                    ),
                     child: const Text(
                       'Forgot password?',
                       style: TextStyle(fontWeight: FontWeight.bold),
@@ -189,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Expanded(
                       child: SocialButton(
                         label: 'Apple',
-                        icon: const Icon(Icons.apple, color: Colors.black, size: 24),
+                        icon: Icon(Icons.apple, color: isDark ? Colors.white : Colors.black, size: 24),
                         onPressed: () => AuthService().signInWithApple(),
                       ),
                     ),
@@ -207,11 +209,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   GestureDetector(
                     onTap: () => context.pushReplacement('/register'),
-                    child: const Text(
+                    child: Text(
                       'Sign up',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF111827),
+                        color: isDark ? Colors.white : const Color(0xFF111827),
                       ),
                     ),
                   ),

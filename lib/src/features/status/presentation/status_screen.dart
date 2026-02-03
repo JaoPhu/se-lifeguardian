@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../pose_detection/data/health_status_provider.dart';
-import '../../statistics/domain/simulation_event.dart';
+import '../../notification/presentation/notification_bell.dart';
 
 class StatusScreen extends ConsumerWidget {
   const StatusScreen({super.key});
@@ -11,7 +11,6 @@ class StatusScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final healthState = ref.watch(healthStatusProvider);
     final config = _getStatusConfig(healthState.status, context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D9488),
@@ -34,27 +33,7 @@ class StatusScreen extends ConsumerWidget {
                 ),
                 Row(
                   children: [
-                    GestureDetector(
-                      onTap: () => context.push('/notifications'),
-                      child: Stack(
-                         children: [
-                           const Icon(Icons.notifications, color: Colors.white, size: 24),
-                           Positioned(
-                             right: 0,
-                             top: 0,
-                             child: Container(
-                               width: 10,
-                               height: 10,
-                               decoration: BoxDecoration(
-                                 color: Colors.red,
-                                 shape: BoxShape.circle,
-                                 border: Border.all(color: const Color(0xFF0D9488), width: 2),
-                               ),
-                             ),
-                           ),
-                         ],
-                       ),
-                    ),
+                    const NotificationBell(color: Colors.white, whiteBorder: true),
                     const SizedBox(width: 16),
                     GestureDetector(
                       onTap: () => context.push('/profile'),
@@ -267,9 +246,14 @@ class StatusScreen extends ConsumerWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: highlight 
-          ? (isDark ? Colors.grey.shade800 : Colors.grey.shade200)
-          : (isDark ? Colors.grey.shade900 : Colors.grey.shade100),
+          ? Theme.of(context).dividerColor.withValues(alpha: 0.1)
+          : Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: highlight 
+              ? const Color(0xFF0D9488).withValues(alpha: 0.3)
+              : Theme.of(context).dividerColor.withValues(alpha: 0.05)
+        ),
       ),
       child: Row(
         children: [
@@ -322,11 +306,10 @@ class StatusScreen extends ConsumerWidget {
           iconColor: Colors.white,
         );
       case HealthStatus.none:
-      default:
         return _StatusConfig(
           title: 'Status : None',
           description: 'No information.',
-          bgColor: isDark ? Colors.grey.shade900 : Colors.grey.shade100,
+          bgColor: Theme.of(context).dividerColor.withValues(alpha: 0.05),
           iconBgColor: Colors.transparent,
           icon: null,
           textColor: isDark ? Colors.grey.shade500 : Colors.grey.shade500,

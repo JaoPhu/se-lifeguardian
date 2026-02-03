@@ -40,8 +40,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         children: [
           // Header
@@ -50,7 +51,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             child: Row(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.chevron_left, color: Colors.grey, size: 32),
+                  icon: Icon(Icons.chevron_left, color: isDark ? Colors.white : Colors.grey, size: 32),
                   onPressed: () => context.pop(),
                 ),
               ],
@@ -65,7 +66,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 style: TextStyle(
                   fontSize: 20, 
                   fontWeight: FontWeight.bold, 
-                  color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade400 : Colors.grey.shade600
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600
                 ),
               ),
             ),
@@ -87,11 +88,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.grey.shade200, width: 2),
+                            border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200, width: 2),
                           ),
                           child: Container(
                             decoration: BoxDecoration(
-                              color: Colors.yellow.shade100,
+                              color: isDark ? Colors.grey.shade900 : Colors.yellow.shade100,
                               shape: BoxShape.circle,
                               image: _avatarImage != null 
                                 ? DecorationImage(
@@ -113,11 +114,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             child: Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: Colors.grey.shade200,
+                                color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
                                 shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 2),
+                                border: Border.all(color: isDark ? const Color(0xFF111827) : Colors.white, width: 2),
                               ),
-                              child: const Icon(Icons.camera_alt_outlined, color: Colors.grey, size: 20),
+                              child: Icon(Icons.camera_alt_outlined, color: isDark ? Colors.white : Colors.grey, size: 20),
                             ),
                           ),
                         ),
@@ -175,7 +176,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               borderRadius: BorderRadius.circular(16),
                             ),
                             elevation: 4,
-                            shadowColor: const Color(0xFF0D9488).withValues(alpha: 0.3),
+                            shadowColor: Color(0xFF0D9488).withValues(alpha: 0.3),
                           ),
                           child: const Text('Submit', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                         ),

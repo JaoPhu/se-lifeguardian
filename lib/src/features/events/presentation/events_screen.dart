@@ -54,7 +54,7 @@ class EventsScreen extends ConsumerWidget {
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                          color: Colors.yellow.shade100,
+                          color: isDark ? Colors.grey.shade900 : Colors.yellow.shade100,
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 2),
                           image: const DecorationImage(
@@ -185,12 +185,13 @@ class EventsScreen extends ConsumerWidget {
   }
 
   Widget _buildEmptyGallery(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: 280,
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
+        color: isDark ? Colors.grey.shade900 : Colors.grey.shade100,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
+        border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade300, style: BorderStyle.solid),
       ),
       child: const Center(
         child: Text('Waiting for start...', style: TextStyle(color: Colors.grey)),

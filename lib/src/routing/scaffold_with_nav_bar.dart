@@ -18,14 +18,14 @@ class ScaffoldWithNavBar extends StatelessWidget {
       body: navigationShell,
       bottomNavigationBar: Container(
         height: 90,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black12,
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 10,
-              offset: Offset(0, -2),
+              offset: const Offset(0, -2),
             ),
           ],
         ),
@@ -97,11 +97,14 @@ class ScaffoldWithNavBar extends StatelessWidget {
     required IconData icon, 
     required bool active
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return IconButton(
       onPressed: () => _onTap(context, index),
       icon: Icon(
         icon,
-        color: active ? const Color(0xFF1E293B) : const Color(0xFF94A3B8),
+        color: active 
+            ? const Color(0xFF0D9488) 
+            : (isDark ? Colors.grey.shade600 : const Color(0xFF94A3B8)),
         size: 28,
       ),
     );

@@ -21,6 +21,7 @@ import 'package:lifeguardian/src/features/debug/presentation/ai_debug_screen.dar
 import 'package:lifeguardian/src/features/pose_detection/presentation/demo_setup_screen.dart';
 import 'package:lifeguardian/src/features/notification/presentation/notification_screen.dart';
 import 'package:lifeguardian/src/features/events/presentation/events_screen.dart';
+import 'package:lifeguardian/src/features/pose_detection/presentation/pose_detector_view.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -93,6 +94,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/demo-setup',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const DemoSetupScreen(),
+      ),
+      GoRoute(
+        path: '/analysis',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final videoPath = state.extra as String?;
+          return PoseDetectorView(videoPath: videoPath);
+        },
       ),
       GoRoute(
         path: '/notifications',

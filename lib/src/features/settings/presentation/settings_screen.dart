@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lifeguardian/src/common/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../notification/presentation/notification_bell.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -67,24 +68,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                       ],
                     ),
-                    Stack(
-                      children: [
-                        const Icon(Icons.notifications, color: Colors.white, size: 24),
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: const Color(0xFF0D9488), width: 2),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    const NotificationBell(color: Colors.white, whiteBorder: true),
                   ],
                 ),
               ],

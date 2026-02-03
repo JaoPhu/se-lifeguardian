@@ -50,7 +50,7 @@ class _SplashScreenState extends State<SplashScreen> {
                decoration: BoxDecoration(
                  gradient: RadialGradient(
                    colors: [
-                     const Color(0xFF2DD4BF).withOpacity(0.2), // primary-400 opacity 20
+                     const Color(0xFF2DD4BF).withValues(alpha: 0.2), // primary-400 opacity 20
                      Colors.transparent,
                    ],
                    center: Alignment.center,
@@ -75,7 +75,7 @@ class _SplashScreenState extends State<SplashScreen> {
                       borderRadius: BorderRadius.circular(32), // More rounded
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF042F2E).withOpacity(0.5),
+                          color: const Color(0xFF042F2E).withValues(alpha: 0.5),
                           blurRadius: 25,
                           offset: const Offset(0, 10),
                         ),

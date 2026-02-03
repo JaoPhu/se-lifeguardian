@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../data/camera_provider.dart';
 import '../domain/camera.dart';
 import '../../pose_detection/data/health_status_provider.dart';
+import '../../notification/presentation/notification_bell.dart';
 
 class OverviewScreen extends ConsumerWidget {
   const OverviewScreen({super.key});
@@ -12,7 +13,6 @@ class OverviewScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cameras = ref.watch(cameraProvider);
     final healthState = ref.watch(healthStatusProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D9488),
@@ -25,7 +25,7 @@ class OverviewScreen extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'LifeGuardain',
+                  'LifeGuardian',
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -35,27 +35,7 @@ class OverviewScreen extends ConsumerWidget {
                 ),
                 Row(
                   children: [
-                    GestureDetector(
-                      onTap: () => context.push('/notifications'),
-                      child: Stack(
-                        children: [
-                          const Icon(Icons.notifications, color: Colors.white, size: 24),
-                          Positioned(
-                            right: 0,
-                            top: 0,
-                            child: Container(
-                              width: 10,
-                              height: 10,
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: const Color(0xFF0D9488), width: 2),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    const NotificationBell(color: Colors.white, whiteBorder: true),
                     const SizedBox(width: 16),
                     GestureDetector(
                       onTap: () => context.push('/profile'),
@@ -144,13 +124,12 @@ class OverviewScreen extends ConsumerWidget {
     );
   }
   Widget _buildCameraCard(BuildContext context, WidgetRef ref, Camera camera, HealthState healthState) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12), // Reduced padding to match prototype px-3 (approx 12px)
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1F2937) : Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(24), // Slightly smaller radius for outer card
         boxShadow: [
           BoxShadow(
@@ -264,50 +243,5 @@ class OverviewScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSharedCameraCard(BuildContext context, String name, String group) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1F2937).withValues(alpha: 0.5) : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: Colors.teal.shade100, width: 1),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.teal.shade50,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.people, color: Color(0xFF0D9488)),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.grey.shade200 : const Color(0xFF374151),
-                  ),
-                ),
-                Text(
-                  'Shared from $group',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
-          const Icon(Icons.chevron_right, color: Colors.grey),
-        ],
-      ),
-    );
-  }
+
 }

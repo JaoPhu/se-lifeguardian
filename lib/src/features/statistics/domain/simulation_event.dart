@@ -63,4 +63,30 @@ class SimulationEvent {
       isCritical: isCritical ?? this.isCritical,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'type': type,
+      'timestamp': timestamp,
+      'date': date,
+      'duration': duration,
+      'description': description,
+      'snapshotUrl': snapshotUrl,
+      'isCritical': isCritical,
+    };
+  }
+
+  factory SimulationEvent.fromJson(Map<String, dynamic> json) {
+    return SimulationEvent(
+      id: json['id'] as String,
+      type: json['type'] as String,
+      timestamp: json['timestamp'] as String,
+      date: json['date'] as String?,
+      duration: json['duration'] as String?,
+      description: json['description'] as String?,
+      snapshotUrl: json['snapshotUrl'] as String?,
+      isCritical: json['isCritical'] as bool? ?? false,
+    );
+  }
 }

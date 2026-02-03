@@ -22,8 +22,10 @@ class ProfileScreen extends StatelessWidget {
       'foodAllergies': '-',
     };
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -34,16 +36,16 @@ class ProfileScreen extends StatelessWidget {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back),
+                    icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.black),
                     onPressed: () => context.pop(),
                   ),
                   const SizedBox(width: 80),
-                  const Text(
+                  Text(
                     'Profile',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF374151),
+                      color: isDark ? Colors.white : const Color(0xFF374151),
                     ),
                   ),
                 ],
@@ -57,7 +59,7 @@ class ProfileScreen extends StatelessWidget {
               height: 140,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.grey.shade200, width: 8),
+                border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200, width: 8),
                 image: const DecorationImage(
                   image: NetworkImage('https://api.dicebear.com/7.x/avataaars/svg?seed=Felix'),
                   fit: BoxFit.contain,
@@ -67,9 +69,9 @@ class ProfileScreen extends StatelessWidget {
             const SizedBox(height: 24),
             
             // Name & Username
-            const Text(
+            Text(
               'hewkai',
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1F2937)),
             ),
             const Text(
               '@lnwhewkaimak',

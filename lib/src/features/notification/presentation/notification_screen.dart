@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/notification_provider.dart';
 
 class NotificationItem {
   final String id;
@@ -15,36 +17,30 @@ class NotificationItem {
   });
 }
 
-class NotificationScreen extends StatelessWidget {
+
+
+class NotificationScreen extends ConsumerStatefulWidget {
   const NotificationScreen({super.key});
 
   @override
+  ConsumerState<NotificationScreen> createState() => _NotificationScreenState();
+}
+
+class _NotificationScreenState extends ConsumerState<NotificationScreen> {
+  
+  @override
+  void initState() {
+    super.initState();
+    // Mark all as read when screen opens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(notificationProvider.notifier).markAllAsRead();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Mock Data based on prototype's expected behavior
-    final List<NotificationItem> notifications = [
-      NotificationItem(
-        id: '1',
-        message: 'Your health signal is stable for the last 24 hours.',
-        type: 'success',
-        isNew: true,
-      ),
-      NotificationItem(
-        id: '2',
-        message: 'Suspicious movement detected at 3:15 PM.',
-        type: 'warning',
-        isNew: true,
-      ),
-      NotificationItem(
-        id: '3',
-        message: 'System update completed successfully.',
-        type: 'success',
-      ),
-      NotificationItem(
-        id: '4',
-        message: 'Emergency contact "Dad" has been notified.',
-        type: 'error',
-      ),
-    ];
+    final state = ref.watch(notificationProvider);
+    final notifications = state.notifications;
 
     Color getIconColor(String type) {
       switch (type) {
@@ -102,7 +98,18 @@ class NotificationScreen extends StatelessWidget {
 
           // Content Body
           Expanded(
-            child: ListView.builder(
+            child: notifications.isEmpty 
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.notifications_off_outlined, size: 64, color: Colors.grey.shade300),
+                    const SizedBox(height: 16),
+                    Text('No notifications', style: TextStyle(color: Colors.grey.shade500)),
+                  ],
+                ),
+              )
+            : ListView.builder(
               padding: const EdgeInsets.only(left: 16, right: 16, top: 24, bottom: 120),
               itemCount: notifications.length,
               itemBuilder: (context, index) {

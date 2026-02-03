@@ -8,17 +8,43 @@ class PoseDetectionService {
     await _poseDetector.close();
   }
 
+  Map<PoseLandmarkType, PoseLandmark> _previousLandmarks = {};
+  final double _smoothingFactor = 0.5; // EMA factor (0 to 1)
+
   Future<Map<PoseLandmarkType, PoseLandmark>?> detect(InputImage inputImage) async {
     final List<Pose> poses = await _poseDetector.processImage(inputImage);
     if (poses.isEmpty) return null;
 
-    // Use the first detected pose
     final currentLandmarks = poses.first.landmarks;
     
-    // In MLKit, landmarks is a Map<PoseLandmarkType, PoseLandmark>. We usually want a list or map access.
-    // However, for smoothing we need consistency.
-    // Start with raw detection for now.
-    return currentLandmarks;
+    // Apply EMA Smoothing
+    if (_previousLandmarks.isEmpty) {
+      _previousLandmarks = currentLandmarks;
+      return currentLandmarks;
+    }
+
+    final smoothedLandmarks = <PoseLandmarkType, PoseLandmark>{};
+    currentLandmarks.forEach((type, landmark) {
+      final prev = _previousLandmarks[type];
+      if (prev != null) {
+        final smoothedX = prev.x + (landmark.x - prev.x) * _smoothingFactor;
+        final smoothedY = prev.y + (landmark.y - prev.y) * _smoothingFactor;
+        final smoothedZ = prev.z + (landmark.z - prev.z) * _smoothingFactor;
+        
+        smoothedLandmarks[type] = PoseLandmark(
+          type: type,
+          x: smoothedX,
+          y: smoothedY,
+          z: smoothedZ,
+          likelihood: landmark.likelihood,
+        );
+      } else {
+        smoothedLandmarks[type] = landmark;
+      }
+    });
+
+    _previousLandmarks = smoothedLandmarks;
+    return smoothedLandmarks;
   }
 
   /// Calculates the angle of the torso relative to the vertical axis.
