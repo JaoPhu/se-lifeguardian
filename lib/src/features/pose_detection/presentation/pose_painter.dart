@@ -110,30 +110,71 @@ class PosePainter extends CustomPainter {
       final p2 = landmarks[type2];
       if (p1 == null || p2 == null) return;
       
+      // Use standard likelihood threshold for stable visualization
+      const double threshold = 0.5;
+      if (p1.likelihood < threshold || p2.likelihood < threshold) return;
+      
       canvas.drawLine(translate(p1), translate(p2), paint);
     }
 
-    // Torso
+    // --- Face (High Fidelity Details) ---
+    paintLine(PoseLandmarkType.nose, PoseLandmarkType.leftEyeInner);
+    paintLine(PoseLandmarkType.leftEyeInner, PoseLandmarkType.leftEye);
+    paintLine(PoseLandmarkType.leftEye, PoseLandmarkType.leftEyeOuter);
+    paintLine(PoseLandmarkType.leftEyeOuter, PoseLandmarkType.leftEar);
+    paintLine(PoseLandmarkType.nose, PoseLandmarkType.rightEyeInner);
+    paintLine(PoseLandmarkType.rightEyeInner, PoseLandmarkType.rightEye);
+    paintLine(PoseLandmarkType.rightEye, PoseLandmarkType.rightEyeOuter);
+    paintLine(PoseLandmarkType.rightEyeOuter, PoseLandmarkType.rightEar);
+    paintLine(PoseLandmarkType.leftMouth, PoseLandmarkType.rightMouth);
+
+    // --- Torso & Shoulders ---
     paintLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder);
     paintLine(PoseLandmarkType.leftHip, PoseLandmarkType.rightHip);
     paintLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.leftHip);
     paintLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightHip);
 
-    // Arms
+    // --- Left Arm & Hand ---
     paintLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.leftElbow);
     paintLine(PoseLandmarkType.leftElbow, PoseLandmarkType.leftWrist);
+    paintLine(PoseLandmarkType.leftWrist, PoseLandmarkType.leftThumb);
+    paintLine(PoseLandmarkType.leftWrist, PoseLandmarkType.leftIndex);
+    paintLine(PoseLandmarkType.leftWrist, PoseLandmarkType.leftPinky);
+    paintLine(PoseLandmarkType.leftIndex, PoseLandmarkType.leftPinky);
+
+    // --- Right Arm & Hand ---
     paintLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightElbow);
     paintLine(PoseLandmarkType.rightElbow, PoseLandmarkType.rightWrist);
+    paintLine(PoseLandmarkType.rightWrist, PoseLandmarkType.rightThumb);
+    paintLine(PoseLandmarkType.rightWrist, PoseLandmarkType.rightIndex);
+    paintLine(PoseLandmarkType.rightWrist, PoseLandmarkType.rightPinky);
+    paintLine(PoseLandmarkType.rightIndex, PoseLandmarkType.rightPinky);
 
-    // Legs
+    // --- Left Leg & Foot ---
     paintLine(PoseLandmarkType.leftHip, PoseLandmarkType.leftKnee);
     paintLine(PoseLandmarkType.leftKnee, PoseLandmarkType.leftAnkle);
+    paintLine(PoseLandmarkType.leftAnkle, PoseLandmarkType.leftHeel);
+    paintLine(PoseLandmarkType.leftAnkle, PoseLandmarkType.leftFootIndex);
+    paintLine(PoseLandmarkType.leftHeel, PoseLandmarkType.leftFootIndex);
+
+    // --- Right Leg & Foot ---
     paintLine(PoseLandmarkType.rightHip, PoseLandmarkType.rightKnee);
     paintLine(PoseLandmarkType.rightKnee, PoseLandmarkType.rightAnkle);
+    paintLine(PoseLandmarkType.rightAnkle, PoseLandmarkType.rightHeel);
+    paintLine(PoseLandmarkType.rightAnkle, PoseLandmarkType.rightFootIndex);
+    paintLine(PoseLandmarkType.rightHeel, PoseLandmarkType.rightFootIndex);
 
     // Draw joints
     for (final landmark in landmarks.values) {
-       canvas.drawCircle(translate(landmark), 5, jointPaint);
+      if (landmark.likelihood < 0.5) continue;
+      canvas.drawCircle(translate(landmark), 3.5, jointPaint);
+      
+      // Add subtle glow to joints
+      canvas.drawCircle(
+        translate(landmark), 
+        6, 
+        Paint()..color = color.withValues(alpha: 0.2)..style = PaintingStyle.fill
+      );
     }
   }
 
