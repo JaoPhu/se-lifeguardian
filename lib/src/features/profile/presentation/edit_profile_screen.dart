@@ -51,8 +51,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             child: Row(
               children: [
                 IconButton(
-                  icon: Icon(Icons.chevron_left, color: isDark ? Colors.white : Colors.grey, size: 32),
-                  onPressed: () => context.pop(),
+                  icon: Icon(
+                    Icons.chevron_left, 
+                    color: isDark ? Colors.white : const Color(0xFF1E293B), // Higher contrast for light mode
+                    size: 36, // Slightly larger for better accessibility
+                  ),
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go('/profile'); // Fallback if no history
+                    }
+                  },
                 ),
               ],
             ),

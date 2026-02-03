@@ -172,6 +172,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
   Widget build(BuildContext context) {
     final healthState = ref.watch(healthStatusProvider);
     final stats = _calculateDurations(healthState.events);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D9488),

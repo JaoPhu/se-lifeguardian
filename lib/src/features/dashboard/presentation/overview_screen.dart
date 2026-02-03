@@ -21,6 +21,16 @@ class OverviewScreen extends ConsumerWidget {
           // Header
           Container(
             padding: const EdgeInsets.only(top: 56, bottom: 24, left: 24, right: 24),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFF0D9488),
+                  const Color(0xFF0D9488).withValues(alpha: 0.8),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -92,25 +102,34 @@ class OverviewScreen extends ConsumerWidget {
                             ),
                           ],
                         ),
-                        child: ElevatedButton(
-                          onPressed: () => context.push('/demo-setup'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0D9488),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: const Text(
+                    child: ElevatedButton(
+                      onPressed: () => context.push('/demo-setup'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0D9488),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.play_circle_fill, color: Colors.white),
+                          SizedBox(width: 12),
+                          Text(
                             'Try Demo',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.5,
                             ),
                           ),
-                        ),
+                        ],
+                      ),
+                    ),
                       ),
                     ),
                   ),
@@ -124,18 +143,24 @@ class OverviewScreen extends ConsumerWidget {
     );
   }
   Widget _buildCameraCard(BuildContext context, WidgetRef ref, Camera camera, HealthState healthState) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12), // Reduced padding to match prototype px-3 (approx 12px)
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(24), // Slightly smaller radius for outer card
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: Theme.of(context).brightness == Brightness.dark 
+              ? Colors.white.withValues(alpha: 0.05) 
+              : Colors.transparent,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),

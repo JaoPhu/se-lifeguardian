@@ -23,7 +23,7 @@ class PoseDetectorView extends StatefulWidget {
   State<PoseDetectorView> createState() => _PoseDetectorViewState();
 }
 
-class _PoseDetectorViewState extends State<PoseDetectorView> {
+class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProviderStateMixin {
   final PoseDetectionService _poseService = PoseDetectionService();
   CameraController? _cameraController;
   bool _isDetecting = false;
@@ -54,14 +54,34 @@ class _PoseDetectorViewState extends State<PoseDetectorView> {
   bool _isCapturing = false;
   DateTime? _lastCaptureTime;
 
+  // Animation for loading
+  late AnimationController _loadingController;
+
   @override
   void initState() {
     super.initState();
+    _loadingController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+
     if (widget.videoPath != null) {
       _initializeVideo();
     } else {
       _initializeCamera();
     }
+  }
+
+  @override
+  void dispose() {
+    _loadingController.dispose();
+    _cameraController?.stopImageStream();
+    _cameraController?.dispose();
+    _videoController?.dispose();
+    _analysisTimer?.cancel();
+    _simTimer?.cancel();
+    _poseService.close();
+    super.dispose();
   }
 
   Future<void> _initializeVideo() async {
@@ -223,9 +243,15 @@ class _PoseDetectorViewState extends State<PoseDetectorView> {
     try {
       await _cameraController!.initialize();
       await _cameraController!.startImageStream(_processCameraImage);
-      setState(() => _statusText = "Camera Ready");
+      setState(() {
+        _statusText = "Camera Ready";
+        _isLoading = false;
+      });
     } catch (e) {
-      setState(() => _statusText = "Camera error: $e");
+      setState(() {
+        _statusText = "Camera error: $e";
+        _isLoading = false;
+      });
     }
   }
 
@@ -237,7 +263,7 @@ class _PoseDetectorViewState extends State<PoseDetectorView> {
       final inputImage = _inputImageFromCameraImage(image);
       if (inputImage == null) return;
 
-      final landmarks = await _poseService.detect(inputImage);
+      final poses = await _poseService.detect(inputImage);
       
       final List<PersonPose> detectedPersons = [];
       const List<Color> personColors = [
@@ -247,15 +273,15 @@ class _PoseDetectorViewState extends State<PoseDetectorView> {
       ];
 
       for (int i = 0; i < poses.length; i++) {
-        final pose = poses[i];
+        final landmarks = poses[i];
         final personColor = personColors[i % personColors.length];
         
         // Single status for camera view for now
-        final isLaying = _poseService.isLaying(pose.landmarks);
-        final isWalking = _poseService.isWalking(pose.landmarks);
+        final isLaying = _poseService.isLaying(landmarks);
+        final isWalking = _poseService.isWalking(landmarks);
 
         detectedPersons.add(PersonPose(
-          landmarks: pose.landmarks,
+          landmarks: landmarks,
           color: personColor,
           isLaying: isLaying,
           isWalking: isWalking,
@@ -362,15 +388,6 @@ class _PoseDetectorViewState extends State<PoseDetectorView> {
     return InputImage.fromBytes(bytes: bytes, metadata: metadata);
   }
 
-  @override
-  void dispose() {
-    _cameraController?.stopImageStream();
-    _cameraController?.dispose();
-    _videoController?.dispose();
-    _analysisTimer?.cancel();
-    _poseService.close();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -378,6 +395,10 @@ class _PoseDetectorViewState extends State<PoseDetectorView> {
       return Scaffold(
         body: Center(child: Text(_statusText)),
       );
+    }
+
+    if (_isLoading) {
+      return _buildLoadingScreen();
     }
 
     if (widget.videoPath != null && (_videoController == null || !_videoController!.value.isInitialized)) {
@@ -668,14 +689,19 @@ class _PoseDetectorViewState extends State<PoseDetectorView> {
             Stack(
               alignment: Alignment.center,
               children: [
-                SizedBox(
-                  width: 140, height: 140,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 4,
-                    value: 0.7, // Fixed value for static representation or let it spin
-                    color: const Color(0xFF0D9488),
-                    backgroundColor: isDark ? Colors.white10 : const Color(0xFFF1F5F9),
-                  ),
+                AnimatedBuilder(
+                  animation: _loadingController,
+                  builder: (context, child) {
+                    return SizedBox(
+                      width: 140, height: 140,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 4,
+                        value: _loadingController.value,
+                        color: const Color(0xFF0D9488),
+                        backgroundColor: isDark ? Colors.white10 : const Color(0xFFF1F5F9),
+                      ),
+                    );
+                  },
                 ),
                 // Custom ECG Pulse Icon Container
                 Container(
@@ -726,39 +752,9 @@ class _PoseDetectorViewState extends State<PoseDetectorView> {
       ),
     );
   }
-}
-
-class PulsePainter extends CustomPainter {
-  final Color color;
-  PulsePainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 2.5
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final path = Path();
-    path.moveTo(0, size.height * 0.5);
-    path.lineTo(size.width * 0.2, size.height * 0.5);
-    path.lineTo(size.width * 0.3, size.height * 0.2); // Mid-high
-    path.lineTo(size.width * 0.4, size.height * 0.8); // Drop
-    path.lineTo(size.width * 0.5, size.height * 0.1); // Peak
-    path.lineTo(size.width * 0.6, size.height * 0.9); // Low Valley
-    path.lineTo(size.width * 0.7, size.height * 0.5);
-    path.lineTo(size.width, size.height * 0.5);
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
 
   Widget _buildSummaryScreen() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       backgroundColor: const Color(0xFF0D9488),
       body: SafeArea(
@@ -981,4 +977,34 @@ class PulsePainter extends CustomPainter {
       ),
     );
   }
+}
+
+class PulsePainter extends CustomPainter {
+  final Color color;
+  PulsePainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final path = Path();
+    path.moveTo(0, size.height * 0.5);
+    path.lineTo(size.width * 0.2, size.height * 0.5);
+    path.lineTo(size.width * 0.3, size.height * 0.2); // Mid-high
+    path.lineTo(size.width * 0.4, size.height * 0.8); // Drop
+    path.lineTo(size.width * 0.5, size.height * 0.1); // Peak
+    path.lineTo(size.width * 0.6, size.height * 0.9); // Low Valley
+    path.lineTo(size.width * 0.7, size.height * 0.5);
+    path.lineTo(size.width, size.height * 0.5);
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

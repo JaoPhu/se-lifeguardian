@@ -235,12 +235,17 @@ class _AIDebugScreenState extends State<AIDebugScreen> {
           if (_poses.isNotEmpty && _isDetecting && _imageSize != null && _imageRotation != null)
             CustomPaint(
               painter: PosePainter(
-                _poses.first.landmarks,
+                [
+                  PersonPose(
+                    landmarks: _poses.first.landmarks,
+                    color: const Color(0xFF0D9488),
+                    isLaying: _statusText.contains('FALL'),
+                    isWalking: false,
+                  )
+                ],
                 _imageSize!,
                 _imageRotation!,
                 _controller!.description.lensDirection,
-                isLaying: _statusText.contains('FALL'),
-                isWalking: false,
               ),
               child: Container(),
             ),

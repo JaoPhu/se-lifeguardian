@@ -333,6 +333,7 @@ class _DemoSetupScreenState extends State<DemoSetupScreen> {
   }
 
   Widget _buildButton(String text, IconData? icon, VoidCallback onTap) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
