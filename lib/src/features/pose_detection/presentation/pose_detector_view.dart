@@ -1239,6 +1239,38 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
       ),
     );
   }
+
+  Map<PoseLandmarkType, PoseLandmark> _applyOneEuroFilter(int personIndex, Map<PoseLandmarkType, PoseLandmark> landmarks) {
+    final t = DateTime.now().millisecondsSinceEpoch;
+    final Map<PoseLandmarkType, PoseLandmark> filteredMap = {};
+    
+    _filters.putIfAbsent(personIndex, () => {});
+    final personFilters = _filters[personIndex]!;
+
+    landmarks.forEach((type, landmark) {
+      final keyX = '${type.name}_x';
+      final keyY = '${type.name}_y';
+      final keyZ = '${type.name}_z';
+      
+      final fX = personFilters.putIfAbsent(keyX, () => _OneEuroFilter(minCutoff: 1.0, beta: 0.05));
+      final fY = personFilters.putIfAbsent(keyY, () => _OneEuroFilter(minCutoff: 1.0, beta: 0.05));
+      final fZ = personFilters.putIfAbsent(keyZ, () => _OneEuroFilter(minCutoff: 1.0, beta: 0.05));
+
+      final filteredX = fX.filter(landmark.x, t);
+      final filteredY = fY.filter(landmark.y, t);
+      final filteredZ = fZ.filter(landmark.z, t);
+
+      filteredMap[type] = PoseLandmark(
+        type: type,
+        x: filteredX,
+        y: filteredY,
+        z: filteredZ,
+        likelihood: landmark.likelihood,
+      );
+    });
+    
+    return filteredMap;
+  }
 }
 
 /// 1 Euro Filter implementation for jitter reduction as per 2025 standards
@@ -1285,38 +1317,6 @@ class _OneEuroFilter {
   }
 
   double _lerp(double a, double b, double alpha) => a + (b - a) * alpha;
-
-  Map<PoseLandmarkType, PoseLandmark> _applyOneEuroFilter(int personIndex, Map<PoseLandmarkType, PoseLandmark> landmarks) {
-    final t = DateTime.now().millisecondsSinceEpoch;
-    final Map<PoseLandmarkType, PoseLandmark> filteredMap = {};
-    
-    _filters.putIfAbsent(personIndex, () => {});
-    final personFilters = _filters[personIndex]!;
-
-    landmarks.forEach((type, landmark) {
-      final keyX = '${type.name}_x';
-      final keyY = '${type.name}_y';
-      final keyZ = '${type.name}_z';
-      
-      final fX = personFilters.putIfAbsent(keyX, () => _OneEuroFilter(minCutoff: 1.0, beta: 0.05));
-      final fY = personFilters.putIfAbsent(keyY, () => _OneEuroFilter(minCutoff: 1.0, beta: 0.05));
-      final fZ = personFilters.putIfAbsent(keyZ, () => _OneEuroFilter(minCutoff: 1.0, beta: 0.05));
-
-      final filteredX = fX.filter(landmark.x, t);
-      final filteredY = fY.filter(landmark.y, t);
-      final filteredZ = fZ.filter(landmark.z, t);
-
-      filteredMap[type] = PoseLandmark(
-        type: type,
-        x: filteredX,
-        y: filteredY,
-        z: filteredZ,
-        likelihood: landmark.likelihood,
-      );
-    });
-    
-    return filteredMap;
-  }
 }
 
 class PulsePainter extends CustomPainter {
