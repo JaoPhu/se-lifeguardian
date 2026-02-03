@@ -355,8 +355,11 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
       ];
 
       for (int i = 0; i < poses.length; i++) {
-        final landmarks = poses[i];
+        final rawLandmarks = poses[i];
         final personColor = personColors[i % personColors.length];
+        
+        // Apply 1 Euro Filter for Jitter Reduction (Standard for 2025)
+        final landmarks = _applyOneEuroFilter(i, rawLandmarks);
         
         // Single status for camera view for now
         final isLaying = _poseService.isLaying(landmarks);
@@ -634,16 +637,41 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        _buildCameraContent(),
-                        if (_persons.isNotEmpty && _imageSize != null && _imageRotation != null)
-                          CustomPaint(
-                            painter: PosePainter(
-                              _persons,
-                              _imageSize!,
-                              _imageRotation!,
-                              _cameraController?.description.lensDirection ?? CameraLensDirection.back,
-                            ),
-                          ),
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final size = constraints.biggest;
+                            double scale = 1.0;
+                            
+                            if (widget.videoPath != null && _videoController != null && _videoController!.value.isInitialized) {
+                              scale = size.aspectRatio / _videoController!.value.aspectRatio;
+                            } else if (_cameraController != null && _cameraController!.value.isInitialized) {
+                              scale = size.aspectRatio * _cameraController!.value.aspectRatio;
+                            }
+                            if (scale < 1) scale = 1 / scale;
+
+                            return Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Transform.scale(
+                                  scale: scale,
+                                  child: Center(child: _buildCameraContent(size)),
+                                ),
+                                if (_persons.isNotEmpty && _imageSize != null && _imageRotation != null)
+                                  Transform.scale(
+                                    scale: scale,
+                                    child: CustomPaint(
+                                      painter: PosePainter(
+                                        _persons,
+                                        _imageSize!,
+                                        _imageRotation!,
+                                        _cameraController?.description.lensDirection ?? CameraLensDirection.back,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
                         if (_showDiagnosticInsights) _buildDiagnosticOverlay(),
                       ],
                     ),
@@ -1108,12 +1136,14 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
     );
   }
 
-  Widget _buildCameraContent() {
+  // 1 Euro Filter for smoothing jitter
+  final Map<int, Map<String, _OneEuroFilter>> _filters = {};
+
+  Widget _buildCameraContent(Size size) {
     if (widget.videoPath != null && _videoController != null && _videoController!.value.isInitialized) {
       return VideoPlayer(_videoController!);
     } else {
-      final size = MediaQuery.of(context).size;
-      return _buildCameraPreview(size);
+      return CameraPreview(_cameraController!);
     }
   }
 
@@ -1208,6 +1238,84 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
         ),
       ),
     );
+  }
+}
+
+/// 1 Euro Filter implementation for jitter reduction as per 2025 standards
+class _OneEuroFilter {
+  final double minCutoff;
+  final double beta;
+  final double dCutoff;
+  
+  double? _xPrev;
+  double? _dxPrev;
+  int? _tPrev;
+
+  _OneEuroFilter({this.minCutoff = 1.0, this.beta = 0.0, this.dCutoff = 1.0});
+
+  double filter(double x, int t) {
+    if (_tPrev == null || _xPrev == null) {
+      _tPrev = t;
+      _xPrev = x;
+      _dxPrev = 0;
+      return x;
+    }
+
+    final double te = (t - _tPrev!) / 1000.0;
+    if (te <= 0) return _xPrev!;
+
+    final double ad = _alpha(te, dCutoff);
+    final double dx = (x - _xPrev!) / te;
+    final double dxHat = _lerp(_dxPrev!, dx, ad);
+
+    final double cutoff = minCutoff + beta * dxHat.abs();
+    final double a = _alpha(te, cutoff);
+    final double xHat = _lerp(_xPrev!, x, a);
+
+    _xPrev = xHat;
+    _dxPrev = dxHat;
+    _tPrev = t;
+
+    return xHat;
+  }
+
+  double _alpha(double te, double cutoff) {
+    final double tau = 1.0 / (2 * math.pi * cutoff);
+    return 1.0 / (1.0 + tau / te);
+  }
+
+  double _lerp(double a, double b, double alpha) => a + (b - a) * alpha;
+
+  Map<PoseLandmarkType, PoseLandmark> _applyOneEuroFilter(int personIndex, Map<PoseLandmarkType, PoseLandmark> landmarks) {
+    final t = DateTime.now().millisecondsSinceEpoch;
+    final Map<PoseLandmarkType, PoseLandmark> filteredMap = {};
+    
+    _filters.putIfAbsent(personIndex, () => {});
+    final personFilters = _filters[personIndex]!;
+
+    landmarks.forEach((type, landmark) {
+      final keyX = '${type.name}_x';
+      final keyY = '${type.name}_y';
+      final keyZ = '${type.name}_z';
+      
+      final fX = personFilters.putIfAbsent(keyX, () => _OneEuroFilter(minCutoff: 1.0, beta: 0.05));
+      final fY = personFilters.putIfAbsent(keyY, () => _OneEuroFilter(minCutoff: 1.0, beta: 0.05));
+      final fZ = personFilters.putIfAbsent(keyZ, () => _OneEuroFilter(minCutoff: 1.0, beta: 0.05));
+
+      final filteredX = fX.filter(landmark.x, t);
+      final filteredY = fY.filter(landmark.y, t);
+      final filteredZ = fZ.filter(landmark.z, t);
+
+      filteredMap[type] = PoseLandmark(
+        type: type,
+        x: filteredX,
+        y: filteredY,
+        z: filteredZ,
+        likelihood: landmark.likelihood,
+      );
+    });
+    
+    return filteredMap;
   }
 }
 
