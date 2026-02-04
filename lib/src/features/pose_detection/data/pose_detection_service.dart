@@ -89,7 +89,7 @@ class PoseDetectionService {
       final rawCentroid = _calculateRawCentroid(rawLandmarks);
       
       TrackedPose? bestMatch;
-      double minDistance = 150.0; // Distance threshold for matching (adjust as needed)
+      double minDistance = 300.0; // Increased threshold to prevent ghosting (Standard for 2025)
 
       for (var tp in _trackedPoses) {
         final dist = tp.distanceTo(rawCentroid);
@@ -166,10 +166,10 @@ class PoseDetectionService {
   double getAngle(PoseLandmark? first, PoseLandmark? mid, PoseLandmark? last) {
     if (first == null || mid == null || last == null) return 0;
     
-    final double result = math.toDegrees(
+    final double result = (
       math.atan2(last.y - mid.y, last.x - mid.x) -
       math.atan2(first.y - mid.y, first.x - mid.x)
-    ).abs();
+    ).abs() * (180 / math.pi);
     
     return result > 180 ? 360 - result : result;
   }

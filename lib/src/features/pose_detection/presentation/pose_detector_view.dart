@@ -208,8 +208,8 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
     final centerX = width / 2;
     final time = DateTime.now().millisecondsSinceEpoch / 1000.0;
     
-    // Support dynamic N persons (e.g., up to 4 for more realism)
-    final numPeople = 1 + _random.nextInt(3);
+    // Limit to 1 person as per user feedback for standard videos
+    const numPeople = 1;
     final List<PersonPose> mockPersons = [];
     
     final personColors = [
@@ -527,21 +527,36 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
                   const SizedBox(height: 24),
                   
                   // Stop Button
+                  // Unified Start/Stop Analysis Button
                   SizedBox(
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton(
-                      onPressed: () => context.pop(),
+                      onPressed: () {
+                        setState(() {
+                          _isPaused = !_isPaused;
+                          if (_videoController != null) {
+                            if (_isPaused) {
+                              _videoController!.pause();
+                            } else {
+                              _videoController!.play();
+                            }
+                          }
+                        });
+                      },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFD97706),
+                        backgroundColor: _isPaused ? const Color(0xFF0D9488) : const Color(0xFFD97706),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(24),
                         ),
                         elevation: 4,
-                        shadowColor: const Color(0xFFD97706).withValues(alpha: 0.4),
+                        shadowColor: (_isPaused ? const Color(0xFF0D9488) : const Color(0xFFD97706)).withValues(alpha: 0.4),
                       ),
-                      child: const Text('Stop', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      child: Text(
+                        _isPaused ? 'Start Analysis' : 'Stop Analysis', 
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+                      ),
                     ),
                   ),
                   const SizedBox(height: 32),
@@ -672,7 +687,7 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
                             );
                           },
                         ),
-                        if (_showDiagnosticInsights) _buildDiagnosticOverlay(),
+                        if (_showDiagnosticInsights && _isAnalysisComplete) _buildDiagnosticOverlay(),
                       ],
                     ),
                   ),
@@ -762,9 +777,8 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
           const SizedBox(height: 16),
           
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              _buildAnalysisToggleButton(),
               Text(
                 'Speed : ${_playbackSpeed.toInt()}X',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -1086,55 +1100,6 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
     );
   }
 
-  Widget _buildAnalysisToggleButton() {
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _isPaused = !_isPaused;
-          if (_videoController != null) {
-            if (_isPaused) {
-              _videoController!.pause();
-            } else {
-              _videoController!.play();
-            }
-          }
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        decoration: BoxDecoration(
-          color: _isPaused ? Colors.orange : const Color(0xFF0D9488),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: (_isPaused ? Colors.orange : const Color(0xFF0D9488)).withValues(alpha: 0.3),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              _isPaused ? Icons.play_arrow : Icons.stop,
-              color: Colors.white,
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              _isPaused ? 'Start' : 'Stop',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   // 1 Euro Filter for smoothing jitter
   final Map<int, Map<String, _OneEuroFilter>> _filters = {};
