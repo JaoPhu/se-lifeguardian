@@ -129,8 +129,8 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
     _saveState();
   }
 
-  void updateActivity(String activity) {
-    if (state.currentActivity == activity) return;
+  void updateActivity(String activity, {String? snapshotPath}) {
+    if (state.currentActivity == activity && snapshotPath == null) return;
 
     final now = DateTime.now();
     final timestamp = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
@@ -141,7 +141,10 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       type: activity,
       timestamp: timestamp,
       date: "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}",
-      isCritical: activity == 'falling',
+      isCritical: activity == 'falling' || activity == 'near_fall',
+      snapshotUrl: snapshotPath,
+      duration: "0.5 hr", // Default duration for preview
+      description: _getActivityDescription(activity),
     );
 
     final updatedEvents = [newEvent, ...state.events];
@@ -163,6 +166,20 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       );
     }
     _saveState();
+  }
+
+  String _getActivityDescription(String type) {
+    switch (type) {
+      case 'sitting': return 'Common office posture. Take breaks often.';
+      case 'slouching': return 'Poor posture detected. Straighten up!';
+      case 'laying': return 'Subject is resting in a horizontal position.';
+      case 'walking': return 'Active movement detected. Healthy state.';
+      case 'standing': return 'Upright position. Standard activity.';
+      case 'exercise': return 'Intense activity. Great for heart health!';
+      case 'falling': return 'CRITICAL: Sudden impact detected. Check subject!';
+      case 'near_fall': return 'WARNING: Unusual stumble or imbalance.';
+      default: return 'Normal daily activity.';
+    }
   }
 
   void _updateScoreBasedOnActivity() {

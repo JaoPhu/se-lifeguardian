@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,7 +16,7 @@ class EventsScreen extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D9488),
+      backgroundColor: const Color(0xFF0D9492),
       body: Column(
         children: [
           // Header
@@ -227,13 +228,21 @@ class EventsScreen extends ConsumerWidget {
                 color: isCritical ? Colors.red.shade100 : Colors.teal.shade50,
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Center(
-                child: Icon(
-                  _getIconForType(event.type),
-                  size: 48,
-                  color: isCritical ? Colors.red : const Color(0xFF0D9488),
-                ),
-              ),
+              child: event.snapshotUrl != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.file(
+                      File(event.snapshotUrl!),
+                      fit: BoxFit.cover,
+                    ),
+                  )
+                : Center(
+                    child: Icon(
+                      _getIconForType(event.type),
+                      size: 48,
+                      color: isCritical ? Colors.red : const Color(0xFF0D9488),
+                    ),
+                  ),
             ),
           ),
           Padding(

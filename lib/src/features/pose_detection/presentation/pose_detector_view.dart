@@ -3,12 +3,14 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart' hide PoseLandmark, PoseLandmarkType;
 import 'package:permission_handler/permission_handler.dart';
 
 import '../data/pose_models.dart';
 
 import '../data/pose_detection_service.dart';
+import '../data/health_status_provider.dart';
 import 'pose_painter.dart';
 import 'package:video_player/video_player.dart';
 import 'package:screenshot/screenshot.dart';
@@ -18,15 +20,15 @@ import 'package:go_router/go_router.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
-class PoseDetectorView extends StatefulWidget {
+class PoseDetectorView extends ConsumerStatefulWidget {
   final String? videoPath;
   const PoseDetectorView({super.key, this.videoPath});
-
+ 
   @override
-  State<PoseDetectorView> createState() => _PoseDetectorViewState();
+  ConsumerState<PoseDetectorView> createState() => _PoseDetectorViewState();
 }
 
-class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProviderStateMixin {
+class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with TickerProviderStateMixin {
   final PoseDetectionService _poseService = PoseDetectionService();
   CameraController? _cameraController;
   bool _isDetecting = false;
@@ -324,11 +326,27 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
             _imageRotation = InputImageRotation.rotation0deg;
             _isDetecting = false;
             
-            if (_persons.isNotEmpty) {
-               _statusText = _persons.first.isLaying ? "FALL DETECTED!" : "Anatomical Sync: Active";
-               _diagnosticMessage = _persons.first.isLaying ? "CRITICAL: Fall detected" : "Frame Sync: Optimal Flow";
+          if (_persons.isNotEmpty) {
+            final targetIndex = (_selectedPersonIndex ?? 0).clamp(0, _persons.length - 1);
+            final p = _persons[targetIndex];
+            
+            String detectedActivity = 'standing';
+            if (p.isLaying) detectedActivity = 'falling';
+            else if (p.isWalking) detectedActivity = 'walking';
+            
+            _statusText = p.isLaying ? "FALL DETECTED!" : "Anatomical Sync: Active";
+            _diagnosticMessage = p.isLaying ? "CRITICAL: Fall detected" : "Frame Sync: Optimal Flow";
+
+            // State Transition & Snapshot Logic
+            final healthState = ref.read(healthStatusProvider);
+            if (healthState.currentActivity != detectedActivity) {
+               // Capture snapshot asynchronously to not block UI
+               _captureSnapshot().then((path) {
+                 ref.read(healthStatusProvider.notifier).updateActivity(detectedActivity, snapshotPath: path);
+               });
             }
-          });
+          }
+        });
         }
       } catch (e) {
         debugPrint("Video analysis error: $e");
@@ -432,16 +450,28 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
           
           if (_persons.isNotEmpty) {
             final mainPerson = _persons.first;
+            
+            String detectedActivity = 'standing';
+            if (mainPerson.isLaying) detectedActivity = 'falling';
+            else if (mainPerson.isWalking) detectedActivity = 'walking';
+            
             _isLaying = mainPerson.isLaying;
             _isWalking = mainPerson.isWalking;
             
             if (_isLaying) {
               _statusText = "Laying / Fallen!";
-              _captureSnapshot();
             } else if (_isWalking) {
               _statusText = "Walking / Active";
             } else {
               _statusText = "Standing";
+            }
+
+            // Report live activity
+            final healthState = ref.read(healthStatusProvider);
+            if (healthState.currentActivity != detectedActivity) {
+               _captureSnapshot().then((path) {
+                 ref.read(healthStatusProvider.notifier).updateActivity(detectedActivity, snapshotPath: path);
+               });
             }
           } else {
              _statusText = "No Pose Detected";
@@ -457,13 +487,13 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
     }
   }
 
-  Future<void> _captureSnapshot() async {
+  Future<String?> _captureSnapshot() async {
     // Prevent multiple captures for the same fall (debounce 30 seconds)
-    if (_isCapturing) return;
+    if (_isCapturing) return null;
     if (widget.videoPath != null && 
         _lastCaptureTime != null && 
-        DateTime.now().difference(_lastCaptureTime!).inSeconds < 30) {
-      return;
+        DateTime.now().difference(_lastCaptureTime!).inSeconds < 15) { // Reduced to 15s for more responsiveness in events
+      return null;
     }
 
     _isCapturing = true;
@@ -473,19 +503,22 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
       final image = await _screenshotController.capture();
       if (image != null) {
         final directory = await getTemporaryDirectory();
-        final imagePath = '${directory.path}/fall_${DateTime.now().millisecondsSinceEpoch}.png';
+        final fileName = 'event_${DateTime.now().millisecondsSinceEpoch}.png';
+        final imagePath = '${directory.path}/$fileName';
         final imageFile = File(imagePath);
         await imageFile.writeAsBytes(image);
         
-        // Save to gallery
+        // Save to gallery for user visibility if requested, but we need the path
         await Gal.putImage(imagePath);
-        debugPrint("Snapshot saved to gallery: $imagePath");
+        debugPrint("Snapshot saved: $imagePath");
+        return imagePath;
       }
     } catch (e) {
       debugPrint("Error capturing snapshot: $e");
     } finally {
       _isCapturing = false;
     }
+    return null;
   }
 
   InputImage? _inputImageFromCameraImage(CameraImage image) {
@@ -610,7 +643,7 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
                           borderRadius: BorderRadius.circular(24),
                         ),
                         elevation: 4,
-                        shadowColor: (_isPaused ? const Color(0xFF0D9488) : const Color(0xFFD97706)).withOpacity(0.4),
+                        shadowColor: (_isPaused ? const Color(0xFF0D9492) : const Color(0xFFD97706)).withValues(alpha: 0.4),
                       ),
                       child: Text(
                         _isPaused ? 'Start Analysis' : 'Stop Analysis', 
@@ -635,7 +668,7 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
     return Container(
       padding: const EdgeInsets.only(top: 56, bottom: 24, left: 24, right: 24),
       decoration: const BoxDecoration(
-        color: Color(0xFF0D9488),
+        color: Color(0xFF0D9492),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -897,7 +930,7 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
                   child: Center(
                     child: CustomPaint(
                       size: const Size(50, 30),
-                      painter: PulsePainter(color: const Color(0xFF0D9488).withOpacity(0.8)),
+                      painter: PulsePainter(color: const Color(0xFF0D9492).withValues(alpha: 0.8)),
                     ),
                   ),
                 ),
@@ -920,7 +953,7 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
                 'LifeGuardian AI is detecting events and potential risks.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: isDark ? Colors.white54 : const Color(0xFF64748B), 
+                  color: isDark ? Colors.white54 : const Color(0xFF64748B).withValues(alpha: 0.8),
                   fontSize: 15,
                   height: 1.4,
                 ),
@@ -947,7 +980,7 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
   Widget _buildSummaryScreen() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: const Color(0xFF0D9488),
+      backgroundColor: const Color(0xFF0D9492),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
@@ -1269,7 +1302,7 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
                 Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0D9488).withOpacity(0.1),
+                    color: const Color(0xFF0D9492).withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.psychology, color: Color(0xFF0D9488), size: 14),

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,7 +16,7 @@ class OverviewScreen extends ConsumerWidget {
     final healthState = ref.watch(healthStatusProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D9488),
+      backgroundColor: const Color(0xFF0D9492), // Slightly deeper teal for premium feel
       body: Column(
         children: [
           // Header
@@ -213,7 +214,15 @@ class OverviewScreen extends ConsumerWidget {
                       ),
                     ],
                   )
-                : null,
+                : (healthState.events.isNotEmpty && healthState.events.any((e) => e.snapshotUrl != null))
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.file(
+                          File(healthState.events.firstWhere((e) => e.snapshotUrl != null).snapshotUrl!),
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    : null,
             ),
           ),
           const SizedBox(height: 12),
