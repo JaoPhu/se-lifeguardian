@@ -60,11 +60,13 @@ class TrackedPose {
 }
 
 class PoseDetectionService {
-  final PoseDetector _poseDetector = PoseDetector(options: PoseDetectorOptions());
+  // Use High-Accuracy model for diagnostic-grade results
+  final PoseDetector _poseDetector = PoseDetector(
+    options: PoseDetectorOptions(model: PoseDetectionModel.accurate),
+  );
   
-  // Ported from Prototype: Balance between lag and stability
-  // 0.1 = very stable but laggy, 0.9 = jittery but fast
-  final double _smoothingFactor = 0.35; 
+  // Smoothing is now handled by 1 Euro Filter in the Presentation layer
+  // to minimize latency and ensure anatomical consistency.
   
   final List<TrackedPose> _trackedPoses = [];
   final int _maxForgottenFrames = 10;
@@ -98,7 +100,8 @@ class PoseDetectionService {
       }
 
       if (bestMatch != null) {
-        bestMatch.update(rawLandmarks, _smoothingFactor);
+        // Direct update: Smoothing is offloaded to 1 Euro Filter in UI
+        bestMatch.update(rawLandmarks, 1.0); 
       } else {
         _trackedPoses.add(TrackedPose(rawLandmarks));
       }
@@ -159,24 +162,17 @@ class PoseDetectionService {
   }
 
   double getLegStraightness(Map<PoseLandmarkType, PoseLandmark> landmarks) {
-    double getAngle(PoseLandmark? a, PoseLandmark? b, PoseLandmark? c) {
-      if (a == null || b == null || c == null) return 180;
-      
-      final abX = b.x - a.x;
-      final abY = b.y - a.y;
-      final bcX = c.x - b.x;
-      final bcY = c.y - b.y;
-      
-      final dot = abX * bcX + abY * bcY;
-      final magAB = math.sqrt(abX * abX + abY * abY);
-      final magBC = math.sqrt(bcX * bcX + bcY * bcY);
-      
-      if (magAB * magBC == 0) return 0;
-      
-      double cosine = dot / (magAB * magBC);
-      cosine = cosine.clamp(-1.0, 1.0);
-      return math.acos(cosine) * (180 / math.pi);
-    }
+  /// Calculates the angle between three landmarks using atan2 (Anatomical Standard).
+  double getAngle(PoseLandmark? first, PoseLandmark? mid, PoseLandmark? last) {
+    if (first == null || mid == null || last == null) return 0;
+    
+    final double result = math.toDegrees(
+      math.atan2(last.y - mid.y, last.x - mid.x) -
+      math.atan2(first.y - mid.y, first.x - mid.x)
+    ).abs();
+    
+    return result > 180 ? 360 - result : result;
+  }
 
     final leftBend = getAngle(
       landmarks[PoseLandmarkType.leftHip],
