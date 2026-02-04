@@ -42,22 +42,21 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   Size? _imageSize;
   InputImageRotation? _imageRotation;
   bool _isLoading = true;
-  double _playbackSpeed = 1.0;
+  final double _playbackSpeed = 1.0;
   DateTime _simTime = DateTime.now();
-  final List<String> _analysisEvents = [];
   bool _isAnalysisComplete = false;
   bool _isAnalyzing = false;
-  double _analysisProgress = 0.0;
   bool _isPaused = false;
   bool _isIdentificationMode = false;
-  bool _showDiagnosticInsights = true;
-  double _healthScore = 98.0;
+  final bool _showDiagnosticInsights = true;
+  final double _healthScore = 98.0;
   String _diagnosticMessage = "Scanning Systemic Alignment...";
 
   // Video Player state
   VideoPlayerController? _videoController;
   Timer? _simTimer;
-  final math.Random _random = math.Random();
+  bool _isAnalysisLoopRunning = false;
+  final Map<int, Map<String, _OneEuroFilter>> _filters = {};
 
   // Snapshot state
   final ScreenshotController _screenshotController = ScreenshotController();
@@ -157,11 +156,13 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   }
 
   Future<void> _runPreAnalysis() async {
-    if (_videoController == null || !_videoController!.value.isInitialized) return;
+    if (_videoController == null || !_videoController!.value.isInitialized) {
+      return;
+    }
     
     setState(() {
       _isAnalyzing = true;
-      _analysisProgress = 0.0;
+      _isAnalysisComplete = false;
       _statusText = "Analyzing Scene...";
     });
 
@@ -170,8 +171,12 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     final sampleInterval = duration > 10000 ? 1000 : 500;
     
     for (int ms = 0; ms < duration; ms += sampleInterval) {
-      if (!mounted) return;
-      if (!_isAnalyzing) break;
+      if (!mounted) {
+        return;
+      }
+      if (!_isAnalyzing) {
+        break;
+      }
 
       await _videoController!.seekTo(Duration(milliseconds: ms));
       // Ultra-fast seek wait
@@ -208,9 +213,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
         }
       }
       
-      setState(() {
-        _analysisProgress = (ms / duration).clamp(0.0, 1.0);
-      });
+      // Analysis logic removed progress update for now as it's not used in UI
     }
 
     if (!mounted || !_isAnalyzing) { // Check if cancelled or unmounted
@@ -218,9 +221,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
       return;
     }
 
-    setState(() {
-      _analysisProgress = 1.0;
-    });
+    // Final state set
     
     await Future.delayed(const Duration(milliseconds: 300));
     
@@ -243,10 +244,10 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     }
   }
 
-  bool _isAnalysisLoopRunning = false;
-
   void _startVideoAnalysisLoop() async {
-    if (_isAnalysisLoopRunning) return;
+    if (_isAnalysisLoopRunning) {
+      return;
+    }
     _isAnalysisLoopRunning = true;
 
     while (mounted && widget.videoPath != null && _isAnalysisLoopRunning) {
@@ -281,10 +282,12 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
         final inputImage = InputImage.fromFile(file);
         final poses = await _poseService.detect(inputImage, uint8list);
         
-        if (!mounted) break;
+        if (!mounted) {
+          break;
+        }
 
         final List<PersonPose> detectedPersons = [];
-        final personColors = [
+        final List<Color> personColors = [
           const Color(0xFF0D9488), // Teal
           Colors.orange,
           Colors.blue,
@@ -295,9 +298,8 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
           Colors.lime,
         ];
 
-        for (var pose in poses) {
-          final tp = pose as TrackedPerson;
-          final landmarks = _applyOneEuroFilter(tp.id, tp.smoothedLandmarks as Map<PoseLandmarkType, PoseLandmark>);
+        for (var tp in poses) {
+          final landmarks = _applyOneEuroFilter(tp.id, tp.smoothedLandmarks);
           
           final isLaying = _poseService.isLaying(landmarks);
           final isWalking = _poseService.isWalking(landmarks);
@@ -331,8 +333,11 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
             final p = _persons[targetIndex];
             
             String detectedActivity = 'standing';
-            if (p.isLaying) detectedActivity = 'falling';
-            else if (p.isWalking) detectedActivity = 'walking';
+            if (p.isLaying) {
+              detectedActivity = 'falling';
+            } else if (p.isWalking) {
+              detectedActivity = 'walking';
+            }
             
             _statusText = p.isLaying ? "FALL DETECTED!" : "Anatomical Sync: Active";
             _diagnosticMessage = p.isLaying ? "CRITICAL: Fall detected" : "Frame Sync: Optimal Flow";
@@ -350,7 +355,9 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
         }
       } catch (e) {
         debugPrint("Video analysis error: $e");
-        _isDetecting = false;
+        if (mounted) {
+          _isDetecting = false;
+        }
       }
       
       // Minimal delay to yield to the UI thread
@@ -403,12 +410,16 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   }
 
   void _processCameraImage(CameraImage image) async {
-    if (_isDetecting) return;
+    if (_isDetecting) {
+      return;
+    }
     _isDetecting = true;
 
     try {
       final inputImage = _inputImageFromCameraImage(image);
-      if (inputImage == null) return;
+      if (inputImage == null) {
+        return;
+      }
 
       final poses = await _poseService.detect(inputImage, Uint8List(0));
       
@@ -425,8 +436,8 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
       ];
 
       for (var pose in poses) {
-        final tp = pose as TrackedPerson;
-        final landmarks = _applyOneEuroFilter(tp.id, tp.smoothedLandmarks as Map<PoseLandmarkType, PoseLandmark>);
+        final tp = pose;
+        final landmarks = _applyOneEuroFilter(tp.id, tp.smoothedLandmarks);
         final personColor = personColors[tp.id % personColors.length];
         
         final isLaying = _poseService.isLaying(landmarks);
@@ -452,8 +463,11 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
             final mainPerson = _persons.first;
             
             String detectedActivity = 'standing';
-            if (mainPerson.isLaying) detectedActivity = 'falling';
-            else if (mainPerson.isWalking) detectedActivity = 'walking';
+            if (mainPerson.isLaying) {
+              detectedActivity = 'falling';
+            } else if (mainPerson.isWalking) {
+              detectedActivity = 'walking';
+            }
             
             _isLaying = mainPerson.isLaying;
             _isWalking = mainPerson.isWalking;
@@ -489,7 +503,9 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
 
   Future<String?> _captureSnapshot() async {
     // Prevent multiple captures for the same fall (debounce 30 seconds)
-    if (_isCapturing) return null;
+    if (_isCapturing) {
+      return null;
+    }
     if (widget.videoPath != null && 
         _lastCaptureTime != null && 
         DateTime.now().difference(_lastCaptureTime!).inSeconds < 15) { // Reduced to 15s for more responsiveness in events
@@ -522,7 +538,9 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   }
 
   InputImage? _inputImageFromCameraImage(CameraImage image) {
-    if (_cameraController == null) return null;
+    if (_cameraController == null) {
+      return null;
+    }
 
     final camera = _cameraController!.description;
     final sensorOrientation = camera.sensorOrientation;
@@ -541,12 +559,18 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
       rotation = InputImageRotationValue.fromRawValue(rotationOffset);
     }
     
-    if (rotation == null) return null;
+    if (rotation == null) {
+      return null;
+    }
 
     final format = InputImageFormatValue.fromRawValue(image.format.raw);
-    if (format == null) return null;
+    if (format == null) {
+      return null;
+    }
 
-    if (image.planes.isEmpty) return null;
+    if (image.planes.isEmpty) {
+      return null;
+    }
 
     final plane = image.planes.first;
 
@@ -709,7 +733,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -749,7 +773,9 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                             } else if (_cameraController != null && _cameraController!.value.isInitialized) {
                               scale = size.aspectRatio * _cameraController!.value.aspectRatio;
                             }
-                            if (scale < 1) scale = 1 / scale;
+                            if (scale < 1) {
+                              scale = 1 / scale;
+                            }
 
                             return Stack(
                               fit: StackFit.expand,
@@ -799,7 +825,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -923,7 +949,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                     color: Colors.transparent,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF1F5F9),
+                      color: isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFF1F5F9),
                       width: 1,
                     ),
                   ),
@@ -966,14 +992,30 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   }
 
   String _getColorName(Color color) {
-    if (color == const Color(0xFF0D9488)) return "Teal";
-    if (color == Colors.orange) return "Orange";
-    if (color == Colors.blue) return "Blue";
-    if (color == Colors.purple) return "Purple";
-    if (color == Colors.pink) return "Pink";
-    if (color == Colors.amber) return "Amber";
-    if (color == Colors.cyan) return "Cyan";
-    if (color == Colors.lime) return "Lime";
+    if (color == const Color(0xFF0D9488)) {
+      return "Teal";
+    }
+    if (color == Colors.orange) {
+      return "Orange";
+    }
+    if (color == Colors.blue) {
+      return "Blue";
+    }
+    if (color == Colors.purple) {
+      return "Purple";
+    }
+    if (color == Colors.pink) {
+      return "Pink";
+    }
+    if (color == Colors.amber) {
+      return "Amber";
+    }
+    if (color == Colors.cyan) {
+      return "Cyan";
+    }
+    if (color == Colors.lime) {
+      return "Lime";
+    }
     return "Custom Color";
   }
 
@@ -1001,7 +1043,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    color: _persons[_selectedPersonIndex!].color.withOpacity(0.2),
+                    color: _persons[_selectedPersonIndex!].color.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.white30),
                   ),
@@ -1022,7 +1064,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withOpacity(0.1) : Colors.white,
+                  color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.white,
                   borderRadius: BorderRadius.circular(32),
                 ),
                 child: Column(
@@ -1147,7 +1189,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                         child: Container(
                           width: double.infinity,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(24),
                             border: Border.all(color: Colors.white24),
                           ),
@@ -1186,7 +1228,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                                       shape: BoxShape.circle,
                                       boxShadow: [
                                         BoxShadow(
-                                          color: person.color.withOpacity(0.4),
+                                          color: person.color.withValues(alpha: 0.4),
                                           blurRadius: 10,
                                           spreadRadius: 2,
                                         )
@@ -1209,7 +1251,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                                       const SizedBox(height: 4),
                                       Text(
                                         'Tracked as ID #${person.id}',
-                                        style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.7)),
+                                        style: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.7)),
                                       ),
                                     ],
                                   ),
@@ -1246,22 +1288,6 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     );
   }
 
-  Widget _buildCameraPreview(Size size) {
-    var scale = size.aspectRatio * _cameraController!.value.aspectRatio;
-    if (scale < 1) scale = 1 / scale;
-    
-    return Transform.scale(
-      scale: scale,
-      child: Center(
-        child: CameraPreview(_cameraController!),
-      ),
-    );
-  }
-
-
-  // 1 Euro Filter for smoothing jitter
-  final Map<int, Map<String, _OneEuroFilter>> _filters = {};
-
   Widget _buildCameraContent(Size size) {
     if (widget.videoPath != null && _videoController != null && _videoController!.value.isInitialized) {
       return VideoPlayer(_videoController!);
@@ -1279,15 +1305,15 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
         width: 180,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: (isDark ? Colors.black : Colors.white).withOpacity(0.85),
+          color: (isDark ? Colors.black : Colors.white).withValues(alpha: 0.85),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: const Color(0xFF0D9488).withOpacity(0.3),
+            color: const Color(0xFF0D9492).withValues(alpha: 0.3),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -1339,7 +1365,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
               borderRadius: BorderRadius.circular(2),
               child: LinearProgressIndicator(
                 value: _healthScore / 100,
-                backgroundColor: const Color(0xFF0D9488).withOpacity(0.1),
+                backgroundColor: const Color(0xFF0D9492).withValues(alpha: 0.1),
                 valueColor: AlwaysStoppedAnimation<Color>(
                   _healthScore < 70 ? Colors.red : const Color(0xFF0D9488),
                 ),
