@@ -1,19 +1,28 @@
 import 'dart:math' as math;
-import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+import 'dart:ui' as ui;
+import 'dart:typed_data';
+import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart' hide PoseLandmark, PoseLandmarkType;
+import 'multi_person_pose_service.dart';
+import 'pose_models.dart';
 
-class TrackedPose {
+class TrackedPerson {
   Map<PoseLandmarkType, PoseLandmark> smoothedLandmarks = {};
   math.Point<double> centroid = const math.Point(0, 0);
-  int framesSinceUpdate = 0;
+  math.Point<double> velocity = const math.Point(0, 0);
+  int missedCount = 0;
+  int seenCount = 0;
+  final int id;
 
-  TrackedPose(Map<PoseLandmarkType, PoseLandmark> initialLandmarks) {
-    smoothedLandmarks = Map.from(initialLandmarks);
+  TrackedPerson(this.id, Map<PoseLandmarkType, PoseLandmark> initialLandmarks) {
+    smoothedLandmarks = Map<PoseLandmarkType, PoseLandmark>.from(initialLandmarks);
     _updateCentroid();
   }
 
   void update(Map<PoseLandmarkType, PoseLandmark> rawLandmarks, double factor) {
-    rawLandmarks.forEach((type, landmark) {
-      final prev = smoothedLandmarks[type];
+    final oldCentroid = centroid;
+    
+    rawLandmarks.forEach((PoseLandmarkType type, PoseLandmark landmark) {
+      final PoseLandmark? prev = smoothedLandmarks[type];
       if (prev != null) {
         smoothedLandmarks[type] = PoseLandmark(
           type: type,
@@ -26,8 +35,31 @@ class TrackedPose {
         smoothedLandmarks[type] = landmark;
       }
     });
+
     _updateCentroid();
-    framesSinceUpdate = 0;
+    
+    // Update velocity based on centroid movement
+    velocity = math.Point(centroid.x - oldCentroid.x, centroid.y - oldCentroid.y);
+    missedCount = 0;
+    seenCount++;
+  }
+
+  /// Predict next position based on velocity (Dead Reckoning)
+  void predict() {
+    centroid = math.Point(centroid.x + velocity.x, centroid.y + velocity.y);
+    
+    // Shift all landmarks by velocity to keep skeleton consistent during occlusion
+    smoothedLandmarks = smoothedLandmarks.map((PoseLandmarkType type, PoseLandmark landmark) {
+      return MapEntry(type, PoseLandmark(
+        type: type,
+        x: landmark.x + velocity.x,
+        y: landmark.y + velocity.y,
+        z: landmark.z,
+        likelihood: landmark.likelihood * 0.9, // Diminish likelihood while occluded
+      ));
+    });
+    
+    missedCount++;
   }
 
   void _updateCentroid() {
@@ -36,7 +68,6 @@ class TrackedPose {
     final leftShoulder = smoothedLandmarks[PoseLandmarkType.leftShoulder];
     final rightShoulder = smoothedLandmarks[PoseLandmarkType.rightShoulder];
     
-    // Use average of hips and shoulders for more stable centroid
     double sumX = 0;
     double sumY = 0;
     int count = 0;
@@ -60,58 +91,125 @@ class TrackedPose {
 }
 
 class PoseDetectionService {
-  // Use High-Accuracy model for diagnostic-grade results
-  final PoseDetector _poseDetector = PoseDetector(
-    options: PoseDetectorOptions(model: PoseDetectionModel.accurate),
-  );
+  final MultiPersonPoseService _multiPersonPoseService = MultiPersonPoseService();
   
-  // Smoothing is now handled by 1 Euro Filter in the Presentation layer
-  // to minimize latency and ensure anatomical consistency.
+  final List<TrackedPerson> _activeTracks = [];
+  int _nextPersonId = 0;
   
-  final List<TrackedPose> _trackedPoses = [];
-  final int _maxForgottenFrames = 10;
+  // Scene Analysis State
+  bool _isCameraMoving = false;
+  math.Point<double> _globalMotion = const math.Point(0, 0);
+  
+  // Stability thresholds (Standard for Occlusion Handling)
+  static const double _matchThreshold = 350.0; 
+  static const int _maxMissedFrames = 60; 
+  // REMOVED: _velocityNoiseThreshold - allowing fast movements as requested
 
   Future<void> close() async {
-    await _poseDetector.close();
+    await _multiPersonPoseService.close();
   }
 
-  Future<List<Map<PoseLandmarkType, PoseLandmark>>> detect(InputImage inputImage) async {
-    final List<Pose> detectedPoses = await _poseDetector.processImage(inputImage);
+  /// Detects if the scene is moving by comparing movement of all tracked objects
+  void _analyzeSceneMotion() {
+    if (_activeTracks.isEmpty) return;
     
-    // 1. Increment frame counters
-    for (var tp in _trackedPoses) {
-      tp.framesSinceUpdate++;
+    double dx = 0;
+    double dy = 0;
+    int count = 0;
+
+    for (var track in _activeTracks) {
+      if (track.missedCount == 0) {
+        dx += track.velocity.x;
+        dy += track.velocity.y;
+        count++;
+      }
     }
 
-    // 2. Match and Update
-    for (var pose in detectedPoses) {
-      final rawLandmarks = pose.landmarks;
-      final rawCentroid = _calculateRawCentroid(rawLandmarks);
-      
-      TrackedPose? bestMatch;
-      double minDistance = 300.0; // Increased threshold to prevent ghosting (Standard for 2025)
+    if (count > 0) {
+      _globalMotion = math.Point(dx / count, dy / count);
+      // Increased threshold to 15.0: Ignore minor hand-shake, only trigger focus if camera truly pans
+      _isCameraMoving = math.sqrt(_globalMotion.x * _globalMotion.x + _globalMotion.y * _globalMotion.y) > 15.0; 
+    }
+  }
 
-      for (var tp in _trackedPoses) {
-        final dist = tp.distanceTo(rawCentroid);
+  Future<List<TrackedPerson>> detect(InputImage inputImage, Uint8List originalBytes) async {
+    final List<Map<PoseLandmarkType, PoseLandmark>> detectedLandmarksList = 
+        await _multiPersonPoseService.detect(inputImage, originalBytes);
+    
+    final imageSize = inputImage.metadata?.size ?? const ui.Size(0, 0);
+    final centerX = imageSize.width / 2;
+    final centerY = imageSize.height / 2;
+    final centerRadius = imageSize.shortestSide * 0.35; // Focused region for moving camera
+    // 1. Prediction Step for all existing tracks
+    for (var track in _activeTracks) {
+      track.predict();
+    }
+
+    // 2. Matching Step (Greedy matching by distance)
+    final List<Map<PoseLandmarkType, PoseLandmark>> unmatchedDetections = List.from(detectedLandmarksList);
+    
+    // Sort tracks by missedCount to prioritize matching active ones
+    _activeTracks.sort((a, b) => a.missedCount.compareTo(b.missedCount));
+
+    for (var track in _activeTracks) {
+      if (unmatchedDetections.isEmpty) break;
+
+      Map<PoseLandmarkType, PoseLandmark>? bestMatch;
+      double minDistance = _matchThreshold;
+
+      for (var det in unmatchedDetections) {
+        final detCentroid = _calculateRawCentroid(det);
+        final dist = track.distanceTo(detCentroid);
         if (dist < minDistance) {
           minDistance = dist;
-          bestMatch = tp;
+          bestMatch = det;
         }
       }
 
       if (bestMatch != null) {
-        // Direct update: Smoothing is offloaded to 1 Euro Filter in UI
-        bestMatch.update(rawLandmarks, 1.0); 
-      } else {
-        _trackedPoses.add(TrackedPose(rawLandmarks));
+        // Increased smoothing influence (0.6 instead of 0.7) for more stable tracks
+        track.update(bestMatch, 0.6);
+        unmatchedDetections.remove(bestMatch);
       }
     }
 
-    // 3. Remove old tracks
-    _trackedPoses.removeWhere((tp) => tp.framesSinceUpdate > _maxForgottenFrames);
+    // 3. Create new tracks for unmatched detections
+    for (var det in unmatchedDetections) {
+      final detCentroid = _calculateRawCentroid(det);
+      
+      // Intelligent Filtering Logic
+      if (_isCameraMoving) {
+        // If camera is moving, only keep detections near center
+        final distToCenter = math.sqrt(math.pow(detCentroid.x - centerX, 2) + math.pow(detCentroid.y - centerY, 2));
+        if (distToCenter > centerRadius) continue;
+      }
 
-    // 4. Return smoothed landmarks
-    return _trackedPoses.map((tp) => tp.smoothedLandmarks).toList();
+      _activeTracks.add(TrackedPerson(_nextPersonId++, det));
+    }
+
+    // 4. Post-Process Analysis (Scene State)
+    _analyzeSceneMotion();
+
+    // 5. Cleanup Tracks
+    _activeTracks.removeWhere((t) {
+      // Check if centroid is wildly out of frame (Auto-remove if left scene)
+      if (imageSize.width > 0 && imageSize.height > 0) {
+        final padding = imageSize.shortestSide * 0.3;
+        final isWayOutOfFrame = t.centroid.x < -padding || 
+                                 t.centroid.x > imageSize.width + padding || 
+                                 t.centroid.y < -padding || 
+                                 t.centroid.y > imageSize.height + padding;
+        if (isWayOutOfFrame) return true;
+      }
+      
+      // Lost track (Time-based cleanup)
+      return t.missedCount > _maxMissedFrames;
+    });
+
+    // Sort by ID to ensure consistent UI layering
+    _activeTracks.sort((a, b) => a.id.compareTo(b.id));
+
+    return List.from(_activeTracks);
   }
 
   math.Point<double> _calculateRawCentroid(Map<PoseLandmarkType, PoseLandmark> landmarks) {
@@ -193,8 +291,8 @@ class PoseDetectionService {
     if (landmarks.isEmpty) return false;
     final torsoAngle = getTorsoAngle(landmarks);
     
-    final xValues = landmarks.values.map((l) => l.x).toList();
-    final yValues = landmarks.values.map((l) => l.y).toList();
+    final xValues = landmarks.values.map((l) => (l as PoseLandmark).x).toList();
+    final yValues = landmarks.values.map((l) => (l as PoseLandmark).y).toList();
     if (xValues.isEmpty || yValues.isEmpty) return false;
     
     final width = xValues.reduce(math.max) - xValues.reduce(math.min);

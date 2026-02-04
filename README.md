@@ -67,10 +67,12 @@ assets/
 ```
 
 ## 💡 Key Features Implemented
-- **On-Device AI Pose Detection**: Real-time skeletal tracking using Google ML Kit for privacy and speed.
+- **AI Stability Engine**: High-speed pre-analysis and camera motion compensation for robust tracking in handheld or dynamic environments.
+- **Multi-Person ID Persistence**: Intelligent tracking that maintains individual IDs for multiple subjects across occlusion and rapid movement.
+- **On-Device AI Pose Detection**: Real-time skeletal tracking using Google ML Kit (v2025) for privacy and zero-latency performance.
 - **Precision Activity Ring**: High-fidelity circular gauge for monitoring daily health goals.
 - **Weekly Analytics**: Clean, minimal bar charts for long-term activity tracking.
-- **Multi-Camera Dashboard**: Interactive management of multiple monitoring sources.
+- **Multi-Camera Dashboard**: Interactive management of multiple monitoring sources with snapshot event logging.
 - **Premium Navigation**: Custom semi-floating bottom navigation bar mirroring high-end mobile designs.
 - **Global Theme Support**: Full support for system-aware dark and light modes.
 
@@ -90,7 +92,7 @@ assets/
 1.  `flutter pub get`
 2.  `flutter run`
 
-> **สถานะปัจจุบัน**: พัฒนาส่วน UI Mirroring จากต้นฉบับเสร็จสมบูรณ์ 100% ทั้งระบบสถิติ (Statistics), กราฟรายสัปดาห์ (Weekly Chart), และแถบเมนูนำทาง (Custom Bottom Navbar) พร้อมสำหรับการเชื่อมต่อ Logic ตรวจจับแบบเต็มรูปแบบ
+> **สถานะปัจจุบัน**: พัฒนาส่วน AI Stability Engine และระบบ Pre-analysis เสร็จสมบูรณ์ พร้อมรองรับการตรวจจับแบบหลายคน (Multi-person) อย่างแม่นยำแม้ขณะกล้องสั่นหรือวัตถุขยับเร็ว พร้อมระบบรายงานผลแบบ Snapshot รายเหตุการณ์
 
 ---
 

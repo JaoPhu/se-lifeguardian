@@ -1,9 +1,12 @@
+import 'dart:ui' as ui;
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart' hide PoseLandmark, PoseLandmarkType;
 import 'package:permission_handler/permission_handler.dart';
+
+import '../data/pose_models.dart';
 
 import '../data/pose_detection_service.dart';
 import 'pose_painter.dart';
@@ -41,6 +44,8 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
   DateTime _simTime = DateTime.now();
   final List<String> _analysisEvents = [];
   bool _isAnalysisComplete = false;
+  bool _isAnalyzing = false;
+  double _analysisProgress = 0.0;
   bool _isPaused = false;
   bool _isIdentificationMode = false;
   bool _showDiagnosticInsights = true;
@@ -49,7 +54,6 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
 
   // Video Player state
   VideoPlayerController? _videoController;
-  Timer? _analysisTimer;
   Timer? _simTimer;
   final math.Random _random = math.Random();
 
@@ -78,11 +82,11 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
 
   @override
   void dispose() {
+    _isAnalysisLoopRunning = false;
     _loadingController.dispose();
     _cameraController?.stopImageStream();
     _cameraController?.dispose();
     _videoController?.dispose();
-    _analysisTimer?.cancel();
     _simTimer?.cancel();
     _poseService.close();
     super.dispose();
@@ -97,23 +101,14 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
       setState(() {
         _imageSize = _videoController!.value.size;
         _imageRotation = InputImageRotation.rotation0deg;
-        _isLoading = true;
-        _statusText = "AI Analyzing Video...";
+        _isLoading = false; // Set to false here, pre-analysis will handle its own loading state
+        _statusText = "Video Initialized.";
       });
 
-      // Show loading screen for 3 seconds
-      await Future.delayed(const Duration(seconds: 3));
-      
       if (!mounted) return;
 
-      setState(() {
-        _isLoading = false;
-        _videoController!.play();
-      });
-
-      // Start simulation timers
-      _startSimulation();
-      _startMockAnalysis();
+      // Start pre-analysis
+      _runPreAnalysis();
 
       _videoController!.addListener(() {
         if (_videoController!.value.position >= _videoController!.value.duration) {
@@ -141,154 +136,209 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
 
   void _onAnalysisComplete() {
     if (_isAnalysisComplete) return;
-    _analysisTimer?.cancel();
+    _isAnalysisLoopRunning = false;
     _simTimer?.cancel();
     _videoController?.pause();
+    _isAnalysisLoopRunning = false;
 
-    if (_persons.length > 1) {
+    if (_persons.length > 1 && _selectedPersonIndex == null) {
       setState(() {
-        _isIdentificationMode = true;
+         _isIdentificationMode = true;
       });
     } else {
       setState(() {
-        _selectedPersonIndex = _persons.isNotEmpty ? 0 : null;
+        _selectedPersonIndex ??= (_persons.isNotEmpty ? 0 : null);
         _isAnalysisComplete = true;
         _statusText = "Analysis Complete";
       });
     }
   }
 
-  void _startMockAnalysis() {
-    _analysisTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
-      if (!mounted) return;
-      if (_isPaused) return;
+  Future<void> _runPreAnalysis() async {
+    if (_videoController == null || !_videoController!.value.isInitialized) return;
+    
+    setState(() {
+      _isAnalyzing = true;
+      _analysisProgress = 0.0;
+      _statusText = "Analyzing Scene...";
+    });
 
-      // Check if video is finished
-      if (_videoController != null && 
-          _videoController!.value.position >= _videoController!.value.duration) {
-        _onAnalysisComplete();
-        return;
+    final duration = _videoController!.value.duration.inMilliseconds;
+    // Fast Sampling: Sample every 1000ms for quick scene understanding (Faster than 500ms)
+    final sampleInterval = duration > 10000 ? 1000 : 500;
+    
+    for (int ms = 0; ms < duration; ms += sampleInterval) {
+      if (!mounted) return;
+      if (!_isAnalyzing) break;
+
+      await _videoController!.seekTo(Duration(milliseconds: ms));
+      // Ultra-fast seek wait
+      await Future.delayed(const Duration(milliseconds: 60));
+      
+      // Low-res capture for maximum speed during pre-analysis
+      final uint8list = await _screenshotController.capture(pixelRatio: 0.4);
+      if (uint8list != null) {
+        final tempDir = await getTemporaryDirectory();
+        final file = File('${tempDir.path}/pre_frame.png');
+        await file.writeAsBytes(uint8list, flush: true);
+        
+        final inputImage = InputImage.fromFile(file);
+        final trackedPersons = await _poseService.detect(inputImage, uint8list);
+        
+        // Update local _persons list so we know how many people are being tracked
+        if (mounted) {
+          final personColors = [
+            const Color(0xFF0D9488),
+            Colors.orange, Colors.blue, Colors.purple,
+            Colors.pink, Colors.amber, Colors.cyan, Colors.lime,
+          ];
+          
+          setState(() {
+            _persons.clear();
+            _persons.addAll(trackedPersons.map((tp) => PersonPose(
+              id: tp.id,
+              landmarks: tp.smoothedLandmarks,
+              color: personColors[tp.id % personColors.length],
+              isLaying: _poseService.isLaying(tp.smoothedLandmarks),
+              isWalking: _poseService.isWalking(tp.smoothedLandmarks),
+            )));
+          });
+        }
       }
       
       setState(() {
-        final time = DateTime.now().millisecondsSinceEpoch / 1000.0;
-        
-        // Diagnostic Engine Logic (Simulated based on pose)
-        if (_random.nextDouble() < 0.01) {
-          _isLaying = true;
-          _isWalking = false;
-          _statusText = "FALL DETECTED!";
-          _diagnosticMessage = "CRITICAL: Impact Detected at Hip Level";
-          _healthScore = 45.0 + _random.nextDouble() * 10;
-        } else {
-          _isLaying = false;
-          _isWalking = math.sin(time) > 0;
-          _statusText = _isWalking ? "Active Movement" : "Stable Stance";
-          
-          if (_isWalking) {
-            _diagnosticMessage = "Gait Analysis: Symmetric (94%)";
-            _healthScore = 95.0 + math.sin(time) * 2;
-          } else {
-            _diagnosticMessage = "Spine Alignment: Within Normal Range";
-            _healthScore = 98.0 + math.cos(time) * 1;
-          }
-        }
-        
-        // Generate mock persons
-        final persons = _generateMockPersons();
-        _persons.clear();
-        _persons.addAll(persons);
+        _analysisProgress = (ms / duration).clamp(0.0, 1.0);
       });
-    });
-  }
-
-  List<PersonPose> _generateMockPersons() {
-    final width = _imageSize?.width ?? 1080;
-    final height = _imageSize?.height ?? 1920;
-    final centerX = width / 2;
-    final time = DateTime.now().millisecondsSinceEpoch / 1000.0;
-    
-    // Limit to 1 person as per user feedback for standard videos
-    const numPeople = 1;
-    final List<PersonPose> mockPersons = [];
-    
-    final personColors = [
-        const Color(0xFF0D9488), // Teal
-        Colors.orange,
-        Colors.blue,
-        Colors.purple,
-    ];
-
-    for (int i = 0; i < numPeople; i++) {
-      // Offset each person to the center focus area
-      final spread = width * 0.18;
-      final offsetX = (i - (numPeople - 1) / 2) * spread;
-      final personCenterX = centerX + offsetX + math.sin(time + i) * 10; // Slight horizontal sway
-      final verticalBase = height * 0.25 + (i % 2) * (height * 0.05);
-      
-      // Animation factors
-      final breathing = math.sin(time * 1.5 + i) * 5;
-      final armSwing = math.sin(time * 2.0 + i) * 15;
-      
-      final landmarks = <PoseLandmarkType, PoseLandmark>{};
-
-      // Helper to add landmark
-      void add(PoseLandmarkType type, double x, double y) {
-        landmarks[type] = PoseLandmark(type: type, x: x, y: y, z: 0, likelihood: 0.95);
-      }
-
-      // Torso & Head
-      add(PoseLandmarkType.nose, personCenterX, verticalBase + breathing);
-      add(PoseLandmarkType.leftEye, personCenterX - 15, verticalBase - 10 + breathing);
-      add(PoseLandmarkType.rightEye, personCenterX + 15, verticalBase - 10 + breathing);
-      add(PoseLandmarkType.leftEar, personCenterX - 30, verticalBase - 5 + breathing);
-      add(PoseLandmarkType.rightEar, personCenterX + 30, verticalBase - 5 + breathing);
-
-      // Shoulders & Arms
-      final shoulderY = verticalBase + height * 0.08 + breathing;
-      final shoulderWidth = width * 0.09;
-      add(PoseLandmarkType.leftShoulder, personCenterX - shoulderWidth, shoulderY);
-      add(PoseLandmarkType.rightShoulder, personCenterX + shoulderWidth, shoulderY);
-      
-      final elbowY = shoulderY + height * 0.12;
-      add(PoseLandmarkType.leftElbow, personCenterX - shoulderWidth - 20 + armSwing, elbowY);
-      add(PoseLandmarkType.rightElbow, personCenterX + shoulderWidth + 20 - armSwing, elbowY);
-      
-      final wristY = elbowY + height * 0.1;
-      add(PoseLandmarkType.leftWrist, personCenterX - shoulderWidth - 30 + armSwing * 1.2, wristY);
-      add(PoseLandmarkType.rightWrist, personCenterX + shoulderWidth + 30 - armSwing * 1.2, wristY);
-
-      // Hips & Legs
-      final hipY = shoulderY + height * 0.25;
-      final hipWidth = width * 0.07;
-      add(PoseLandmarkType.leftHip, personCenterX - hipWidth, hipY);
-      add(PoseLandmarkType.rightHip, personCenterX + hipWidth, hipY);
-      
-      final kneeY = hipY + height * 0.18;
-      add(PoseLandmarkType.leftKnee, personCenterX - hipWidth - 5, kneeY);
-      add(PoseLandmarkType.rightKnee, personCenterX + hipWidth + 5, kneeY);
-      
-      final ankleY = kneeY + height * 0.18;
-      add(PoseLandmarkType.leftAnkle, personCenterX - hipWidth - 10, ankleY);
-      add(PoseLandmarkType.rightAnkle, personCenterX + hipWidth + 10, ankleY);
-
-      // Hands & Feet (Simplified)
-      add(PoseLandmarkType.leftPinky, personCenterX - shoulderWidth - 35, wristY + 10);
-      add(PoseLandmarkType.rightPinky, personCenterX + shoulderWidth + 35, wristY + 10);
-      add(PoseLandmarkType.leftHeel, personCenterX - hipWidth - 20, ankleY + 10);
-      add(PoseLandmarkType.rightHeel, personCenterX + hipWidth + 20, ankleY + 10);
-      add(PoseLandmarkType.leftFootIndex, personCenterX - hipWidth - 30, ankleY + 20);
-      add(PoseLandmarkType.rightFootIndex, personCenterX + hipWidth + 30, ankleY + 20);
-
-      mockPersons.add(PersonPose(
-        landmarks: landmarks,
-        color: personColors[i % personColors.length],
-        isLaying: i == 0 ? _isLaying : false,
-        isWalking: i == 0 ? _isWalking : false,
-      ));
     }
 
-    return mockPersons;
+    if (!mounted || !_isAnalyzing) { // Check if cancelled or unmounted
+      await _videoController!.seekTo(Duration.zero);
+      return;
+    }
+
+    setState(() {
+      _analysisProgress = 1.0;
+    });
+    
+    await Future.delayed(const Duration(milliseconds: 300));
+    
+    // Seek back to start
+    await _videoController!.seekTo(Duration.zero);
+    
+    if (_persons.length > 1) {
+      setState(() {
+        _isAnalyzing = false;
+        _isIdentificationMode = true;
+      });
+    } else {
+      setState(() {
+        _isAnalyzing = false;
+        _selectedPersonIndex = _persons.isNotEmpty ? 0 : null;
+        _videoController!.play();
+      });
+      _startVideoAnalysisLoop();
+      _startSimulation();
+    }
+  }
+
+  bool _isAnalysisLoopRunning = false;
+
+  void _startVideoAnalysisLoop() async {
+    if (_isAnalysisLoopRunning) return;
+    _isAnalysisLoopRunning = true;
+
+    while (mounted && widget.videoPath != null && _isAnalysisLoopRunning) {
+      // Check if video is finished
+      if (_videoController != null && 
+          _videoController!.value.isInitialized &&
+          _videoController!.value.position >= _videoController!.value.duration) {
+        _onAnalysisComplete();
+        break;
+      }
+
+      if (_isPaused || _isDetecting || _videoController == null || !_videoController!.value.isPlaying) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        continue;
+      }
+
+      _isDetecting = true;
+      try {
+        // Capture at lower resolution (0.7) for significantly faster processing
+        final uint8list = await _screenshotController.capture(pixelRatio: 0.6);
+        if (uint8list == null) {
+          _isDetecting = false;
+          await Future.delayed(const Duration(milliseconds: 5));
+          continue;
+        }
+
+        final tempDir = await getTemporaryDirectory();
+        final file = File('${tempDir.path}/frame.png');
+        await file.writeAsBytes(uint8list, flush: true);
+
+        
+        final inputImage = InputImage.fromFile(file);
+        final poses = await _poseService.detect(inputImage, uint8list);
+        
+        if (!mounted) break;
+
+        final List<PersonPose> detectedPersons = [];
+        final personColors = [
+          const Color(0xFF0D9488), // Teal
+          Colors.orange,
+          Colors.blue,
+          Colors.purple,
+          Colors.pink,
+          Colors.amber,
+          Colors.cyan,
+          Colors.lime,
+        ];
+
+        for (var pose in poses) {
+          final tp = pose as TrackedPerson;
+          final landmarks = _applyOneEuroFilter(tp.id, tp.smoothedLandmarks as Map<PoseLandmarkType, PoseLandmark>);
+          
+          final isLaying = _poseService.isLaying(landmarks);
+          final isWalking = _poseService.isWalking(landmarks);
+          
+          detectedPersons.add(PersonPose(
+            id: tp.id,
+            landmarks: landmarks,
+            color: personColors[tp.id % personColors.length],
+            isLaying: isLaying,
+            isWalking: isWalking,
+          ));
+        }
+
+        if (mounted) {
+          // Dynamically detect image size for perfect alignment
+          final completer = Completer<ui.Image>();
+          ui.decodeImageFromList(uint8list, (ui.Image img) {
+            completer.complete(img);
+          });
+          final img = await completer.future;
+
+          setState(() {
+            _persons.clear();
+            _persons.addAll(detectedPersons);
+            _imageSize = Size(img.width.toDouble(), img.height.toDouble());
+            _imageRotation = InputImageRotation.rotation0deg;
+            _isDetecting = false;
+            
+            if (_persons.isNotEmpty) {
+               _statusText = _persons.first.isLaying ? "FALL DETECTED!" : "Anatomical Sync: Active";
+               _diagnosticMessage = _persons.first.isLaying ? "CRITICAL: Fall detected" : "Frame Sync: Optimal Flow";
+            }
+          });
+        }
+      } catch (e) {
+        debugPrint("Video analysis error: $e");
+        _isDetecting = false;
+      }
+      
+      // Minimal delay to yield to the UI thread
+      await Future.delayed(Duration.zero);
+    }
+    _isAnalysisLoopRunning = false;
   }
 
   Future<void> _initializeCamera() async {
@@ -342,7 +392,7 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
       final inputImage = _inputImageFromCameraImage(image);
       if (inputImage == null) return;
 
-      final poses = await _poseService.detect(inputImage);
+      final poses = await _poseService.detect(inputImage, Uint8List(0));
       
       final List<PersonPose> detectedPersons = [];
       final List<Color> personColors = [
@@ -352,20 +402,20 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
         Colors.purple,
         Colors.pink,
         Colors.amber,
+        Colors.cyan,
+        Colors.lime,
       ];
 
-      for (int i = 0; i < poses.length; i++) {
-        final rawLandmarks = poses[i];
-        final personColor = personColors[i % personColors.length];
+      for (var pose in poses) {
+        final tp = pose as TrackedPerson;
+        final landmarks = _applyOneEuroFilter(tp.id, tp.smoothedLandmarks as Map<PoseLandmarkType, PoseLandmark>);
+        final personColor = personColors[tp.id % personColors.length];
         
-        // Apply 1 Euro Filter for Jitter Reduction (Standard for 2025)
-        final landmarks = _applyOneEuroFilter(i, rawLandmarks);
-        
-        // Single status for camera view for now
         final isLaying = _poseService.isLaying(landmarks);
         final isWalking = _poseService.isWalking(landmarks);
 
         detectedPersons.add(PersonPose(
+          id: tp.id,
           landmarks: landmarks,
           color: personColor,
           isLaying: isLaying,
@@ -444,33 +494,38 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
     final camera = _cameraController!.description;
     final sensorOrientation = camera.sensorOrientation;
     
-    final WriteBuffer allBytes = WriteBuffer();
-    for (final Plane plane in image.planes) {
-      allBytes.putUint8List(plane.bytes);
+    // Official ML Kit Coordinate Mapping (Matching iOS/Android Docs)
+    InputImageRotation? rotation;
+    if (Platform.isIOS) {
+      rotation = InputImageRotationValue.fromRawValue(sensorOrientation);
+    } else {
+      var rotationOffset = 0;
+      if (camera.lensDirection == CameraLensDirection.front) {
+        rotationOffset = (sensorOrientation + 0) % 360;
+      } else {
+        rotationOffset = (sensorOrientation - 0 + 360) % 360;
+      }
+      rotation = InputImageRotationValue.fromRawValue(rotationOffset);
     }
-    final bytes = allBytes.done().buffer.asUint8List();
+    
+    if (rotation == null) return null;
 
-    final Size imageSize = Size(image.width.toDouble(), image.height.toDouble());
+    final format = InputImageFormatValue.fromRawValue(image.format.raw);
+    if (format == null) return null;
 
-    InputImageRotation imageRotation = InputImageRotation.rotation0deg;
-    switch (sensorOrientation) {
-      case 90: imageRotation = InputImageRotation.rotation90deg; break;
-      case 180: imageRotation = InputImageRotation.rotation180deg; break;
-      case 270: imageRotation = InputImageRotation.rotation270deg; break;
-      default: imageRotation = InputImageRotation.rotation0deg; break;
-    }
+    if (image.planes.isEmpty) return null;
 
-    // Default to nv21 for Android, bgra8888 for iOS
-    final inputImageFormat = Platform.isAndroid ? InputImageFormat.nv21 : InputImageFormat.bgra8888;
+    final plane = image.planes.first;
 
-    final metadata = InputImageMetadata(
-      size: imageSize,
-      rotation: imageRotation,
-      format: inputImageFormat,
-      bytesPerRow: image.planes[0].bytesPerRow,
+    return InputImage.fromBytes(
+      bytes: plane.bytes,
+      metadata: InputImageMetadata(
+        size: Size(image.width.toDouble(), image.height.toDouble()),
+        rotation: rotation,
+        format: format,
+        bytesPerRow: plane.bytesPerRow,
+      ),
     );
-
-    return InputImage.fromBytes(bytes: bytes, metadata: metadata);
   }
 
 
@@ -490,6 +545,10 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
       return Scaffold(
         body: Center(child: Text(_statusText)),
       );
+    }
+
+    if (_isAnalyzing) {
+      return _buildLoadingScreen();
     }
 
     if (_isIdentificationMode) {
@@ -551,7 +610,7 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
                           borderRadius: BorderRadius.circular(24),
                         ),
                         elevation: 4,
-                        shadowColor: (_isPaused ? const Color(0xFF0D9488) : const Color(0xFFD97706)).withValues(alpha: 0.4),
+                        shadowColor: (_isPaused ? const Color(0xFF0D9488) : const Color(0xFFD97706)).withOpacity(0.4),
                       ),
                       child: Text(
                         _isPaused ? 'Start Analysis' : 'Stop Analysis', 
@@ -617,7 +676,7 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -647,11 +706,6 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Screenshot(
-                    controller: _screenshotController,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
                         LayoutBuilder(
                           builder: (context, constraints) {
                             final size = constraints.biggest;
@@ -669,7 +723,12 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
                               children: [
                                 Transform.scale(
                                   scale: scale,
-                                  child: Center(child: _buildCameraContent(size)),
+                                  child: Center(
+                                    child: Screenshot(
+                                      controller: _screenshotController,
+                                      child: _buildCameraContent(size),
+                                    ),
+                                  ),
                                 ),
                                 if (_persons.isNotEmpty && _imageSize != null && _imageRotation != null)
                                   Transform.scale(
@@ -688,9 +747,7 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
                           },
                         ),
                         if (_showDiagnosticInsights && _isAnalysisComplete) _buildDiagnosticOverlay(),
-                      ],
-                    ),
-                  ),
+
                 ],
               ),
             ),
@@ -709,7 +766,7 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -833,14 +890,14 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
                     color: Colors.transparent,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFF1F5F9),
+                      color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF1F5F9),
                       width: 1,
                     ),
                   ),
                   child: Center(
                     child: CustomPaint(
                       size: const Size(50, 30),
-                      painter: PulsePainter(color: const Color(0xFF0D9488).withValues(alpha: 0.8)),
+                      painter: PulsePainter(color: const Color(0xFF0D9488).withOpacity(0.8)),
                     ),
                   ),
                 ),
@@ -875,6 +932,18 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
     );
   }
 
+  String _getColorName(Color color) {
+    if (color == const Color(0xFF0D9488)) return "Teal";
+    if (color == Colors.orange) return "Orange";
+    if (color == Colors.blue) return "Blue";
+    if (color == Colors.purple) return "Purple";
+    if (color == Colors.pink) return "Pink";
+    if (color == Colors.amber) return "Amber";
+    if (color == Colors.cyan) return "Cyan";
+    if (color == Colors.lime) return "Lime";
+    return "Custom Color";
+  }
+
   Widget _buildSummaryScreen() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
@@ -899,7 +968,7 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    color: _persons[_selectedPersonIndex!].color.withValues(alpha: 0.2),
+                    color: _persons[_selectedPersonIndex!].color.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.white30),
                   ),
@@ -920,7 +989,7 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.white,
+                  color: isDark ? Colors.white.withOpacity(0.1) : Colors.white,
                   borderRadius: BorderRadius.circular(32),
                 ),
                 child: Column(
@@ -1031,55 +1100,111 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
               ),
               const SizedBox(height: 48),
               
-              // Person Selection List
-              ...List.generate(_persons.length, (index) {
-                final person = _persons[index];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 64,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          _selectedPersonIndex = index;
-                          _isIdentificationMode = false;
-                          _isAnalysisComplete = true;
-                          _statusText = "Analysis Complete";
-                        });
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: person.color,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
+              // Person Selection List (Scrollable)
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    children: List.generate(_persons.length, (index) {
+                      final person = _persons[index];
+                      final colorName = _getColorName(person.color);
+                      
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: Colors.white24),
+                          ),
+                          child: InkWell(
+                            onTap: () {
+                              final isAtEnd = _videoController != null && 
+                                              _videoController!.value.isInitialized &&
+                                              _videoController!.value.position >= _videoController!.value.duration;
+                              
+                              setState(() {
+                                _selectedPersonIndex = index;
+                                _isIdentificationMode = false;
+                                if (isAtEnd) {
+                                   _isAnalysisComplete = true;
+                                   _statusText = "Analysis Complete";
+                                } else {
+                                   _videoController?.play();
+                                }
+                              });
+                              
+                              if (!isAtEnd) {
+                                _startVideoAnalysisLoop();
+                                _startSimulation();
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(24),
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: person.color,
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: person.color.withOpacity(0.4),
+                                          blurRadius: 10,
+                                          spreadRadius: 2,
+                                        )
+                                      ],
+                                    ),
+                                    child: const Icon(Icons.person, color: Colors.white),
+                                  ),
+                                  const SizedBox(width: 20),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        "That's me! ($colorName)",
+                                        style: const TextStyle(
+                                          fontSize: 18, 
+                                          fontWeight: FontWeight.bold, 
+                                          color: Colors.white
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Tracked as ID #${person.id}',
+                                        style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.7)),
+                                      ),
+                                    ],
+                                  ),
+                                  const Spacer(),
+                                  const Icon(Icons.arrow_forward_ios, color: Colors.white24, size: 16),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
-                        elevation: 4,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 24, height: 24,
-                            decoration: BoxDecoration(color: person.color, shape: BoxShape.circle),
-                          ),
-                          const SizedBox(width: 16),
-                          Text(
-                            index == 0 ? 'Person 1 (Primary)' : 'Person ${index + 1}',
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ),
+                      );
+                    }),
                   ),
-                );
-              }),
+                ),
+              ),
               
               const Spacer(),
               
               TextButton(
-                onPressed: () => context.pop(),
-                child: const Text('Cancel & Return', style: TextStyle(color: Colors.white70)),
+                onPressed: () {
+                  setState(() {
+                    _isIdentificationMode = false;
+                    _isAnalyzing = false; // Stop pre-analysis if it was running
+                    _videoController?.play(); // Resume video if it was paused for identification
+                    _startVideoAnalysisLoop(); // Start the main analysis loop
+                  });
+                },
+                child: const Text('Cancel Analysis', style: TextStyle(color: Colors.white70)),
               ),
             ],
           ),
@@ -1121,15 +1246,15 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
         width: 180,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: (isDark ? Colors.black : Colors.white).withValues(alpha: 0.85),
+          color: (isDark ? Colors.black : Colors.white).withOpacity(0.85),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: const Color(0xFF0D9488).withValues(alpha: 0.3),
+            color: const Color(0xFF0D9488).withOpacity(0.3),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
+              color: Colors.black.withOpacity(0.1),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -1144,7 +1269,7 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
                 Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0D9488).withValues(alpha: 0.1),
+                    color: const Color(0xFF0D9488).withOpacity(0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.psychology, color: Color(0xFF0D9488), size: 14),
@@ -1181,7 +1306,7 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
               borderRadius: BorderRadius.circular(2),
               child: LinearProgressIndicator(
                 value: _healthScore / 100,
-                backgroundColor: const Color(0xFF0D9488).withValues(alpha: 0.1),
+                backgroundColor: const Color(0xFF0D9488).withOpacity(0.1),
                 valueColor: AlwaysStoppedAnimation<Color>(
                   _healthScore < 70 ? Colors.red : const Color(0xFF0D9488),
                 ),
@@ -1205,24 +1330,22 @@ class _PoseDetectorViewState extends State<PoseDetectorView> with TickerProvider
     );
   }
 
-  Map<PoseLandmarkType, PoseLandmark> _applyOneEuroFilter(int personIndex, Map<PoseLandmarkType, PoseLandmark> landmarks) {
-    final t = DateTime.now().millisecondsSinceEpoch;
+  Map<PoseLandmarkType, PoseLandmark> _applyOneEuroFilter(int personId, Map<PoseLandmarkType, PoseLandmark> landmarks) {
+    final t = DateTime.now().millisecondsSinceEpoch / 1000.0;
     final Map<PoseLandmarkType, PoseLandmark> filteredMap = {};
     
-    _filters.putIfAbsent(personIndex, () => {});
-    final personFilters = _filters[personIndex]!;
+    _filters.putIfAbsent(personId, () => {});
+    final personFilters = _filters[personId]!;
 
     landmarks.forEach((type, landmark) {
       final keyX = '${type.name}_x';
       final keyY = '${type.name}_y';
       final keyZ = '${type.name}_z';
       
-      // Refined parameters for higher anatomical precision (based on 2025 research)
-      // minCutoff: 1.0 -> 0.8 (better low-speed stability)
-      // beta: 0.05 -> 0.02 (smoother transitions)
-      final fX = personFilters.putIfAbsent(keyX, () => _OneEuroFilter(minCutoff: 0.8, beta: 0.02));
-      final fY = personFilters.putIfAbsent(keyY, () => _OneEuroFilter(minCutoff: 0.8, beta: 0.02));
-      final fZ = personFilters.putIfAbsent(keyZ, () => _OneEuroFilter(minCutoff: 0.8, beta: 0.02));
+      // High-speed responsiveness tuning (Beta 0.05 for faster reaction to movement)
+      final fX = personFilters.putIfAbsent(keyX, () => _OneEuroFilter(minCutoff: 1.0, beta: 0.05));
+      final fY = personFilters.putIfAbsent(keyY, () => _OneEuroFilter(minCutoff: 1.0, beta: 0.05));
+      final fZ = personFilters.putIfAbsent(keyZ, () => _OneEuroFilter(minCutoff: 1.0, beta: 0.05));
 
       final filteredX = fX.filter(landmark.x, t);
       final filteredY = fY.filter(landmark.y, t);
@@ -1257,11 +1380,11 @@ class _OneEuroFilter {
   
   double? _xPrev;
   double? _dxPrev;
-  int? _tPrev;
+  double? _tPrev;
 
   _OneEuroFilter({this.minCutoff = 1.0, this.beta = 0.0, this.dCutoff = 1.0});
 
-  double filter(double x, int t) {
+  double filter(double x, double t) {
     if (_tPrev == null || _xPrev == null) {
       _tPrev = t;
       _xPrev = x;
@@ -1269,7 +1392,7 @@ class _OneEuroFilter {
       return x;
     }
 
-    final double te = (t - _tPrev!) / 1000.0;
+    final double te = t - _tPrev!;
     if (te <= 0) return _xPrev!;
 
     final double ad = _alpha(te, dCutoff);

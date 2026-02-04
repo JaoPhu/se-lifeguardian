@@ -3,7 +3,8 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart' hide PoseLandmark, PoseLandmarkType;
+import '../../pose_detection/data/pose_models.dart';
 import '../../pose_detection/presentation/pose_painter.dart';
 
 class AIDebugScreen extends StatefulWidget {
@@ -101,7 +102,8 @@ class _AIDebugScreenState extends State<AIDebugScreen> {
       }
 
       final poses = await _poseDetector!.processImage(inputImage);
-
+      
+      final List<PersonPose> detectedPersons = [];
       if (mounted) {
         setState(() {
           _poses = poses;
@@ -237,7 +239,17 @@ class _AIDebugScreenState extends State<AIDebugScreen> {
               painter: PosePainter(
                 [
                   PersonPose(
-                    landmarks: _poses.first.landmarks,
+                    id: 0,
+                    landmarks: _poses.first.landmarks.map((key, value) => MapEntry(
+                      PoseLandmarkType.values.byName(key.name),
+                      PoseLandmark(
+                        type: PoseLandmarkType.values.byName(key.name),
+                        x: value.x,
+                        y: value.y,
+                        z: value.z,
+                        likelihood: value.likelihood,
+                      ),
+                    )),
                     color: const Color(0xFF0D9488),
                     isLaying: _statusText.contains('FALL'),
                     isWalking: false,
