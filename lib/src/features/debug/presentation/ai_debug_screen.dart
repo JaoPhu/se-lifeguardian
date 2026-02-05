@@ -3,7 +3,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart' hide PoseLandmark, PoseLandmarkType;
+import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart' as ml_kit;
 import '../../pose_detection/data/pose_models.dart';
 import '../../pose_detection/presentation/pose_painter.dart';
 
@@ -16,17 +16,17 @@ class AIDebugScreen extends StatefulWidget {
 
 class _AIDebugScreenState extends State<AIDebugScreen> {
   CameraController? _controller;
-  PoseDetector? _poseDetector;
+  ml_kit.PoseDetector? _poseDetector;
   bool _isDetecting = false;
   bool _canProcess = true;
   bool _isBusy = false;
   String _statusText = 'Initializing...';
   double _fallThreshold = 0.35;
   double _minConfidence = 0.5;
-  List<Pose> _poses = [];
+  List<ml_kit.Pose> _poses = [];
   CustomPaint? _customPaint;
   Size? _imageSize;
-  InputImageRotation? _imageRotation;
+  ml_kit.InputImageRotation? _imageRotation;
 
   @override
   void initState() {
@@ -36,8 +36,8 @@ class _AIDebugScreenState extends State<AIDebugScreen> {
   }
 
   Future<void> _initializePoseDetector() async {
-    final options = PoseDetectorOptions(mode: PoseDetectionMode.stream);
-    _poseDetector = PoseDetector(options: options);
+    final options = ml_kit.PoseDetectorOptions(mode: ml_kit.PoseDetectionMode.stream);
+    _poseDetector = ml_kit.PoseDetector(options: options);
   }
 
   Future<void> _initializeCamera() async {
@@ -103,7 +103,6 @@ class _AIDebugScreenState extends State<AIDebugScreen> {
 
       final poses = await _poseDetector!.processImage(inputImage);
       
-      final List<PersonPose> detectedPersons = [];
       if (mounted) {
         setState(() {
           _poses = poses;
@@ -119,7 +118,7 @@ class _AIDebugScreenState extends State<AIDebugScreen> {
     }
   }
 
-  InputImage? _inputImageFromCameraImage(CameraImage image) {
+  ml_kit.InputImage? _inputImageFromCameraImage(CameraImage image) {
     if (_controller == null) return null;
 
     final camera = _controller!.description;
@@ -133,21 +132,21 @@ class _AIDebugScreenState extends State<AIDebugScreen> {
     final rotationCompensation =
         (orientations[_controller!.value.deviceOrientation] ?? 0 + sensorOrientation) % 360;
 
-    final rotation = InputImageRotationValue.fromRawValue(rotationCompensation);
+    final rotation = ml_kit.InputImageRotationValue.fromRawValue(rotationCompensation);
     if (rotation == null) return null;
 
-    final format = InputImageFormatValue.fromRawValue(image.format.raw);
+    final format = ml_kit.InputImageFormatValue.fromRawValue(image.format.raw);
     if (format == null ||
-        (Platform.isAndroid && format != InputImageFormat.nv21) ||
-        (Platform.isIOS && format != InputImageFormat.bgra8888)) {
+        (Platform.isAndroid && format != ml_kit.InputImageFormat.nv21) ||
+        (Platform.isIOS && format != ml_kit.InputImageFormat.bgra8888)) {
       return null;
     }
 
     if (image.planes.isEmpty) return null;
 
-    return InputImage.fromBytes(
+    return ml_kit.InputImage.fromBytes(
       bytes: image.planes[0].bytes,
-      metadata: InputImageMetadata(
+      metadata: ml_kit.InputImageMetadata(
         size: Size(image.width.toDouble(), image.height.toDouble()),
         rotation: rotation,
         format: format,
@@ -156,16 +155,16 @@ class _AIDebugScreenState extends State<AIDebugScreen> {
     );
   }
 
-  void _checkFallStatus(List<Pose> poses) {
+  void _checkFallStatus(List<ml_kit.Pose> poses) {
     if (poses.isEmpty) {
       _statusText = 'No Pose Detected';
       return;
     }
 
     final pose = poses.first;
-    final nose = pose.landmarks[PoseLandmarkType.nose];
-    final leftAnkle = pose.landmarks[PoseLandmarkType.leftAnkle];
-    final rightAnkle = pose.landmarks[PoseLandmarkType.rightAnkle];
+    final nose = pose.landmarks[ml_kit.PoseLandmarkType.nose];
+    final leftAnkle = pose.landmarks[ml_kit.PoseLandmarkType.leftAnkle];
+    final rightAnkle = pose.landmarks[ml_kit.PoseLandmarkType.rightAnkle];
 
     if (nose != null && leftAnkle != null && rightAnkle != null) {
       final ankleY = (leftAnkle.y + rightAnkle.y) / 2;

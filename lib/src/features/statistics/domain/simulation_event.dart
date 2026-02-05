@@ -7,6 +7,10 @@ class SimulationEvent {
   final String? description;
   final String? snapshotUrl;
   final bool isCritical;
+  final bool isVerified; // Cloud verification status
+  final double? confidence; // Verification confidence score
+  final int? startTimeMs; // Precision start time
+  final int? durationSeconds; // Precision duration
 
   SimulationEvent({
     required this.id,
@@ -17,6 +21,10 @@ class SimulationEvent {
     this.description,
     this.snapshotUrl,
     this.isCritical = false,
+    this.isVerified = false,
+    this.confidence,
+    this.startTimeMs,
+    this.durationSeconds,
   });
 
   String get thaiLabel {
@@ -51,6 +59,10 @@ class SimulationEvent {
     String? description,
     String? snapshotUrl,
     bool? isCritical,
+    bool? isVerified,
+    double? confidence,
+    int? startTimeMs,
+    int? durationSeconds,
   }) {
     return SimulationEvent(
       id: id ?? this.id,
@@ -61,6 +73,10 @@ class SimulationEvent {
       description: description ?? this.description,
       snapshotUrl: snapshotUrl ?? this.snapshotUrl,
       isCritical: isCritical ?? this.isCritical,
+      isVerified: isVerified ?? this.isVerified,
+      confidence: confidence ?? this.confidence,
+      startTimeMs: startTimeMs ?? this.startTimeMs,
+      durationSeconds: durationSeconds ?? this.durationSeconds,
     );
   }
 
@@ -74,6 +90,10 @@ class SimulationEvent {
       'description': description,
       'snapshotUrl': snapshotUrl,
       'isCritical': isCritical,
+      'isVerified': isVerified,
+      'confidence': confidence,
+      'startTimeMs': startTimeMs,
+      'durationSeconds': durationSeconds,
     };
   }
 
@@ -87,6 +107,10 @@ class SimulationEvent {
       description: json['description'] as String?,
       snapshotUrl: json['snapshotUrl'] as String?,
       isCritical: json['isCritical'] as bool? ?? false,
+      isVerified: json['isVerified'] as bool? ?? false,
+      confidence: (json['confidence'] as num?)?.toDouble(),
+      startTimeMs: json['startTimeMs'] as int?,
+      durationSeconds: json['durationSeconds'] as int?,
     );
   }
 }

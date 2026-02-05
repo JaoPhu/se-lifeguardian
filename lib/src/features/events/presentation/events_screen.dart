@@ -266,9 +266,16 @@ class EventsScreen extends ConsumerWidget {
                       style: const TextStyle(fontSize: 10, color: Colors.grey),
                     ),
                   ],
+
                 ),
-                if (isCritical)
+                if (isCritical) ...[
+                  if (event.isVerified)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Icon(Icons.verified, color: Colors.blue.shade400, size: 20),
+                    ),
                   const Icon(Icons.warning, color: Colors.red, size: 20),
+                ],
               ],
             ),
           ),
@@ -292,30 +299,66 @@ class EventsScreen extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: isCritical ? Colors.red.shade100 : Colors.white,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              _getIconForType(event.type),
-              size: 20,
-              color: isCritical ? Colors.red : const Color(0xFF0D9488),
-            ),
+          Stack(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isCritical ? Colors.red.shade100 : Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _getIconForType(event.type),
+                  size: 20,
+                  color: isCritical ? Colors.red : const Color(0xFF0D9488),
+                ),
+              ),
+              if (event.isVerified)
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.verified, size: 12, color: Colors.blue),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  event.thaiLabel,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: isCritical ? Colors.red : (isDark ? Colors.grey.shade200 : const Color(0xFF374151)),
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      event.thaiLabel,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: isCritical ? Colors.red : (isDark ? Colors.grey.shade200 : const Color(0xFF374151)),
+                      ),
+                    ),
+                    if (event.isVerified) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue.shade100),
+                        ),
+                        child: const Text(
+                          "VERIFIED",
+                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.blue),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 Text(
                   event.description ?? "Duration: ${event.duration ?? "0.5 hr"}",

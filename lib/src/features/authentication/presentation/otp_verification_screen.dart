@@ -65,9 +65,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: 16),
-              Align(
+              const Align(
                 alignment: Alignment.centerLeft,
-                child: const Text(
+                child: Text(
                   'OTP Verification',
                   style: TextStyle(
                     fontSize: 24,
@@ -179,7 +179,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     backgroundColor: const Color(0xFF0D9488),
                     foregroundColor: Colors.white,
                     elevation: 4,
-                    shadowColor: Color(0xFF0D9488).withValues(alpha: 0.4),
+                    shadowColor: const Color(0xFF0D9488).withValues(alpha: 0.4),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),

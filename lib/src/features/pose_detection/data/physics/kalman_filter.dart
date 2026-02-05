@@ -1,13 +1,12 @@
-import 'dart:math';
+
 
 /// A standard 1D Kalman Filter for smoothing noisy signals.
 /// Based on standard control theory.
 class KalmanFilter {
-  double _processNoise; // Q: Process noise covariance
-  double _measurementNoise; // R: Measurement noise covariance
+  final double _processNoise; // Q: Process noise covariance
+  final double _measurementNoise; // R: Measurement noise covariance
   double _estimatedError; // P: Estimation error covariance
   double _value; // X: State estimate
-  double _velocity = 0; // Velocity estimate
 
   bool _isInitialized = false;
 
@@ -32,12 +31,12 @@ class KalmanFilter {
     // Prediction Phase
     // X_p = X_k-1 (Simple constant position model for now)
     // P_p = P_k-1 + Q
-    double predictedValue = _value; 
-    double predictedError = _estimatedError + _processNoise;
+    final double predictedValue = _value; 
+    final double predictedError = _estimatedError + _processNoise;
 
     // Measurement Update (Correction) Phase
     // K = P_p / (P_p + R)
-    double kalmanGain = predictedError / (predictedError + _measurementNoise);
+    final double kalmanGain = predictedError / (predictedError + _measurementNoise);
 
     // X_k = X_p + K * (Z_k - X_p)
     _value = predictedValue + kalmanGain * (measurement - predictedValue);

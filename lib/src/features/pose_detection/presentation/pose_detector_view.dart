@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart' hide PoseLandmark, PoseLandmarkType;
 import 'package:permission_handler/permission_handler.dart';
 
-import '../data/pose_models.dart';
+
 
 import '../data/pose_detection_service.dart';
 import '../data/health_status_provider.dart';
@@ -21,7 +21,7 @@ import 'dart:async';
 import '../../dashboard/data/camera_provider.dart' as cam_provider;
 import '../../dashboard/domain/camera.dart' as cam_domain;
 import '../../statistics/domain/simulation_event.dart';
-import 'dart:math' as math;
+
 
 class PoseDetectorView extends ConsumerStatefulWidget {
   final String? videoPath;
@@ -39,8 +39,6 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   // State for UI
   final List<PersonPose> _persons = [];
   int? _selectedPersonIndex;
-  bool _isLaying = false;
-  bool _isWalking = false;
   String _statusText = "Initializing...";
   Size? _imageSize;
   InputImageRotation? _imageRotation;
@@ -59,8 +57,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   VideoPlayerController? _videoController;
   Timer? _simTimer;
   bool _isAnalysisLoopRunning = false;
-  // Performance Optimization: Use List<_OneEuroFilter> [x, y, z] to avoid String keys
-  final Map<int, Map<PoseLandmarkType, List<_OneEuroFilter>>> _filters = {};
+
 
   // Snapshot state
   final ScreenshotController _screenshotController = ScreenshotController();
@@ -212,6 +209,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
               color: personColors[tp.id % personColors.length],
               isLaying: _poseService.isLaying(tp.smoothedLandmarks),
               isWalking: _poseService.isWalking(tp.smoothedLandmarks),
+              isFalling: _poseService.isFalling(tp),
             )));
           });
         }
@@ -303,10 +301,11 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
         ];
 
         for (var tp in poses) {
-          final landmarks = _applyOneEuroFilter(tp.id, tp.smoothedLandmarks);
+          final landmarks = tp.smoothedLandmarks;
           
           final isLaying = _poseService.isLaying(landmarks);
           final isWalking = _poseService.isWalking(landmarks);
+          final isFalling = _poseService.isFalling(tp);
           
           detectedPersons.add(PersonPose(
             id: tp.id,
@@ -314,6 +313,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
             color: personColors[tp.id % personColors.length],
             isLaying: isLaying,
             isWalking: isWalking,
+            isFalling: isFalling,
           ));
         }
 
@@ -337,14 +337,24 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
             final p = _persons[targetIndex];
             
             String detectedActivity = 'standing';
-            if (p.isLaying) {
-              detectedActivity = 'falling';
+            if (p.isFalling) {
+               detectedActivity = 'falling_impact'; // Differentiate impact
+            } else if (p.isLaying) {
+              detectedActivity = 'laying';
             } else if (p.isWalking) {
               detectedActivity = 'walking';
             }
             
-            _statusText = p.isLaying ? "FALL DETECTED!" : "Anatomical Sync: Active";
-            _diagnosticMessage = p.isLaying ? "CRITICAL: Fall detected" : "Frame Sync: Optimal Flow";
+            if (p.isFalling) {
+               _statusText = "IMPACT DETECTED!";
+               _diagnosticMessage = "CRITICAL: High G-Force Impact";
+            } else if (p.isLaying) {
+              _statusText = "Laying / Fallen";
+              _diagnosticMessage = "CRITICAL: Fall detected";
+            } else {
+              _statusText = p.isWalking ? "Walking / Active" : "Anatomical Sync: Active";
+              _diagnosticMessage = "Frame Sync: Optimal Flow";
+            }
 
             // State Transition & Snapshot Logic
             final healthState = ref.read(healthStatusProvider);
@@ -414,7 +424,12 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     }
   }
 
+  int _frameCounter = 0;
   void _processCameraImage(CameraImage image) async {
+    _frameCounter++;
+    if (_frameCounter % 2 != 0) { // Process every 2nd frame (~15 FPS) for smoother UI
+      return;
+    }
     if (_isDetecting) {
       return;
     }
@@ -442,11 +457,12 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
 
       for (var pose in poses) {
         final tp = pose;
-        final landmarks = _applyOneEuroFilter(tp.id, tp.smoothedLandmarks);
+        final landmarks = tp.smoothedLandmarks;
         final personColor = personColors[tp.id % personColors.length];
         
         final isLaying = _poseService.isLaying(landmarks);
         final isWalking = _poseService.isWalking(landmarks);
+        final isFalling = _poseService.isFalling(tp);
 
         detectedPersons.add(PersonPose(
           id: tp.id,
@@ -454,6 +470,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
           color: personColor,
           isLaying: isLaying,
           isWalking: isWalking,
+          isFalling: isFalling,
         ));
       }
 
@@ -467,19 +484,20 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
           if (_persons.isNotEmpty) {
             final mainPerson = _persons.first;
             
-            String detectedActivity = 'standing';
-            if (mainPerson.isLaying) {
-              detectedActivity = 'falling';
+             String detectedActivity = 'standing';
+            if (mainPerson.isFalling) {
+              detectedActivity = 'falling_impact';
+            } else if (mainPerson.isLaying) {
+              detectedActivity = 'falling'; // Map laying to falling for dashboard consistency
             } else if (mainPerson.isWalking) {
               detectedActivity = 'walking';
             }
             
-            _isLaying = mainPerson.isLaying;
-            _isWalking = mainPerson.isWalking;
-            
-            if (_isLaying) {
+            if (mainPerson.isFalling) {
+               _statusText = "IMPACT DETECTED!";
+            } else if (mainPerson.isLaying) {
               _statusText = "Laying / Fallen!";
-            } else if (_isWalking) {
+            } else if (mainPerson.isWalking) {
               _statusText = "Walking / Active";
             } else {
               _statusText = "Standing";
@@ -487,8 +505,9 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
 
             // Report live activity
             final healthState = ref.read(healthStatusProvider);
-            if (healthState.currentActivity != detectedActivity) {
-               _captureSnapshot().then((path) {
+            // Trigger capture on impact or state change
+            if (mainPerson.isFalling || healthState.currentActivity != detectedActivity) {
+               _captureSnapshot(force: mainPerson.isFalling).then((path) {
                  ref.read(healthStatusProvider.notifier).updateActivity(detectedActivity, snapshotPath: path);
                });
             }
@@ -811,8 +830,8 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                                       ),
                                     ),
                                   ),
-                              ],
-                            );
+                                ],
+                              );
                           },
                         ),
                         if (_showDiagnosticInsights && _isAnalysisComplete) _buildDiagnosticOverlay(),
@@ -1445,90 +1464,6 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     );
   }
 
-  Map<PoseLandmarkType, PoseLandmark> _applyOneEuroFilter(int personId, Map<PoseLandmarkType, PoseLandmark> landmarks) {
-    final t = DateTime.now().millisecondsSinceEpoch / 1000.0;
-    
-    _filters.putIfAbsent(personId, () => {});
-    final personFilters = _filters[personId]!;
-
-    landmarks.forEach((type, landmark) {
-      // Get or create filters for X, Y, Z (index 0, 1, 2)
-      final filters = personFilters.putIfAbsent(type, () => [
-        _OneEuroFilter(minCutoff: 1.0, beta: 0.05), // X
-        _OneEuroFilter(minCutoff: 1.0, beta: 0.05), // Y
-        _OneEuroFilter(minCutoff: 1.0, beta: 0.05), // Z
-      ]);
-
-      final filteredX = filters[0].filter(landmark.x, t);
-      final filteredY = filters[1].filter(landmark.y, t);
-      final filteredZ = filters[2].filter(landmark.z, t);
-
-      // --- Anatomical Validation (Simple Outlier Rejection) ---
-      // If the confidence is too low or the jump is physically impossible for a human joint,
-      // we favor the previous filtered value to prevent "teleporting" limbs.
-      bool isAnatomicallyPossible = true;
-      if (landmark.likelihood < 0.3) isAnatomicallyPossible = false;
-      
-      // If valid, update the landmark with filtered values
-      if (isAnatomicallyPossible) {
-        landmarks[type] = PoseLandmark(
-          type: type,
-          x: filteredX,
-          y: filteredY,
-          z: filteredZ,
-          likelihood: landmark.likelihood,
-        );
-      }
-    });
-    
-    return landmarks;
-  }
-}
-
-/// 1 Euro Filter implementation for jitter reduction as per 2025 standards
-class _OneEuroFilter {
-  final double minCutoff;
-  final double beta;
-  final double dCutoff = 1.0;
-  
-  double? _xPrev;
-  double? _dxPrev;
-  double? _tPrev;
-
-  _OneEuroFilter({this.minCutoff = 1.0, this.beta = 0.0});
-
-  double filter(double x, double t) {
-    if (_tPrev == null || _xPrev == null) {
-      _tPrev = t;
-      _xPrev = x;
-      _dxPrev = 0;
-      return x;
-    }
-
-    final double te = t - _tPrev!;
-    if (te <= 0) return _xPrev!;
-
-    final double ad = _alpha(te, dCutoff);
-    final double dx = (x - _xPrev!) / te;
-    final double dxHat = _lerp(_dxPrev!, dx, ad);
-
-    final double cutoff = minCutoff + beta * dxHat.abs();
-    final double a = _alpha(te, cutoff);
-    final double xHat = _lerp(_xPrev!, x, a);
-
-    _xPrev = xHat;
-    _dxPrev = dxHat;
-    _tPrev = t;
-
-    return xHat;
-  }
-
-  double _alpha(double te, double cutoff) {
-    final double tau = 1.0 / (2 * math.pi * cutoff);
-    return 1.0 / (1.0 + tau / te);
-  }
-
-  double _lerp(double a, double b, double alpha) => a + (b - a) * alpha;
 }
 
 class PulsePainter extends CustomPainter {

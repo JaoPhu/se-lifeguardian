@@ -61,22 +61,33 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
 
     for (var event in events) {
       final type = event.type.toLowerCase();
-      final durationStr = event.duration ?? '0.0h';
-      final duration = double.tryParse(durationStr.replaceAll('h', '')) ?? 0.0;
+      // Use precise seconds if available, otherwise fallback (though v2 should have seconds)
+      double duration = 0.0;
+      if (event.durationSeconds != null) {
+        duration = event.durationSeconds! / 3600; // Convert seconds to hours
+      } else {
+        final durationStr = event.duration ?? '0.0h';
+        duration = double.tryParse(durationStr.replaceAll('h', '')) ?? 0.0;
+      }
 
-      if (type.contains('sitting') || type.contains('laying') || type.contains('relax')) {
+      // Robust matching
+      if (type == 'sitting' || type == 'laying' || type == 'relax') {
         relax += duration;
-      } else if (type.contains('working') || type.contains('work')) {
+      } else if (type == 'working' || type == 'work' || type == 'standing') { // Group standing with working/neutral? Or separate? 
+        // Original code didn't explicitly handle 'standing' in the counters above, it might have been missed or grouped?
+        // Looking at the original 'else if (type.contains('working')...' logic, 'standing' wasn't there.
+        // Let's assume 'standing' is 'work' or 'neutral'. Given 'Work' is usually associated with desk standing/sitting.
+        // Let's map 'standing' to 'work' for now as it's a common active-office state.
         work += duration;
-      } else if (type.contains('walking') || type.contains('walk')) {
+      } else if (type == 'walking' || type == 'walk') {
         walk += duration;
-      } else if (type.contains('slouching') || type.contains('slouch')) {
+      } else if (type == 'slouching' || type == 'slouch') {
         slouch += duration;
-      } else if (type.contains('exercise')) {
+      } else if (type == 'exercise') {
         exercise += duration;
-      } else if (type.contains('falling') || type.contains('fall')) {
+      } else if (type == 'falling' || type == 'fall') {
         falls++;
-      } else if (type.contains('near_fall')) {
+      } else if (type == 'near_fall') {
         nearFalls++;
       }
     }
@@ -106,7 +117,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     }
 
     final stats = _calculateDurations(events);
-    List<PieChartSectionData> sections = [];
+    final List<PieChartSectionData> sections = [];
     
     if (stats['relax']! > 0) {
       sections.add(PieChartSectionData(

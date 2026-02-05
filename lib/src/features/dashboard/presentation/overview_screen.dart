@@ -16,7 +16,7 @@ class OverviewScreen extends ConsumerWidget {
     final healthState = ref.watch(healthStatusProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D9492), // Slightly deeper teal for premium feel
+      backgroundColor: Colors.white, // Changed to white as requested
       body: Column(
         children: [
           // Header
@@ -238,15 +238,38 @@ class OverviewScreen extends ConsumerWidget {
                       ),
                     ],
                   )
-                : (camera.events.isNotEmpty && camera.events.any((e) => e.snapshotUrl != null))
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.file(
-                          File(camera.events.firstWhere((e) => e.snapshotUrl != null).snapshotUrl!),
-                          fit: BoxFit.contain,
-                        ),
-                      )
-                    : null,
+                : Builder(
+                    builder: (context) {
+                      String? imagePath;
+                      // Priority 1: Config thumbnail (from Demo setup)
+                      if (camera.config?.thumbnailUrl != null) {
+                        imagePath = camera.config!.thumbnailUrl;
+                      }
+                      // Priority 2: Latest Event Snapshot
+                      else if (camera.events.isNotEmpty && camera.events.any((e) => e.snapshotUrl != null)) {
+                        imagePath = camera.events.firstWhere((e) => e.snapshotUrl != null).snapshotUrl;
+                      }
+
+                      if (imagePath != null) {
+                        return Container(
+                          width: double.infinity,
+                          height: double.infinity,
+                          color: Colors.black, // Background for the fitted image
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.file(
+                              File(imagePath),
+                              fit: BoxFit.contain, // Changed to contain as requested
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(color: Colors.grey[900]);
+                              },
+                            ),
+                          ),
+                        );
+                      }
+                      return const Center(child: Icon(Icons.videocam_off, color: Colors.white54));
+                    },
+                  ),
             ),
           ),
           const SizedBox(height: 12),

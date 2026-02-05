@@ -11,6 +11,7 @@ class PersonPose {
   final Color color;
   final bool isLaying;
   final bool isWalking;
+  final bool isFalling;
 
   PersonPose({
     required this.id,
@@ -18,6 +19,7 @@ class PersonPose {
     required this.color,
     this.isLaying = false,
     this.isWalking = false,
+    this.isFalling = false,
   });
 }
 
@@ -47,15 +49,7 @@ class PosePainter extends CustomPainter {
     final landmarks = person.landmarks;
     final color = person.color;
 
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4.0
-      ..color = color;
 
-    // Use unified color for all parts as requested
-    final jointPaint = Paint()
-      ..style = PaintingStyle.fill
-      ..color = color;
 
     // Standardize coordinate translation to match the camera feed exactly
     // detailed logic adapted from ML Kit Quickstart (Research Standard)
@@ -106,11 +100,11 @@ class PosePainter extends CustomPainter {
     }
 
     Offset translate(PoseLandmark landmark) {
-      double x = landmark.x;
-      double y = landmark.y;
+      final double x = landmark.x;
+      final double y = landmark.y;
       
       double tx = translateX(x, y, rotation);
-      double ty = translateY(x, y, rotation);
+      final double ty = translateY(x, y, rotation);
 
       if (cameraLensDirection == CameraLensDirection.front) {
         // Mirror X-axis for front (selfie) camera
