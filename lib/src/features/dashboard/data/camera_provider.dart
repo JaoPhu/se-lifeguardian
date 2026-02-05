@@ -13,12 +13,30 @@ class CameraNotifier extends StateNotifier<List<Camera>> {
     ),
   ]);
 
+  void clearCameras() {
+    state = [];
+  }
+
   void addCamera(Camera camera) {
     if (state.any((c) => c.id == camera.id)) {
       state = state.map((c) => c.id == camera.id ? camera : c).toList();
     } else {
       state = [camera, ...state];
     }
+  }
+
+  String addCameraSafely(String baseName, {CameraConfig? config}) {
+    final id = 'cam-${DateTime.now().millisecondsSinceEpoch}';
+    final newCamera = Camera(
+      id: id,
+      name: baseName,
+      status: CameraStatus.online,
+      source: CameraSource.demo,
+      events: const [],
+      config: config,
+    );
+    state = [newCamera, ...state];
+    return id;
   }
 
   void updateCameraEvents(String id, List<SimulationEvent> events) {

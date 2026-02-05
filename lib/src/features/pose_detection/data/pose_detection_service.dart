@@ -240,10 +240,27 @@ class PoseDetectionService {
     final width = xValues.reduce(math.max) - xValues.reduce(math.min);
     final height = yValues.reduce(math.max) - yValues.reduce(math.min);
     
-    // Prototype check: torso < 25 or isFlat
+    // Prototype check: torso < 25 or isFlat (horizontal aspect ratio)
     final isFlat = width > height * 1.4;
 
     return torsoAngle < 25 || isFlat;
+  }
+
+  bool isSlouching(Map<PoseLandmarkType, PoseLandmark> landmarks) {
+    if (landmarks.isEmpty) return false;
+    final torsoAngle = getTorsoAngle(landmarks);
+    // Unconscious / Slumped / Leaning significantly
+    return torsoAngle >= 25 && torsoAngle < 60;
+  }
+
+  bool isSitting(Map<PoseLandmarkType, PoseLandmark> landmarks) {
+    if (landmarks.isEmpty) return false;
+    final torsoAngle = getTorsoAngle(landmarks);
+    if (torsoAngle < 60) return false;
+    
+    final legBend = getLegStraightness(landmarks);
+    // Knees bent significantly (> 70 degrees typically)
+    return legBend > 65;
   }
 
   bool isStanding(Map<PoseLandmarkType, PoseLandmark> landmarks) {
@@ -252,7 +269,7 @@ class PoseDetectionService {
      if (torsoAngle < 60) return false;
      
      final legBend = getLegStraightness(landmarks);
-     return legBend < 25; // Very straight
+     return legBend < 25; // Very straight legs
   }
 
   bool isWalking(Map<PoseLandmarkType, PoseLandmark> landmarks) {
@@ -261,7 +278,8 @@ class PoseDetectionService {
     if (torsoAngle < 60) return false;
     
     final legBend = getLegStraightness(landmarks);
-    return legBend >= 25 && legBend < 65;
+    // Leg is partially bent (walking motion)
+    return legBend >= 25 && legBend <= 65;
   }
 
   bool isFalling(TrackedPerson person) {

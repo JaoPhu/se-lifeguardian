@@ -101,8 +101,20 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/analysis',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) {
-          final videoPath = state.extra as String?;
-          return PoseDetectorView(videoPath: videoPath);
+          final extra = state.extra;
+          if (extra is Map<String, dynamic>) {
+            return PoseDetectorView(
+              videoPath: extra['videoPath'] as String?,
+              displayCameraName: extra['cameraName'] as String?,
+            );
+          } else if (extra is Map) {
+             // Handle _Map<String, String?> or other Map variants
+             return PoseDetectorView(
+               videoPath: extra['videoPath']?.toString(),
+               displayCameraName: extra['cameraName']?.toString(),
+             );
+          }
+          return const PoseDetectorView();
         },
       ),
       GoRoute(

@@ -11,10 +11,10 @@ class AppTheme {
       colorScheme: ColorScheme.fromSeed(
         seedColor: const Color(0xFF0D9488),
         brightness: Brightness.light,
-        surface: const Color(0xFFFAFAFA),
+        surface: Colors.white,
       ),
       textTheme: GoogleFonts.plusJakartaSansTextTheme(),
-      scaffoldBackgroundColor: const Color(0xFFFAFAFA),
+      scaffoldBackgroundColor: Colors.white,
       cardColor: Colors.white,
     );
   }

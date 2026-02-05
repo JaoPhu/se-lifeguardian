@@ -278,7 +278,10 @@ class _DemoSetupScreenState extends State<DemoSetupScreen> {
                   height: 56,
                   child: ElevatedButton(
                     onPressed: _videoPath != null ? () {
-                      context.push('/analysis', extra: _videoPath);
+                      context.push('/analysis', extra: {
+                        'videoPath': _videoPath,
+                        'cameraName': _cameraNameController.text,
+                      });
                     } : null, // Disabled if no video
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF0D9488),

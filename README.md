@@ -95,11 +95,12 @@ assets/
 ```
 
 ## 💡 Key Features Implemented
-- **AI Stability Engine**: High-speed pre-analysis and camera motion compensation for robust tracking in handheld or dynamic environments.
-- **Single-Person Focus**: Designed for single-subject monitoring to ensure maximum stability and reliability (Note: Multi-pose detection is not supported due to ML Kit limitations).
-- **Automatic Event Snapshots**: AI-triggered high-resolution captures of significant behavioral changes (e.g., falling, near-misses).
-- **Precision Duration Tracking**: Real-time, second-level accuracy for activity monitoring (e.g., "Sitting: 0.005h") ensuring reliable health statistics.
-- **Premium Event Dashboard**: Dynamic monitoring cards that display real-time snapshots and a historical activity gallery.
+- **Multi-Camera Management**: Ability to register and manage multiple cameras with custom display names.
+- **Camera-Specific Data Segregation**: Every event is tagged with a unique `cameraId`, allowing for independent history logs and targeted data cleanup per camera.
+- **Advanced Posture Classification**: Granular detection for **Sitting** (`นั่งพัก`) and **Slouching/Unconscious** (`สลบ / ซบ`) states, alongside Fall, Laying, and Walking.
+- **Smart Date-Range Display**: Dashboard cards automatically calculate and display the event date range (`YYYY/MM/DD`) for each specific camera.
+- **Optimized 16:9 Analysis Layout**: Refined video analysis screen with a centered 16:9 aspect ratio and automated black-bar padding for consistent skeletal overlay alignment.
+- **Clean-State Data Management**: Integrated confirmation-guarded "Clear History" deletion for local logs and cached snapshots.
 - **On-Device AI Pose Detection**: Real-time skeletal tracking using Google ML Kit (v2025) for privacy and zero-latency performance.
 - **Precision Activity Ring**: High-fidelity circular gauge for monitoring daily health goals.
 - **Weekly Analytics**: Clean, minimal bar charts for long-term activity tracking.
@@ -122,7 +123,7 @@ assets/
 1.  `flutter pub get`
 2.  `flutter run`
 
-> **สถานะปัจจุบัน**: พัฒนาเสร็จสมบูรณ์ทั้งระบบ **AI Stability Engine** (ตรวจจับได้แม่นยำแม้กล้องสั่น) และระบบ **Event Dashboard** (แสดงภาพ Snapshot อัตโนมัติเมื่อเกิดเหตุสำคัญ) พร้อมดีไซน์ระดับ Premium Teal สำหรับการใช้งานจริง
+> **สถานะปัจจุบัน**: พัฒนาเสร็จสมบูรณ์ทั้งระบบ **AI Stability Engine**, **Multi-Camera Support**, และระบบ **Smart History Cleanup** (ล้างข้อมูลแยกตามรายกล้อง) พร้อมการประมวลผลท่าทางละเอียดระดับ Sitting/Slouching และดีไซน์ระดับ Premium Teal
 
 ---
 

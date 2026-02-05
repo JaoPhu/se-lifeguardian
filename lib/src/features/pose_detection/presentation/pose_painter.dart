@@ -10,6 +10,8 @@ class PersonPose {
   final Map<PoseLandmarkType, PoseLandmark> landmarks;
   final Color color;
   final bool isLaying;
+  final bool isSitting;
+  final bool isSlouching;
   final bool isWalking;
   final bool isFalling;
 
@@ -18,6 +20,8 @@ class PersonPose {
     required this.landmarks,
     required this.color,
     this.isLaying = false,
+    this.isSitting = false,
+    this.isSlouching = false,
     this.isWalking = false,
     this.isFalling = false,
   });

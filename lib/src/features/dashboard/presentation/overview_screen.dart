@@ -185,9 +185,29 @@ class OverviewScreen extends ConsumerWidget {
                 if (camera.status != CameraStatus.offline)
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert, color: Colors.grey),
-                    onSelected: (value) {
+                    onSelected: (value) async {
                       if (value == 'delete') {
-                        ref.read(cameraProvider.notifier).removeCamera(camera.id);
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Delete Camera?'),
+                            content: const Text('This will remove the camera and permanently delete all its associated history and images.'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true), 
+                                child: const Text('Delete', style: TextStyle(color: Colors.red))
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (confirm == true) {
+                          // 1. Clear History for this camera first
+                          await ref.read(healthStatusProvider.notifier).clearAllData(cameraId: camera.id);
+                          // 2. Remove the camera
+                          ref.read(cameraProvider.notifier).removeCamera(camera.id);
+                        }
                       }
                     },
                     itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
@@ -277,8 +297,41 @@ class OverviewScreen extends ConsumerWidget {
           // Footer Row
           Row(
             children: [
-              // Left Spacer for parity
-              const Expanded(child: SizedBox()),
+              // Left Date Range
+              Expanded(
+                child: Builder(
+                  builder: (context) {
+                    final cameraEvents = healthState.events.where((e) => e.cameraId == camera.id).toList();
+                    if (cameraEvents.isEmpty) {
+                      return const SizedBox();
+                    }
+                    
+                    final dates = cameraEvents
+                        .map((e) => e.date)
+                        .whereType<String>()
+                        .toSet()
+                        .toList();
+                    dates.sort();
+                    
+                    if (dates.isEmpty) return const SizedBox();
+                    
+                    String formatDate(String d) => d.replaceAll('-', '/');
+                    
+                    final dateLabel = dates.length == 1 
+                        ? formatDate(dates.first)
+                        : "${formatDate(dates.first)} - ${formatDate(dates.last)}";
+
+                    return Text(
+                      dateLabel,
+                      style: const TextStyle(
+                        fontSize: 14, // Match prototype size
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF6B7280), // Slate/Grey as in prototype
+                      ),
+                    );
+                  },
+                ),
+              ),
               
               // Center Events Button
               Expanded(

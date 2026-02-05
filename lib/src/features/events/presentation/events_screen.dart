@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../pose_detection/data/health_status_provider.dart';
+import '../../dashboard/data/camera_provider.dart';
 import '../../statistics/domain/simulation_event.dart';
 
 class EventsScreen extends ConsumerWidget {
@@ -14,6 +15,13 @@ class EventsScreen extends ConsumerWidget {
     final healthState = ref.watch(healthStatusProvider);
     final events = healthState.events;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    // Get camera name for context
+    final cameras = ref.watch(cameraProvider);
+    final camera = cameras.any((c) => c.id == cameraId) 
+        ? cameras.firstWhere((c) => c.id == cameraId)
+        : null;
+    final cameraName = camera?.name ?? 'Camera';
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D9492),
@@ -33,9 +41,9 @@ class EventsScreen extends ConsumerWidget {
                     ),
                     const SizedBox(width: 16),
                     const Text(
-                      'Monitoring Data',
+                      'Events',
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: 24,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
@@ -75,7 +83,7 @@ class EventsScreen extends ConsumerWidget {
           Expanded(
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              padding: EdgeInsets.zero,
               decoration: BoxDecoration(
                 color: Theme.of(context).scaffoldBackgroundColor,
                 borderRadius: const BorderRadius.only(
@@ -86,18 +94,18 @@ class EventsScreen extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                 children: [
                   
-                  // Horizontal Gallery (Stickman/Snapshot Previews)
-                  const Text(
-                    'Activity Gallery',
-                    style: TextStyle(
-                      fontSize: 16,
+                  // Horizontal Gallery
+                  Text(
+                    'Events of $cameraName',
+                    style: const TextStyle(
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF0D9488),
                     ),
                   ),
                   const SizedBox(height: 16),
                   SizedBox(
-                    height: 160,
+                    height: 180,
                     child: events.isEmpty 
                       ? _buildEmptyGallery(context)
                       : ListView.separated(
@@ -106,7 +114,7 @@ class EventsScreen extends ConsumerWidget {
                           separatorBuilder: (context, index) => const SizedBox(width: 16),
                           itemBuilder: (context, index) {
                             final event = events[index];
-                            return _buildGalleryItem(context, event);
+                            return _buildGalleryItem(context, event, cameraName);
                           },
                         ),
                   ),
@@ -122,12 +130,37 @@ class EventsScreen extends ConsumerWidget {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF374151),
+                          color: Color(0xFF0D9492),
                         ),
                       ),
-                      Text(
-                        'Total: ${events.length}',
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      Row(
+                        children: [
+                          if (events.isNotEmpty)
+                            TextButton(
+                              onPressed: () async {
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Clear History?'),
+                                    content: const Text('This will permanently delete all event logs and images from your device.'),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                                      TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Clear All', style: TextStyle(color: Colors.red))),
+                                    ],
+                                  ),
+                                );
+                                if (confirm == true) {
+                                  ref.read(healthStatusProvider.notifier).clearAllData(cameraId: cameraId);
+                                }
+                              },
+                              child: const Text('Clear History', style: TextStyle(fontSize: 12, color: Colors.blue)),
+                            ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Total: ${events.length}',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.withValues(alpha: 0.6)),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -142,32 +175,31 @@ class EventsScreen extends ConsumerWidget {
                         physics: const NeverScrollableScrollPhysics(),
                         padding: EdgeInsets.zero,
                         itemCount: events.length,
-                        separatorBuilder: (context, index) => const SizedBox(height: 12),
+                        separatorBuilder: (context, index) => const Divider(height: 1, color: Colors.black12),
                         itemBuilder: (context, index) {
                           final event = events[index];
                           return _buildEventListItem(context, event);
                         },
                       ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 32),
 
-                  // Health Status Button
+                  // Outlined Health Button
                   SizedBox(
                     height: 56,
-                    child: ElevatedButton(
+                    child: OutlinedButton(
                       onPressed: () {
                         context.go('/status');
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0D9488),
-                        foregroundColor: Colors.white,
-                        elevation: 4,
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFF0D9488), width: 1),
+                        foregroundColor: const Color(0xFF0D9488),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                       child: const Text(
-                        'Health Status & Stats',
+                        'View Status & Statistics',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -200,84 +232,51 @@ class EventsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildGalleryItem(BuildContext context, SimulationEvent event) {
+  Widget _buildGalleryItem(BuildContext context, SimulationEvent event, String cameraName) {
     final isCritical = event.isCritical;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      width: 240,
+      width: 180, // Narrower as in prototype
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: isCritical ? Colors.red.shade50 : (isDark ? Colors.grey.shade800 : Colors.white),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-        border: isCritical ? Border.all(color: Colors.red.shade300, width: 2) : null,
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.black12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: Container(
-              margin: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: isCritical ? Colors.red.shade100 : Colors.teal.shade50,
-                borderRadius: BorderRadius.circular(16),
-              ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
               child: event.snapshotUrl != null
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.file(
-                      File(event.snapshotUrl!),
-                      fit: BoxFit.cover,
-                    ),
+                ? Image.file(
+                    File(event.snapshotUrl!),
+                    fit: BoxFit.cover,
                   )
-                : Center(
-                    child: Icon(
-                      _getIconForType(event.type),
-                      size: 48,
-                      color: isCritical ? Colors.red : const Color(0xFF0D9488),
+                : Container(
+                    color: Colors.teal.shade50,
+                    child: Center(
+                      child: Icon(
+                        _getIconForType(event.type),
+                        size: 32,
+                        color: const Color(0xFF0D9488),
+                      ),
                     ),
                   ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      event.thaiLabel,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: isCritical ? Colors.red : (isDark ? Colors.grey.shade200 : const Color(0xFF374151)),
-                      ),
-                    ),
-                    Text(
-                      event.timestamp,
-                      style: const TextStyle(fontSize: 10, color: Colors.grey),
-                    ),
-                  ],
-
-                ),
-                if (isCritical) ...[
-                  if (event.isVerified)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: Icon(Icons.verified, color: Colors.blue.shade400, size: 20),
-                    ),
-                  const Icon(Icons.warning, color: Colors.red, size: 20),
-                ],
-              ],
+          const SizedBox(height: 8),
+          Text(
+            '${event.thaiLabel} of $cameraName',
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF374151),
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -285,91 +284,55 @@ class EventsScreen extends ConsumerWidget {
   }
 
   Widget _buildEventListItem(BuildContext context, SimulationEvent event) {
-    final isCritical = event.isCritical;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isCritical 
-            ? (isDark ? Colors.red.withValues(alpha: 0.1) : Colors.red.shade50)
-            : (isDark ? Colors.grey.shade900 : Colors.grey.shade100),
-        borderRadius: BorderRadius.circular(16),
-        border: isCritical ? Border.all(color: Colors.red.shade200) : null,
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Stack(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: isCritical ? Colors.red.shade100 : Colors.white,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  _getIconForType(event.type),
-                  size: 20,
-                  color: isCritical ? Colors.red : const Color(0xFF0D9488),
-                ),
-              ),
-              if (event.isVerified)
-                Positioned(
-                  right: -2,
-                  bottom: -2,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.verified, size: 12, color: Colors.blue),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      event.thaiLabel,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: isCritical ? Colors.red : (isDark ? Colors.grey.shade200 : const Color(0xFF374151)),
-                      ),
-                    ),
-                    if (event.isVerified) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blue.shade100),
-                        ),
-                        child: const Text(
-                          "VERIFIED",
-                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.blue),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
                 Text(
-                  event.description ?? "Duration: ${event.duration ?? "0.5 hr"}",
+                  event.thaiLabel,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: isDark ? Colors.grey.shade200 : const Color(0xFF1F2937),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "Duration: ${event.duration ?? "0.32 hr"}",
+                  style: const TextStyle(
+                    fontSize: 14, 
+                    color: Color(0xFF0D9488),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  event.description ?? "Subject is resting in a horizontal position",
                   style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ],
             ),
           ),
-          Text(
-            event.timestamp,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+          const SizedBox(width: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                event.date ?? "2026/02/05",
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              Text(
+                event.timestamp,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
           ),
         ],
       ),
