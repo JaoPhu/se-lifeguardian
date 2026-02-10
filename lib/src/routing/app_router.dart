@@ -14,8 +14,12 @@ import 'package:lifeguardian/src/features/authentication/presentation/reset_pass
 import 'package:lifeguardian/src/features/settings/presentation/settings_screen.dart';
 import 'package:lifeguardian/src/features/status/presentation/status_screen.dart';
 import 'package:lifeguardian/src/features/group/presentation/group_management_screen.dart';
-import 'package:lifeguardian/src/features/statistics/presentation/statistics_screen.dart';
+import 'package:lifeguardian/src/features/history/presentation/statistics_page.dart';
+import 'package:lifeguardian/src/features/history/presentation/pages/history_list_page.dart';
+import 'package:lifeguardian/src/features/history/presentation/pages/history_detail_page.dart';
+import 'package:lifeguardian/src/features/history/domain/history_model.dart';
 import 'package:lifeguardian/src/features/profile/presentation/profile_screen.dart';
+import 'package:lifeguardian/src/features/notification/presentation/notification_page.dart';
 import 'package:lifeguardian/src/features/profile/presentation/edit_profile_screen.dart';
 import 'package:lifeguardian/src/features/debug/presentation/ai_debug_screen.dart';
 import 'package:lifeguardian/src/features/pose_detection/presentation/demo_setup_screen.dart';
@@ -154,7 +158,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: '/statistics',
-                builder: (context, state) => const StatisticsScreen(),
+                builder: (context, state) => const StatisticsPage(),
               ),
             ],
           ),
@@ -186,6 +190,25 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
         ],
+      ),
+
+      GoRoute(
+        path: '/notification',
+        builder: (context, state) => const NotificationPage(),
+        parentNavigatorKey: _rootNavigatorKey,
+      ),
+      GoRoute(
+        path: '/history',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const HistoryListPage(),
+      ),
+      GoRoute(
+        path: '/history-detail',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final history = state.extra as DailyHistory;
+          return HistoryDetailPage(history: history);
+        },
       ),
     ],
     redirect: (context, state) {
