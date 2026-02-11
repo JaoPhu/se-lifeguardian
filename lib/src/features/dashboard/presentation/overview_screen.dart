@@ -14,7 +14,7 @@ class OverviewScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(userProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // final isDark = Theme.of(context).brightness == Brightness.dark; // Unused
     final cameras = ref.watch(cameraProvider);
     final healthState = ref.watch(healthStatusProvider);
 

@@ -81,7 +81,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(userProvider);
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    // final isDark = theme.brightness == Brightness.dark; // Unused
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -245,7 +245,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 borderSide: BorderSide.none,
               ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              suffixIcon: Icon(LucideIcons.pencil, size: 16, color: theme.iconTheme.color?.withOpacity(0.5)),
+              suffixIcon: Icon(LucideIcons.pencil, size: 16, color: theme.iconTheme.color?.withValues(alpha: 0.5)),
             ),
             style: TextStyle(fontSize: 14, color: theme.textTheme.bodyMedium?.color),
           ),
@@ -273,7 +273,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           ),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(
-            value: selectedValue,
+            initialValue: selectedValue,
             items: items.map((String item) {
               return DropdownMenuItem<String>(
                 value: item,
@@ -291,7 +291,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
-            icon: Icon(LucideIcons.chevronDown, size: 16, color: theme.iconTheme.color?.withOpacity(0.5)),
+            icon: Icon(LucideIcons.chevronDown, size: 16, color: theme.iconTheme.color?.withValues(alpha: 0.5)),
           ),
         ],
       ),
