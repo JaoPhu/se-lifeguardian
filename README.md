@@ -81,11 +81,15 @@ Then try running the app again.
 ```
 lib/
 ├── src/
-│   ├── features/      # Feature-first architecture (Auth, Statistics, Dashboard, etc.)
-│   │   ├── auth/      # Login, Register, Profile Management
-│   │   ├── dashboard/ # Multi-camera overview & Live monitoring
-│   │   ├── statistics/# Analytics, Circular Gauges & Weekly Charts
-│   │   └── ...
+│   ├── features/      # Feature-first architecture
+│   │   ├── authentication/ # Login, Register, Forget Password
+│   │   ├── dashboard/      # Multi-camera overview & Live monitoring
+│   │   ├── statistics/     # Modern Analytics & Weekly Charts
+│   │   ├── group/          # Consolidated Group Management
+│   │   ├── profile/        # User Profile & Medical Info
+│   │   ├── pose_detection/ # AI Engine (Kalman Filter & Temporal Analysis)
+│   │   └── notification/   # Consolidated Smart Notifications
+│   ├── common/        # App Theme & Constants
 │   ├── common_widgets/# Shared UI components
 │   ├── routing/       # App routing (GoRouter) & Scaffold with Navbar
 │   └── main.dart      # Entry point
@@ -94,18 +98,16 @@ assets/
 └── images/            # UI background and illustration assets
 ```
 
-## 💡 Key Features Implemented
+## 💡 Key Features & Recent Improvements
+- **Consolidated Architecture**: Streamlined project by removing redundant folders (`groups`, `NotificationPage`) and standardizing on modern implementations.
+- **CI/CD Ready**: Fixed all 22+ analysis issues including `withOpacity` deprecations and missing `const` constructors. Core passes `flutter analyze` with zero issues.
+- **Premium Shield UI**: Integrated a custom high-profile "Shield with Plus" button in the center navigation for quick access to safety features.
+- **Modern Statistics Engine**: Replaced legacy statistics with a high-performance `StatisticsScreen` featuring real-time activity rings and interactive weekly charts.
 - **Multi-Camera Management**: Ability to register and manage multiple cameras with custom display names.
-- **Camera-Specific Data Segregation**: Every event is tagged with a unique `cameraId`, allowing for independent history logs and targeted data cleanup per camera.
-- **Advanced Posture Classification**: Granular detection for **Sitting** (`นั่งพัก`) and **Slouching/Unconscious** (`สลบ / ซบ`) states, alongside Fall, Laying, and Walking.
-- **Smart Date-Range Display**: Dashboard cards automatically calculate and display the event date range (`YYYY/MM/DD`) for each specific camera.
-- **Optimized 16:9 Analysis Layout**: Refined video analysis screen with a centered 16:9 aspect ratio and automated black-bar padding for consistent skeletal overlay alignment.
-- **Clean-State Data Management**: Integrated confirmation-guarded "Clear History" deletion for local logs and cached snapshots.
-- **On-Device AI Pose Detection**: Real-time skeletal tracking using Google ML Kit (v2025) for privacy and zero-latency performance.
-- **Precision Activity Ring**: High-fidelity circular gauge for monitoring daily health goals.
-- **Weekly Analytics**: Clean, minimal bar charts for long-term activity tracking.
-- **Premium Navigation**: Custom semi-floating bottom navigation bar mirroring high-end mobile designs.
-- **Global Theme Support**: Full support for system-aware dark and light modes.
+- **Advanced Posture Classification**: Granular detection for **Sitting** and **Slouching** states, alongside Fall, Laying, and Walking.
+- **Temporal Analysis Engine**: Enhanced AI stability using Kalman Filters and temporal buffering for more accurate event logging.
+- **Smart Notification System**: A centralized notification hub with categorize alerts (Success, Warning, Danger).
+- **Global Theme Support**: Full support for system-aware dark and light modes using a custom `ThemeProvider`.
 
 ---
 
@@ -114,17 +116,12 @@ assets/
 **LifeGuardian คืออะไร?**
 โปรเจกต์นี้เป็นแอปพลิเคชันระบบตรวจจับท่าทางและอาการออฟฟิศซินโดรมด้วย AI (On-device) พัฒนาด้วย Flutter โดยเน้นที่ความรวดเร็วในการประมวลผลและความสวยงามของ UI ระดับ Premium
 
-**ภาษาและเทคโนโลยี:**
-*   **Dart (Flutter)**: ใช้เป็นภาษาหลักในการพัฒนาแบบ Cross-platform
-*   **Google ML Kit**: ใช้สำหรับตรวจจับจุดบนร่างกาย (Pose Detection) แบบ Real-time บนตัวเครื่อง (ไม่ต้องผ่าน Cloud)
-*   **Riverpod**: ใช้สำหรับการจัดการ State ภายในแอปอย่างมีประสิทธิภาพ
+**การปรับปรุงล่าสุด:**
+*   **Code Consolidation**: ยุบรวม Folder ที่ซ้ำซ้อนและลบไฟล์ที่ไม่ได้ใช้งานออก เพื่อโครงสร้างโค้ดที่สะอาดและดูแลง่าย
+*   **CI Improvement**: แก้ไขปัญหา Linting/Analysis ทั้งหมด (22+ จุด) เพื่อให้สามารถรัน CI/CD บน GitHub ได้อย่างไร้รอยต่อ
+*   **UI Redesign**: อัปเกรดหน้าสถิติและระบบนำทางให้เป็นรูปแบบ Modern พร้อมปุ่ม Shield UI แบบพิเศษ
 
-**วิธีเริ่มโปรเจกต์:**
-1.  `flutter pub get`
-2.  `flutter run`
-
-> **สถานะปัจจุบัน**: พัฒนาเสร็จสมบูรณ์ทั้งระบบ **AI Stability Engine**, **Multi-Camera Support**, และระบบ **Smart History Cleanup** (ล้างข้อมูลแยกตามรายกล้อง) พร้อมการประมวลผลท่าทางละเอียดระดับ Sitting/Slouching และดีไซน์ระดับ Premium Teal
-
+> **สถานะปัจจุบัน**: พัฒนาเสร็จสมบูรณ์ทั้งระบบ **AI Stability Engine**, **Multi-Camera Support**, และผ่านการ **Cleanup** โครงสร้างโปรเจกต์ทั้งหมดแล้ว พร้อมสำหรับการต่อยอดในระดับ Production
 ---
 
 ## 📄 License
