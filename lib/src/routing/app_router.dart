@@ -17,7 +17,6 @@ import 'package:lifeguardian/src/features/group/presentation/group_management_sc
 import 'package:lifeguardian/src/features/statistics/presentation/statistics_screen.dart';
 import 'package:lifeguardian/src/features/profile/presentation/profile_screen.dart';
 import 'package:lifeguardian/src/features/profile/presentation/edit_profile_screen.dart';
-import 'package:lifeguardian/src/features/debug/presentation/ai_debug_screen.dart';
 import 'package:lifeguardian/src/features/pose_detection/presentation/demo_setup_screen.dart';
 import 'package:lifeguardian/src/features/notification/presentation/notification_screen.dart';
 import 'package:lifeguardian/src/features/events/presentation/events_screen.dart';
@@ -86,11 +85,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/edit-profile',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const EditProfileScreen(),
-      ),
-      GoRoute(
-        path: '/ai-debug',
-        parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const AIDebugScreen(),
       ),
       GoRoute(
         path: '/demo-setup',
