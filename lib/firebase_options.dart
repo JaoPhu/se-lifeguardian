@@ -64,6 +64,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '292872685738',
     projectId: 'lifeguardian-app',
     storageBucket: 'lifeguardian-app.firebasestorage.app',
+    androidClientId: '292872685738-6ot8uu0g5u27seulvjgc6tub0ujgtbn4.apps.googleusercontent.com',
+    iosClientId: '292872685738-s8muujp6hdv453lpknjakpa8cr4m3q9v.apps.googleusercontent.com',
     iosBundleId: 'com.example.lifeguardian',
   );
 
@@ -73,6 +75,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '292872685738',
     projectId: 'lifeguardian-app',
     storageBucket: 'lifeguardian-app.firebasestorage.app',
+    androidClientId: '292872685738-6ot8uu0g5u27seulvjgc6tub0ujgtbn4.apps.googleusercontent.com',
+    iosClientId: '292872685738-s8muujp6hdv453lpknjakpa8cr4m3q9v.apps.googleusercontent.com',
     iosBundleId: 'com.example.lifeguardian',
   );
 
@@ -85,4 +89,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'lifeguardian-app.firebasestorage.app',
     measurementId: 'G-KJGGK5QS1E',
   );
+
 }
