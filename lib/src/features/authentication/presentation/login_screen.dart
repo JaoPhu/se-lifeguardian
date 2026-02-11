@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/widgets/auth_text_field.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/widgets/social_button.dart';
-import 'package:lifeguardian/src/features/authentication/data/auth_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class LoginScreen extends StatefulWidget {
+// ✅ ใช้ controller
+import 'package:lifeguardian/src/features/authentication/controllers/auth_controller.dart';
+
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _keepLoggedIn = false;
@@ -24,9 +27,19 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final authState = ref.watch(authControllerProvider);
+    final isLoading = authState.isLoading;
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
@@ -35,12 +48,18 @@ class _LoginScreenState extends State<LoginScreen> {
         leading: Padding(
           padding: const EdgeInsets.only(left: 16.0),
           child: IconButton(
-            icon: Icon(Icons.arrow_back_ios_new, color: isDark ? Colors.white : Colors.black, size: 20),
+            icon: Icon(
+              Icons.arrow_back_ios_new,
+              color: isDark ? Colors.white : Colors.black,
+              size: 20,
+            ),
             onPressed: () => context.pop(),
             style: IconButton.styleFrom(
               backgroundColor: isDark ? Colors.grey.shade800 : Colors.white,
               shape: const CircleBorder(),
-              side: BorderSide(color: isDark ? Colors.grey.shade700 : Colors.grey.shade200),
+              side: BorderSide(
+                color: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
+              ),
             ),
           ),
         ),
@@ -69,7 +88,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 32),
-              
               AuthTextField(
                 label: 'Email',
                 hintText: 'example@gmail.com',
@@ -85,7 +103,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 isPassword: true,
                 controller: _passwordController,
               ),
-              
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -97,13 +114,17 @@ class _LoginScreenState extends State<LoginScreen> {
                         width: 24,
                         child: Checkbox(
                           value: _keepLoggedIn,
-                          onChanged: (value) {
-                            setState(() {
-                              _keepLoggedIn = value ?? false;
-                            });
-                          },
-                        activeColor: const Color(0xFF0D9488), // Consistent Teal
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                          onChanged: isLoading
+                              ? null
+                              : (value) {
+                                  setState(() {
+                                    _keepLoggedIn = value ?? false;
+                                  });
+                                },
+                          activeColor: const Color(0xFF0D9488),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -117,9 +138,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                   TextButton(
-                    onPressed: () => context.push('/forgot-password'),
+                    onPressed: isLoading
+                        ? null
+                        : () => context.push('/forgot-password'),
                     style: TextButton.styleFrom(
-                      foregroundColor: isDark ? Colors.grey.shade400 : const Color(0xFF374151),
+                      foregroundColor: isDark
+                          ? Colors.grey.shade400
+                          : const Color(0xFF374151),
                     ),
                     child: const Text(
                       'Forgot password?',
@@ -128,16 +153,32 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ],
               ),
-              
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () {
-                    // Logic to validate and login
-                    context.go('/overview');
-                  },
+                  onPressed: isLoading
+                      ? null
+                      : () async {
+                          final email = _emailController.text.trim();
+                          final password = _passwordController.text.trim();
+
+                          if (email.isEmpty || password.isEmpty) {
+                            _showSnack('กรอกอีเมลและรหัสผ่านก่อนนะ');
+                            return;
+                          }
+
+                          await ref
+                              .read(authControllerProvider.notifier)
+                              .login(email, password);
+
+                          final s = ref.read(authControllerProvider);
+                          s.whenOrNull(
+                            error: (e, st) => _showSnack(e.toString()),
+                            data: (_) => context.go('/overview'),
+                          );
+                        },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0D9488),
                     foregroundColor: Colors.white,
@@ -147,16 +188,21 @@ class _LoginScreenState extends State<LoginScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Login',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: isLoading
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text(
+                          'Login',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
-              
               const SizedBox(height: 32),
               const Row(
                 children: [
@@ -172,7 +218,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
               ),
               const SizedBox(height: 24),
-              
               Row(
                 children: [
                   Expanded(
@@ -183,7 +228,21 @@ class _LoginScreenState extends State<LoginScreen> {
                         height: 24,
                         width: 24,
                       ),
-                      onPressed: () => AuthService().signInWithGoogle(),
+                      onPressed: () {
+                        if (isLoading) return;
+
+                        Future(() async {
+                          await ref
+                              .read(authControllerProvider.notifier)
+                              .loginWithGoogle();
+
+                          final s = ref.read(authControllerProvider);
+                          s.whenOrNull(
+                            error: (e, st) => _showSnack(e.toString()),
+                            data: (_) => context.go('/overview'),
+                          );
+                        });
+                      },
                     ),
                   ),
                   if (defaultTargetPlatform == TargetPlatform.iOS) ...[
@@ -191,14 +250,19 @@ class _LoginScreenState extends State<LoginScreen> {
                     Expanded(
                       child: SocialButton(
                         label: 'Apple',
-                        icon: Icon(Icons.apple, color: isDark ? Colors.white : Colors.black, size: 24),
-                        onPressed: () => AuthService().signInWithApple(),
+                        icon: Icon(
+                          Icons.apple,
+                          color: isDark ? Colors.white : Colors.black,
+                          size: 24,
+                        ),
+                        // เดี๋ยวค่อยทำจริงทีหลัง
+                        onPressed: () =>
+                            _showSnack('Apple sign-in ยังไม่ตั้งค่า'),
                       ),
                     ),
                   ],
                 ],
               ),
-              
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -208,7 +272,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextStyle(color: Colors.grey),
                   ),
                   GestureDetector(
-                    onTap: () => context.pushReplacement('/register'),
+                    onTap: isLoading
+                        ? null
+                        : () => context.pushReplacement('/register'),
                     child: Text(
                       'Sign up',
                       style: TextStyle(

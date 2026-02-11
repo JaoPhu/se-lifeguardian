@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,17 +6,20 @@ import '../data/camera_provider.dart';
 import '../domain/camera.dart';
 import '../../pose_detection/data/health_status_provider.dart';
 import '../../notification/presentation/notification_bell.dart';
+import '../../profile/data/user_repository.dart';
 
 class OverviewScreen extends ConsumerWidget {
   const OverviewScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(userProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final cameras = ref.watch(cameraProvider);
     final healthState = ref.watch(healthStatusProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D9488),
+
       body: Column(
         children: [
           // Header
@@ -56,8 +60,8 @@ class OverviewScreen extends ConsumerWidget {
                           color: Colors.yellow.shade100,
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 2),
-                          image: const DecorationImage(
-                            image: NetworkImage('https://api.dicebear.com/7.x/avataaars/svg?seed=Felix'),
+                          image: DecorationImage(
+                            image: NetworkImage(user.avatarUrl),
                             fit: BoxFit.cover,
                           ),
                         ),
@@ -170,14 +174,58 @@ class OverviewScreen extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: Row(
               children: [
-                Text(
-                  camera.name,
-                  style: const TextStyle(
-                    fontSize: 16, // Slightly larger font for name
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0D9488),
+                Expanded(
+                  child: Text(
+                    camera.name,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0D9488),
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                if (camera.status != CameraStatus.offline)
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, color: Colors.grey),
+                    onSelected: (value) async {
+                      if (value == 'delete') {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Delete Camera?'),
+                            content: const Text('This will remove the camera and permanently delete all its associated history and images.'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true), 
+                                child: const Text('Delete', style: TextStyle(color: Colors.red))
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (confirm == true) {
+                          // 1. Clear History for this camera first
+                          await ref.read(healthStatusProvider.notifier).clearAllData(cameraId: camera.id);
+                          // 2. Remove the camera
+                          ref.read(cameraProvider.notifier).removeCamera(camera.id);
+                        }
+                      }
+                    },
+                    itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                      const PopupMenuItem<String>(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete, color: Colors.red, size: 20),
+                            SizedBox(width: 8),
+                            Text('Delete', style: TextStyle(color: Colors.red)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -189,7 +237,9 @@ class OverviewScreen extends ConsumerWidget {
             child: Container(
               width: double.infinity,
               decoration: BoxDecoration(
-                color: camera.status == CameraStatus.online ? Colors.black : const Color(0xFFD9D9D9),
+                color: camera.status == CameraStatus.online 
+                    ? Colors.black 
+                    : (isDark ? const Color(0xFF111827) : const Color(0xFFD9D9D9)),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: camera.status == CameraStatus.offline 
@@ -213,7 +263,38 @@ class OverviewScreen extends ConsumerWidget {
                       ),
                     ],
                   )
-                : null,
+                : Builder(
+                    builder: (context) {
+                      String? imagePath;
+                      // Priority 1: Config thumbnail (from Demo setup)
+                      if (camera.config?.thumbnailUrl != null) {
+                        imagePath = camera.config!.thumbnailUrl;
+                      }
+                      // Priority 2: Latest Event Snapshot
+                      else if (camera.events.isNotEmpty && camera.events.any((e) => e.snapshotUrl != null)) {
+                        imagePath = camera.events.firstWhere((e) => e.snapshotUrl != null).snapshotUrl;
+                      }
+
+                      if (imagePath != null) {
+                        return Container(
+                          width: double.infinity,
+                          height: double.infinity,
+                          color: Colors.black, // Background for the fitted image
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.file(
+                              File(imagePath),
+                              fit: BoxFit.contain, // Changed to contain as requested
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(color: Colors.grey[900]);
+                              },
+                            ),
+                          ),
+                        );
+                      }
+                      return const Center(child: Icon(Icons.videocam_off, color: Colors.white54));
+                    },
+                  ),
             ),
           ),
           const SizedBox(height: 12),
@@ -221,8 +302,41 @@ class OverviewScreen extends ConsumerWidget {
           // Footer Row
           Row(
             children: [
-              // Left Spacer for parity
-              const Expanded(child: SizedBox()),
+              // Left Date Range
+              Expanded(
+                child: Builder(
+                  builder: (context) {
+                    final cameraEvents = healthState.events.where((e) => e.cameraId == camera.id).toList();
+                    if (cameraEvents.isEmpty) {
+                      return const SizedBox();
+                    }
+                    
+                    final dates = cameraEvents
+                        .map((e) => e.date)
+                        .whereType<String>()
+                        .toSet()
+                        .toList();
+                    dates.sort();
+                    
+                    if (dates.isEmpty) return const SizedBox();
+                    
+                    String formatDate(String d) => d.replaceAll('-', '/');
+                    
+                    final dateLabel = dates.length == 1 
+                        ? formatDate(dates.first)
+                        : "${formatDate(dates.first)} - ${formatDate(dates.last)}";
+
+                    return Text(
+                      dateLabel,
+                      style: const TextStyle(
+                        fontSize: 14, // Match prototype size
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF6B7280), // Slate/Grey as in prototype
+                      ),
+                    );
+                  },
+                ),
+              ),
               
               // Center Events Button
               Expanded(

@@ -4,6 +4,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 import 'dart:io';
 import '../../notification/presentation/notification_bell.dart';
+import '../../profile/data/user_repository.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class VideoPreview extends StatefulWidget {
   final String videoPath;
@@ -52,18 +54,18 @@ class _VideoPreviewState extends State<VideoPreview> {
   }
 }
 
-class DemoSetupScreen extends StatefulWidget {
+class DemoSetupScreen extends ConsumerStatefulWidget {
   const DemoSetupScreen({super.key});
 
   @override
-  State<DemoSetupScreen> createState() => _DemoSetupScreenState();
+  ConsumerState<DemoSetupScreen> createState() => _DemoSetupScreenState();
 }
 
-class _DemoSetupScreenState extends State<DemoSetupScreen> {
+class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
   final _cameraNameController = TextEditingController(text: 'Camera view : Desk');
-  String _startTime = '08:00';
-  int _speed = 1;
-  DateTime _date = DateTime.now();
+  final String _startTime = '08:00';
+  final int _speed = 1;
+  final DateTime _date = DateTime.now();
   String? _videoPath;
   final ImagePicker _picker = ImagePicker();
 
@@ -79,6 +81,7 @@ class _DemoSetupScreenState extends State<DemoSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final user = ref.watch(userProvider);
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
@@ -122,8 +125,8 @@ class _DemoSetupScreenState extends State<DemoSetupScreen> {
                         color: Colors.yellow.shade100,
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 2),
-                        image: const DecorationImage(
-                          image: NetworkImage('https://api.dicebear.com/7.x/avataaars/svg?seed=Felix'),
+                        image: DecorationImage(
+                          image: NetworkImage(user.avatarUrl),
                           fit: BoxFit.cover,
                         ),
                       ),
@@ -278,7 +281,10 @@ class _DemoSetupScreenState extends State<DemoSetupScreen> {
                   height: 56,
                   child: ElevatedButton(
                     onPressed: _videoPath != null ? () {
-                      context.push('/analysis', extra: _videoPath);
+                      context.push('/analysis', extra: {
+                        'videoPath': _videoPath,
+                        'cameraName': _cameraNameController.text,
+                      });
                     } : null, // Disabled if no video
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF0D9488),

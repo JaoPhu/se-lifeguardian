@@ -1,19 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../features/profile/data/user_repository.dart';
 
-class GroupManagementScreen extends StatefulWidget {
+class GroupManagementScreen extends ConsumerStatefulWidget {
   const GroupManagementScreen({super.key});
 
   @override
-  State<GroupManagementScreen> createState() => _GroupManagementScreenState();
+  ConsumerState<GroupManagementScreen> createState() => _GroupManagementScreenState();
 }
 
-class _GroupManagementScreenState extends State<GroupManagementScreen> {
+class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
   // Mock Data
   final String _inviteCode = 'LG-4921';
   String _activeTab = 'my-group'; // 'my-group' or 'join-group'
   String _joinCode = '';
-  String _groupName = 'My Home Group';
+
 
   final List<Map<String, dynamic>> _members = [
     {
@@ -53,29 +56,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     }
   ];
 
-  void _showRenameDialog() {
-    final controller = TextEditingController(text: _groupName);
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Rename Group'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(hintText: "Enter new group name"),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () {
-              setState(() => _groupName = controller.text);
-              Navigator.pop(context);
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   void _showRoleSelector(Map<String, dynamic> member) {
     if (member['roleType'] == 'Owner') return;
@@ -180,9 +161,11 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final user = ref.watch(userProvider);
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF111827) : Colors.white,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Column(
         children: [
           // Header
@@ -215,16 +198,19 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                       children: [
                         const Icon(Icons.notifications, color: Colors.white, size: 24),
                         const SizedBox(width: 16),
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: Colors.yellow.shade100,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
-                            image: const DecorationImage(
-                              image: NetworkImage('https://api.dicebear.com/7.x/avataaars/svg?seed=Felix'),
-                              fit: BoxFit.cover,
+                        GestureDetector(
+                          onTap: () => context.push('/profile'),
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: Colors.yellow.shade100,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                              image: DecorationImage(
+                                image: NetworkImage(user.avatarUrl),
+                                fit: BoxFit.cover,
+                              ),
                             ),
                           ),
                         ),
@@ -254,7 +240,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                 Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: theme.cardColor,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -343,8 +329,9 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
         Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: Colors.grey.shade100,
+            color: Theme.of(context).cardColor,
             borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Theme.of(context).dividerColor),
           ),
           child: Column(
             children: [
@@ -353,7 +340,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade500,
+                  color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),
                 ),
               ),
               const SizedBox(height: 16),
@@ -448,8 +435,9 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: Theme.of(context).cardColor,
                 borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Theme.of(context).dividerColor),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -459,7 +447,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: Colors.grey.shade700,
+                      color: Theme.of(context).textTheme.bodyMedium?.color,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -468,14 +456,14 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                     decoration: InputDecoration(
                       hintText: 'Ex. LG-9821',
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: Theme.of(context).inputDecorationTheme.fillColor,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(color: Colors.transparent),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey.shade200),
+                        borderSide: BorderSide(color: Theme.of(context).dividerColor),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -525,13 +513,15 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
   }
 
   Widget _buildRequestItem(Map<String, dynamic> req) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.orange.shade50),
+        border: Border.all(color: theme.dividerColor),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -548,7 +538,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade200,
+                  color: theme.scaffoldBackgroundColor,
                   shape: BoxShape.circle,
                   image: DecorationImage(
                      image: NetworkImage('https://api.dicebear.com/7.x/avataaars/svg?seed=${req['avatarSeed']}'),
@@ -599,9 +589,10 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                 child: ElevatedButton(
                   onPressed: () {},
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey.shade100,
-                    foregroundColor: Colors.grey.shade600,
+                    backgroundColor: isDark ? Theme.of(context).scaffoldBackgroundColor : Colors.grey.shade100,
+                    foregroundColor: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                     elevation: 0,
+                    side: isDark ? BorderSide(color: Colors.grey.shade800) : BorderSide.none,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   child: const Text('Decline', style: TextStyle(fontSize: 12)),
@@ -623,20 +614,20 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
 
     switch (roleType) {
       case 'Owner':
-        roleBgColor = Colors.red.shade50;
-        roleTextColor = Colors.red.shade600;
-        roleBorderColor = Colors.red.shade200;
+        roleBgColor = isDark ? Colors.red.shade900.withOpacity(0.3) : Colors.red.shade50;
+        roleTextColor = isDark ? Colors.red.shade100 : Colors.red.shade600;
+        roleBorderColor = isDark ? Colors.red.shade800 : Colors.red.shade200;
         break;
       case 'Admin':
-        roleBgColor = Colors.orange.shade50;
-        roleTextColor = Colors.orange.shade600;
-        roleBorderColor = Colors.orange.shade200;
+        roleBgColor = isDark ? Colors.orange.shade900.withOpacity(0.3) : Colors.orange.shade50;
+        roleTextColor = isDark ? Colors.orange.shade100 : Colors.orange.shade600;
+        roleBorderColor = isDark ? Colors.orange.shade800 : Colors.orange.shade200;
         break;
       case 'Viewer':
       default:
-        roleBgColor = Colors.teal.shade50;
-        roleTextColor = Colors.teal.shade600;
-        roleBorderColor = Colors.teal.shade200;
+        roleBgColor = isDark ? Colors.teal.shade900.withOpacity(0.3) : Colors.teal.shade50;
+        roleTextColor = isDark ? Colors.teal.shade100 : Colors.teal.shade600;
+        roleBorderColor = isDark ? Colors.teal.shade800 : Colors.teal.shade200;
         break;
     }
 
@@ -646,8 +637,9 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
         padding: const EdgeInsets.all(16),
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: isDark ? Colors.grey.shade900 : Colors.grey.shade100,
+          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Theme.of(context).dividerColor),
         ),
         child: Row(
           children: [
@@ -672,7 +664,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
-                      color: isDark ? Colors.grey.shade200 : const Color(0xFF374151),
+                      color: Theme.of(context).textTheme.bodyLarge?.color,
                     ),
                   ),
                   Text(

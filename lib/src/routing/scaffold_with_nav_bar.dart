@@ -46,12 +46,10 @@ class ScaffoldWithNavBar extends StatelessWidget {
             ),
 
             // Center High-Profile Button (Shield with Plus)
-            // Center High-Profile Button (Figma Style)
             GestureDetector(
               onTap: () => _onTap(context, 2),
               child: Container(
-                width:
-                    60, // Adjusted size slightly smaller based on image suggestion
+                width: 60, // Adjusted size slightly smaller based on image suggestion
                 height: 60,
                 decoration: BoxDecoration(
                   color: const Color(0xFFF1F5F9), // Light Grey background
@@ -112,7 +110,7 @@ class ScaffoldWithNavBar extends StatelessWidget {
         color: active
             ? const Color(0xFF0D9488)
             : (isDark ? Colors.grey.shade600 : const Color(0xFF94A3B8)),
-        size: 28,
+        size: 32,
       ),
     );
   }
