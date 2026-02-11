@@ -13,7 +13,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
   final String _inviteCode = 'LG-4921';
   String _activeTab = 'my-group'; // 'my-group' or 'join-group'
   String _joinCode = '';
-  String _groupName = 'My Home Group';
+
 
   final List<Map<String, dynamic>> _members = [
     {
@@ -53,29 +53,7 @@ class _GroupManagementScreenState extends State<GroupManagementScreen> {
     }
   ];
 
-  void _showRenameDialog() {
-    final controller = TextEditingController(text: _groupName);
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Rename Group'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(hintText: "Enter new group name"),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () {
-              setState(() => _groupName = controller.text);
-              Navigator.pop(context);
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   void _showRoleSelector(Map<String, dynamic> member) {
     if (member['roleType'] == 'Owner') return;
