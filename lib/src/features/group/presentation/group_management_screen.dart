@@ -162,7 +162,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    // final isDark = theme.brightness == Brightness.dark; // Unused
     final user = ref.watch(userProvider);
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -340,7 +340,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),
+                  color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.6),
                 ),
               ),
               const SizedBox(height: 16),
@@ -614,18 +614,18 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
 
     switch (roleType) {
       case 'Owner':
-        roleBgColor = isDark ? Colors.red.shade900.withOpacity(0.3) : Colors.red.shade50;
+        roleBgColor = isDark ? Colors.red.shade900.withValues(alpha: 0.3) : Colors.red.shade50;
         roleTextColor = isDark ? Colors.red.shade100 : Colors.red.shade600;
         roleBorderColor = isDark ? Colors.red.shade800 : Colors.red.shade200;
         break;
       case 'Admin':
-        roleBgColor = isDark ? Colors.orange.shade900.withOpacity(0.3) : Colors.orange.shade50;
+        roleBgColor = isDark ? Colors.orange.shade900.withValues(alpha: 0.3) : Colors.orange.shade50;
         roleTextColor = isDark ? Colors.orange.shade100 : Colors.orange.shade600;
         roleBorderColor = isDark ? Colors.orange.shade800 : Colors.orange.shade200;
         break;
       case 'Viewer':
       default:
-        roleBgColor = isDark ? Colors.teal.shade900.withOpacity(0.3) : Colors.teal.shade50;
+        roleBgColor = isDark ? Colors.teal.shade900.withValues(alpha: 0.3) : Colors.teal.shade50;
         roleTextColor = isDark ? Colors.teal.shade100 : Colors.teal.shade600;
         roleBorderColor = isDark ? Colors.teal.shade800 : Colors.teal.shade200;
         break;

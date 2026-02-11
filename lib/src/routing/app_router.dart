@@ -24,7 +24,6 @@ import 'package:lifeguardian/src/features/history/presentation/pages/history_lis
 import 'package:lifeguardian/src/features/history/presentation/pages/history_detail_page.dart';
 import 'package:lifeguardian/src/features/history/domain/history_model.dart';
 import 'package:lifeguardian/src/features/profile/presentation/profile_screen.dart';
-import 'package:lifeguardian/src/features/notification/presentation/notification_page.dart';
 import 'package:lifeguardian/src/features/profile/presentation/edit_profile_screen.dart';
 import 'package:lifeguardian/src/features/pose_detection/presentation/demo_setup_screen.dart';
 import 'package:lifeguardian/src/features/notification/presentation/notification_screen.dart';
@@ -193,12 +192,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
         ],
-      ),
-
-      GoRoute(
-        path: '/notification',
-        builder: (context, state) => const NotificationPage(),
-        parentNavigatorKey: _rootNavigatorKey,
       ),
       GoRoute(
         path: '/history',

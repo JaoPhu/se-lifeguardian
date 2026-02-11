@@ -54,7 +54,7 @@ class ProfileStats extends StatelessWidget {
           style: theme.textTheme.bodySmall?.copyWith(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: theme.textTheme.bodySmall?.color?.withOpacity(0.6),
+            color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.6),
           ),
         ),
         const SizedBox(height: 2),

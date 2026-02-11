@@ -75,7 +75,7 @@ class AppTheme {
       ),
       scaffoldBackgroundColor: scaffoldDark,
       cardColor: cardDark,
-      dividerColor: Colors.white.withOpacity(0.05),
+      dividerColor: Colors.white.withValues(alpha: 0.05),
       iconTheme: const IconThemeData(color: textPrimaryDark),
       appBarTheme: const AppBarTheme(
         backgroundColor: scaffoldDark,

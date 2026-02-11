@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+// import 'package:lucide_icons/lucide_icons.dart'; // Unused
 
 class ProfileInfo extends StatelessWidget {
   final String name;
@@ -49,7 +49,7 @@ class ProfileInfo extends StatelessWidget {
           style: theme.textTheme.bodyMedium?.copyWith(
             fontSize: 14,
             fontWeight: FontWeight.w500,
-            color: theme.colorScheme.onSurface.withOpacity(0.6),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
           ),
         ),
         const SizedBox(height: 12),

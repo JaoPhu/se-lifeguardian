@@ -84,7 +84,7 @@ class SettingsScreen extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.08),
+                              color: Colors.black.withValues(alpha: isDarkMode ? 0.3 : 0.08),
                               blurRadius: 12,
                               offset: const Offset(0, 4),
                             ),
@@ -130,13 +130,13 @@ class SettingsScreen extends ConsumerWidget {
                                     style: theme.textTheme.bodyMedium?.copyWith(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
-                                      color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                                      color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
                                     ),
                                   ),
                                   Text(
                                     'life guardain account',
                                     style: TextStyle(
-                                      color: theme.textTheme.bodySmall?.color?.withOpacity(0.5),
+                                      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.5),
                                       fontSize: 12,
                                       fontWeight: FontWeight.w500,
                                     ),
@@ -159,7 +159,7 @@ class SettingsScreen extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.06),
+                            color: Colors.black.withValues(alpha: isDarkMode ? 0.2 : 0.06),
                             blurRadius: 8,
                             offset: const Offset(0, 3),
                           ),
@@ -242,7 +242,7 @@ class SettingsScreen extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.08),
+                            color: Colors.black.withValues(alpha: isDarkMode ? 0.3 : 0.08),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),

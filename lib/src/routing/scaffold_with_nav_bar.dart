@@ -62,17 +62,17 @@ class ScaffoldWithNavBar extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: Stack(
+                child: const Stack(
                   alignment: Alignment.center,
                   children: [
                     // Dark Shield
-                    const Icon(
+                    Icon(
                       Icons.shield,
                       color: Color(0xFF1E293B), // Dark Grey
                       size: 40, // Scaled down with container
                     ),
                     // White Plus
-                    const Icon(
+                    Icon(
                       Icons.add,
                       color: Colors.white,
                       size: 20,
