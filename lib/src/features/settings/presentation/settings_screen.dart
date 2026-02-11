@@ -257,22 +257,7 @@ class SettingsScreen extends ConsumerWidget {
                       ),
                       child: Column(
                         children: [
-                          // Camera Item
-                          ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
-                            leading: Icon(LucideIcons.home, color: isDarkMode ? Colors.white : Colors.black, size: 24),
-                            title: Text(
-                              'Camera',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: primaryTextColor,
-                              ),
-                            ),
-                            trailing: Icon(LucideIcons.chevronRight, color: isDarkMode ? Colors.grey : Colors.black87, size: 20),
-                            onTap: () => context.go('/overview'),
-                          ),
-                          Divider(height: 1, indent: 20, endIndent: 20, color: isDarkMode ? Colors.white.withOpacity(0.05) : const Color(0xFFE5E7EB)),
+
                           // Reset Password
                           ListTile(
                             contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
