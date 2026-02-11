@@ -1,217 +1,56 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../data/user_repository.dart';
+import 'profile_header.dart';
+import 'profile_info.dart';
+import 'profile_stats.dart';
+import 'medical_history.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(userProvider);
 
-
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final List<Map<String, String>> medicalHistory = [
+      {'type': 'condition', 'label': 'Medical condition', 'value': user.medicalCondition},
+      {'type': 'medication', 'label': 'Current Medications', 'value': user.currentMedications},
+      {'type': 'allergy_drug', 'label': 'Drug Allergies', 'value': user.drugAllergies},
+      {'type': 'allergy_food', 'label': 'Food Allergies', 'value': user.foodAllergies},
+    ];
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SingleChildScrollView(
+      body: SafeArea(
         child: Column(
           children: [
-            const SizedBox(height: 56),
-            // Custom Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.black),
-                    onPressed: () => context.pop(),
-                  ),
-                  const SizedBox(width: 80),
-                  Text(
-                    'Profile',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : const Color(0xFF374151),
+            ProfileHeader(onBack: () => context.pop()), 
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    ProfileInfo(
+                      name: user.name,
+                      username: user.username,
+                      avatarUrl: user.avatarUrl,
+                      onEdit: () => context.push('/edit-profile'),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            
-            // Avatar
-            Container(
-              width: 140,
-              height: 140,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200, width: 8),
-                image: const DecorationImage(
-                  image: NetworkImage('https://api.dicebear.com/7.x/avataaars/svg?seed=Felix'),
-                  fit: BoxFit.contain,
+                    ProfileStats(
+                      gender: user.gender,
+                      bloodType: user.bloodType,
+                      age: int.tryParse(user.age) ?? 0,
+                      height: int.tryParse(user.height) ?? 0,
+                      weight: int.tryParse(user.weight) ?? 0,
+                    ),
+                    MedicalHistory(items: medicalHistory),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 24),
-            
-            // Name & Username
-            Text(
-              'hewkai',
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1F2937)),
-            ),
-            const Text(
-              '@lnwhewkaimak',
-              style: TextStyle(fontSize: 16, color: Color(0xFF94A3B8)),
-            ),
-            
-            const SizedBox(height: 24),
-
-            // Edit Profile Button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 64),
-              child: SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: () => context.push('/edit-profile'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0D9488),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'Edit Profile',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            // Stats Section
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 48.0),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _buildProfileStatColumn(context, 'Gender', 'Male', Icons.person_outline),
-                      _buildProfileStatColumn(context, 'Blood Type', 'O', null, isTextLarge: true),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _buildProfileStatColumn(context, 'Age', '21', null, isTextLarge: true),
-                      _buildProfileStatColumn(context, 'Height', '169', null, isTextLarge: true),
-                      _buildProfileStatColumn(context, 'Weight', '68', null, isTextLarge: true),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            // Medical History Container
-            Container(
-              padding: const EdgeInsets.all(24),
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9).withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(40),
-              ),
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Medical history',
-                    style: TextStyle(
-                      fontSize: 18, 
-                      fontWeight: FontWeight.bold, 
-                      color: Color(0xFF0D9488)
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  _buildMedicalItem('Medical condition', '-', Icons.health_and_safety_outlined),
-                  _buildMedicalItem('Current Medications', '-', Icons.medication_outlined),
-                  _buildMedicalItem('Drug Allergies', '-', Icons.close),
-                  _buildMedicalItem('Food Allergies', '-', Icons.close),
-                ],
-              ),
-            ),
-            const SizedBox(height: 32),
-            const SizedBox(height: 120),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildProfileStatColumn(BuildContext context, String label, String value, IconData? icon, {bool isTextLarge = false}) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Column(
-      children: [
-        Text(
-          label,
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey.shade500),
-        ),
-        const SizedBox(height: 8),
-        if (icon != null)
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, size: 20, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-          )
-        else
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: isTextLarge ? 20 : 16,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildMedicalItem(String label, String value, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 24.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: const Color(0xFF0D9488), size: 24),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0D9488)),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey.shade500),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

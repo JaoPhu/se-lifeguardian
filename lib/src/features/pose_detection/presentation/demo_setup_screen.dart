@@ -4,6 +4,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 import 'dart:io';
 import '../../notification/presentation/notification_bell.dart';
+import '../../profile/data/user_repository.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class VideoPreview extends StatefulWidget {
   final String videoPath;
@@ -52,14 +54,14 @@ class _VideoPreviewState extends State<VideoPreview> {
   }
 }
 
-class DemoSetupScreen extends StatefulWidget {
+class DemoSetupScreen extends ConsumerStatefulWidget {
   const DemoSetupScreen({super.key});
 
   @override
-  State<DemoSetupScreen> createState() => _DemoSetupScreenState();
+  ConsumerState<DemoSetupScreen> createState() => _DemoSetupScreenState();
 }
 
-class _DemoSetupScreenState extends State<DemoSetupScreen> {
+class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
   final _cameraNameController = TextEditingController(text: 'Camera view : Desk');
   final String _startTime = '08:00';
   final int _speed = 1;
@@ -79,6 +81,7 @@ class _DemoSetupScreenState extends State<DemoSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final user = ref.watch(userProvider);
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
@@ -122,8 +125,8 @@ class _DemoSetupScreenState extends State<DemoSetupScreen> {
                         color: Colors.yellow.shade100,
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 2),
-                        image: const DecorationImage(
-                          image: NetworkImage('https://api.dicebear.com/7.x/avataaars/svg?seed=Felix'),
+                        image: DecorationImage(
+                          image: NetworkImage(user.avatarUrl),
                           fit: BoxFit.cover,
                         ),
                       ),

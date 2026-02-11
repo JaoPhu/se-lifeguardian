@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-
 class ScaffoldWithNavBar extends StatelessWidget {
   const ScaffoldWithNavBar({
     required this.navigationShell,
@@ -45,31 +44,40 @@ class ScaffoldWithNavBar extends StatelessWidget {
               icon: Icons.bar_chart_rounded,
               active: navigationShell.currentIndex == 1,
             ),
-            
-            // Center High-Profile Button
+
+            // Center High-Profile Button (Shield with Plus)
             GestureDetector(
               onTap: () => _onTap(context, 2),
-              child: Transform.translate(
-                offset: const Offset(0, -15),
-                child: Container(
-                  width: 65,
-                  height: 65,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF009688), // Teal
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF009688).withValues(alpha: 0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.add_moderator_outlined,
-                    color: Colors.white,
-                    size: 32,
-                  ),
+              child: Container(
+                width: 60, // Adjusted size slightly smaller based on image suggestion
+                height: 60,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9), // Light Grey background
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1), // Soft shadow
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Dark Shield
+                    const Icon(
+                      Icons.shield,
+                      color: Color(0xFF1E293B), // Dark Grey
+                      size: 40, // Scaled down with container
+                    ),
+                    // White Plus
+                    const Icon(
+                      Icons.add,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -92,20 +100,17 @@ class ScaffoldWithNavBar extends StatelessWidget {
     );
   }
 
-  Widget _buildNavItem(BuildContext context, {
-    required int index, 
-    required IconData icon, 
-    required bool active
-  }) {
+  Widget _buildNavItem(BuildContext context,
+      {required int index, required IconData icon, required bool active}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return IconButton(
       onPressed: () => _onTap(context, index),
       icon: Icon(
         icon,
-        color: active 
-            ? const Color(0xFF0D9488) 
+        color: active
+            ? const Color(0xFF0D9488)
             : (isDark ? Colors.grey.shade600 : const Color(0xFF94A3B8)),
-        size: 28,
+        size: 32,
       ),
     );
   }
