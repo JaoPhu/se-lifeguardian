@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../pose_detection/data/health_status_provider.dart';
 import '../../dashboard/data/camera_provider.dart';
 import '../../statistics/domain/simulation_event.dart';
+import '../../profile/data/user_repository.dart';
 
 class EventsScreen extends ConsumerWidget {
   final String cameraId;
@@ -12,6 +13,7 @@ class EventsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(userProvider);
     final healthState = ref.watch(healthStatusProvider);
     final events = healthState.events;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -66,8 +68,8 @@ class EventsScreen extends ConsumerWidget {
                           color: isDark ? Colors.grey.shade900 : Colors.yellow.shade100,
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 2),
-                          image: const DecorationImage(
-                            image: NetworkImage('https://api.dicebear.com/7.x/avataaars/svg?seed=Felix'),
+                          image: DecorationImage(
+                            image: NetworkImage(user.avatarUrl),
                             fit: BoxFit.cover,
                           ),
                         ),

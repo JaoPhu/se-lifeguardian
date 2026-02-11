@@ -19,6 +19,12 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
-tasks.register<Delete>("clean") {
-    delete(rootProject.layout.buildDirectory)
+tasks.register("clean") {
+    doLast {
+        delete(rootProject.layout.buildDirectory)
+    }
 }
+
+
+
+

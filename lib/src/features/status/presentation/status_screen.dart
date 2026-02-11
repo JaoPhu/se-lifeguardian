@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../pose_detection/data/health_status_provider.dart';
 import '../../notification/presentation/notification_bell.dart';
+import '../../profile/data/user_repository.dart';
 
 class StatusScreen extends ConsumerWidget {
   const StatusScreen({super.key});
@@ -10,6 +11,7 @@ class StatusScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final healthState = ref.watch(healthStatusProvider);
+    final user = ref.watch(userProvider);
     final config = _getStatusConfig(healthState.status, context);
 
     return Scaffold(
@@ -54,8 +56,8 @@ class StatusScreen extends ConsumerWidget {
                           color: Colors.yellow.shade100,
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 2),
-                          image: const DecorationImage(
-                            image: NetworkImage('https://api.dicebear.com/7.x/avataaars/svg?seed=Felix'),
+                          image: DecorationImage(
+                            image: NetworkImage(user.avatarUrl),
                             fit: BoxFit.cover,
                           ),
                         ),
@@ -293,28 +295,34 @@ class StatusScreen extends ConsumerWidget {
         return _StatusConfig(
           title: 'Status : Normal',
           description: 'No abnormal behavior detected.',
-          bgColor: const Color(0xFF34D399),
-          iconBgColor: const Color(0xFF10B981).withValues(alpha: 0.3),
+          bgColor: isDark ? Colors.green.shade900.withValues(alpha: 0.5) : const Color(0xFF34D399),
+          iconBgColor: isDark 
+              ? Colors.green.shade800 
+              : const Color(0xFF10B981).withValues(alpha: 0.3),
           icon: Icons.check,
-          textColor: const Color(0xFF064E3B),
-          iconColor: const Color(0xFF064E3B),
+          textColor: isDark ? Colors.green.shade100 : const Color(0xFF064E3B),
+          iconColor: isDark ? Colors.green.shade100 : const Color(0xFF064E3B),
         );
       case HealthStatus.warning:
         return _StatusConfig(
           title: 'Status : Warning',
           description: 'Detect risky behavior.',
-          bgColor: const Color(0xFFFBBF24),
-          iconBgColor: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+          bgColor: isDark ? Colors.amber.shade900.withValues(alpha: 0.5) : const Color(0xFFFBBF24),
+          iconBgColor: isDark 
+              ? Colors.amber.shade800 
+              : const Color(0xFFF59E0B).withValues(alpha: 0.3),
           icon: Icons.warning_amber_rounded,
-          textColor: const Color(0xFF78350F),
-          iconColor: const Color(0xFF78350F),
+          textColor: isDark ? Colors.amber.shade100 : const Color(0xFF78350F),
+          iconColor: isDark ? Colors.amber.shade100 : const Color(0xFF78350F),
         );
       case HealthStatus.emergency:
         return _StatusConfig(
           title: 'Status : Emergency',
           description: 'Emergency detected.',
-          bgColor: const Color(0xFFEF4444),
-          iconBgColor: const Color(0xFFDC2626).withValues(alpha: 0.3),
+          bgColor: isDark ? Colors.red.shade900.withValues(alpha: 0.5) : const Color(0xFFEF4444),
+          iconBgColor: isDark 
+              ? Colors.red.shade800 
+              : const Color(0xFFDC2626).withValues(alpha: 0.3),
           icon: Icons.add,
           textColor: Colors.white,
           iconColor: Colors.white,
