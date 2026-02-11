@@ -1,33 +1,73 @@
 import 'dart:math' as math;
-import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 
-class TrackedPose {
+import 'dart:typed_data';
+import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart' as ml_kit;
+
+import 'pose_models.dart';
+import '../logic/kalman_filter.dart';
+import '../logic/physics_engine.dart';
+
+class TrackedPerson {
   Map<PoseLandmarkType, PoseLandmark> smoothedLandmarks = {};
   math.Point<double> centroid = const math.Point(0, 0);
-  int framesSinceUpdate = 0;
+  math.Point<double> velocity = const math.Point(0, 0); // Legacy: derived from centroid
+  
+  // New AI Components
+  final Map<PoseLandmarkType, PointKalmanFilter> _landmarkFilters = {};
+  final PhysicsEngine _physicsEngine = PhysicsEngine();
+  Map<PoseLandmarkType, PhysicsData> landmarkPhysics = {};
 
-  TrackedPose(Map<PoseLandmarkType, PoseLandmark> initialLandmarks) {
-    smoothedLandmarks = Map.from(initialLandmarks);
+  int missedCount = 0;
+  int seenCount = 0;
+  final int id;
+
+  TrackedPerson(this.id, Map<PoseLandmarkType, PoseLandmark> initialLandmarks) {
+    smoothedLandmarks = Map<PoseLandmarkType, PoseLandmark>.from(initialLandmarks);
     _updateCentroid();
   }
 
   void update(Map<PoseLandmarkType, PoseLandmark> rawLandmarks, double factor) {
-    rawLandmarks.forEach((type, landmark) {
-      final prev = smoothedLandmarks[type];
-      if (prev != null) {
-        smoothedLandmarks[type] = PoseLandmark(
-          type: type,
-          x: landmark.x * factor + prev.x * (1 - factor),
-          y: landmark.y * factor + prev.y * (1 - factor),
-          z: landmark.z * factor + prev.z * (1 - factor),
-          likelihood: landmark.likelihood * factor + prev.likelihood * (1 - factor),
-        );
-      } else {
-        smoothedLandmarks[type] = landmark;
-      }
+
+    final Map<PoseLandmarkType, PoseLandmark> filteredLandmarks = {};
+
+    // 1. Apply Kalman Filter
+    rawLandmarks.forEach((PoseLandmarkType type, PoseLandmark landmark) {
+       final filter = _landmarkFilters.putIfAbsent(type, () => PointKalmanFilter());
+       final filtered = filter.filter(landmark.x, landmark.y);
+       
+       filteredLandmarks[type] = PoseLandmark(
+         type: type,
+         x: filtered[0],
+         y: filtered[1],
+         z: landmark.z,
+         likelihood: landmark.likelihood,
+       );
     });
-    _updateCentroid();
-    framesSinceUpdate = 0;
+
+    // Update smoothed landmarks with the result
+    smoothedLandmarks = filteredLandmarks;
+
+    // 2. Update Physics Engine
+    // Pass filtered landmarks for smoother velocity calculation (less noise derivative)
+    landmarkPhysics = _physicsEngine.update(filteredLandmarks);
+  }
+
+  /// Predict next position based on velocity (Dead Reckoning)
+  void predict() {
+    centroid = math.Point(centroid.x + velocity.x, centroid.y + velocity.y);
+    
+    // Shift all landmarks by velocity to keep skeleton consistent during occlusion
+    smoothedLandmarks = smoothedLandmarks.map((PoseLandmarkType type, PoseLandmark landmark) {
+      return MapEntry(type, PoseLandmark(
+        type: type,
+        x: landmark.x + velocity.x,
+        y: landmark.y + velocity.y,
+        z: landmark.z,
+        likelihood: landmark.likelihood * 0.9, // Diminish likelihood while occluded
+      ));
+    });
+    
+    missedCount++;
   }
 
   void _updateCentroid() {
@@ -36,7 +76,6 @@ class TrackedPose {
     final leftShoulder = smoothedLandmarks[PoseLandmarkType.leftShoulder];
     final rightShoulder = smoothedLandmarks[PoseLandmarkType.rightShoulder];
     
-    // Use average of hips and shoulders for more stable centroid
     double sumX = 0;
     double sumY = 0;
     int count = 0;
@@ -60,80 +99,81 @@ class TrackedPose {
 }
 
 class PoseDetectionService {
-  // Use High-Accuracy model for diagnostic-grade results
-  final PoseDetector _poseDetector = PoseDetector(
-    options: PoseDetectorOptions(model: PoseDetectionModel.accurate),
-  );
+  final ml_kit.PoseDetector _poseDetector = ml_kit.PoseDetector(options: ml_kit.PoseDetectorOptions());
   
-  // Smoothing is now handled by 1 Euro Filter in the Presentation layer
-  // to minimize latency and ensure anatomical consistency.
+  final List<TrackedPerson> _activeTracks = [];
+
+  // Scene Analysis State
+
   
-  final List<TrackedPose> _trackedPoses = [];
-  final int _maxForgottenFrames = 10;
+  // Stability thresholds
+  static const int _maxMissedFrames = 60; 
 
   Future<void> close() async {
     await _poseDetector.close();
   }
 
-  Future<List<Map<PoseLandmarkType, PoseLandmark>>> detect(InputImage inputImage) async {
-    final List<Pose> detectedPoses = await _poseDetector.processImage(inputImage);
+
+
+  Future<List<TrackedPerson>> detect(ml_kit.InputImage inputImage, Uint8List originalBytes) async {
+    // 1. Run Standard ML Kit Pose Detector
+    // This returns the most prominent person in the frame (single-person model behavior)
+    final List<ml_kit.Pose> poses = await _poseDetector.processImage(inputImage);
     
-    // 1. Increment frame counters
-    for (var tp in _trackedPoses) {
-      tp.framesSinceUpdate++;
+    // 2. Prediction Step (Physics)
+    if (_activeTracks.isNotEmpty) {
+      _activeTracks.first.predict();
     }
 
-    // 2. Match and Update
-    for (var pose in detectedPoses) {
-      final rawLandmarks = pose.landmarks;
-      final rawCentroid = _calculateRawCentroid(rawLandmarks);
-      
-      TrackedPose? bestMatch;
-      double minDistance = 300.0; // Increased threshold to prevent ghosting (Standard for 2025)
+    if (poses.isEmpty) {
 
-      for (var tp in _trackedPoses) {
-        final dist = tp.distanceTo(rawCentroid);
-        if (dist < minDistance) {
-          minDistance = dist;
-          bestMatch = tp;
-        }
-      }
-
-      if (bestMatch != null) {
-        // Direct update: Smoothing is offloaded to 1 Euro Filter in UI
-        bestMatch.update(rawLandmarks, 1.0); 
-      } else {
-        _trackedPoses.add(TrackedPose(rawLandmarks));
-      }
+       // Cleanup if lost for too long
+       _activeTracks.removeWhere((t) => t.missedCount > _maxMissedFrames);
+      return List.from(_activeTracks);
     }
 
-    // 3. Remove old tracks
-    _trackedPoses.removeWhere((tp) => tp.framesSinceUpdate > _maxForgottenFrames);
+    // 3. Process the Primary Subject
+    // We strictly take the first detected pose and force it to be ID 0
+    final primaryPose = poses.first;
+    final landmarks = _mapLandmarks(primaryPose.landmarks);
 
-    // 4. Return smoothed landmarks
-    return _trackedPoses.map((tp) => tp.smoothedLandmarks).toList();
+    if (_activeTracks.isEmpty) {
+      _activeTracks.add(TrackedPerson(0, landmarks));
+    } else {
+      // Update existing track (always ID 0)
+      _activeTracks.first.update(landmarks, 0.6); // 0.6 smoothing factor
+      _activeTracks.first.missedCount = 0;
+    }
+
+    // 4. Post-Process Analysis
+
+
+    return List.from(_activeTracks);
   }
 
-  math.Point<double> _calculateRawCentroid(Map<PoseLandmarkType, PoseLandmark> landmarks) {
-    final leftHip = landmarks[PoseLandmarkType.leftHip];
-    final rightHip = landmarks[PoseLandmarkType.rightHip];
-    final leftShoulder = landmarks[PoseLandmarkType.leftShoulder];
-    final rightShoulder = landmarks[PoseLandmarkType.rightShoulder];
+  Map<PoseLandmarkType, PoseLandmark> _mapLandmarks(Map<ml_kit.PoseLandmarkType, ml_kit.PoseLandmark> raw) {
+    // Map SDK types to our domain types manually to resolve type mismatch
+    final Map<PoseLandmarkType, PoseLandmark> result = {};
     
-    double sumX = 0;
-    double sumY = 0;
-    int count = 0;
-
-    for (var l in [leftHip, rightHip, leftShoulder, rightShoulder]) {
-      if (l != null) {
-        sumX += l.x;
-        sumY += l.y;
-        count++;
-      }
-    }
-
-    return count > 0 ? math.Point(sumX / count, sumY / count) : const math.Point(0, 0);
+    raw.forEach((ml_kit.PoseLandmarkType type, ml_kit.PoseLandmark landmark) {
+       // Convert SDK type to our Domain type via name matching
+       for (var ourType in PoseLandmarkType.values) {
+         if (ourType.name == type.name) {
+           result[ourType] = PoseLandmark(
+             type: ourType,
+             x: landmark.x,
+             y: landmark.y,
+             z: landmark.z,
+             likelihood: landmark.likelihood,
+           );
+           break;
+         }
+       }
+    });
+    return result;
   }
+
+
 
   /// Calculates the angle of the torso relative to the vertical axis.
   /// Ported from Prototype: 90 = Upright, 0 = Flat.
@@ -200,10 +240,27 @@ class PoseDetectionService {
     final width = xValues.reduce(math.max) - xValues.reduce(math.min);
     final height = yValues.reduce(math.max) - yValues.reduce(math.min);
     
-    // Prototype check: torso < 25 or isFlat
+    // Prototype check: torso < 25 or isFlat (horizontal aspect ratio)
     final isFlat = width > height * 1.4;
 
     return torsoAngle < 25 || isFlat;
+  }
+
+  bool isSlouching(Map<PoseLandmarkType, PoseLandmark> landmarks) {
+    if (landmarks.isEmpty) return false;
+    final torsoAngle = getTorsoAngle(landmarks);
+    // Unconscious / Slumped / Leaning significantly
+    return torsoAngle >= 25 && torsoAngle < 60;
+  }
+
+  bool isSitting(Map<PoseLandmarkType, PoseLandmark> landmarks) {
+    if (landmarks.isEmpty) return false;
+    final torsoAngle = getTorsoAngle(landmarks);
+    if (torsoAngle < 60) return false;
+    
+    final legBend = getLegStraightness(landmarks);
+    // Knees bent significantly (> 70 degrees typically)
+    return legBend > 65;
   }
 
   bool isStanding(Map<PoseLandmarkType, PoseLandmark> landmarks) {
@@ -212,7 +269,7 @@ class PoseDetectionService {
      if (torsoAngle < 60) return false;
      
      final legBend = getLegStraightness(landmarks);
-     return legBend < 25; // Very straight
+     return legBend < 25; // Very straight legs
   }
 
   bool isWalking(Map<PoseLandmarkType, PoseLandmark> landmarks) {
@@ -221,6 +278,52 @@ class PoseDetectionService {
     if (torsoAngle < 60) return false;
     
     final legBend = getLegStraightness(landmarks);
-    return legBend >= 25 && legBend < 65;
+    // Leg is partially bent (walking motion)
+    return legBend >= 25 && legBend <= 65;
+  }
+
+  bool isFalling(TrackedPerson person) {
+    if (person.landmarkPhysics.isEmpty) return false;
+    
+    final height = _getBodyHeight(person.smoothedLandmarks);
+    if (height < 50) return false; // Too small / far away
+
+    double maxAcc = 0;
+    double maxDownVel = 0;
+    
+    // Check hips for fall dynamics
+    for (var type in [PoseLandmarkType.leftHip, PoseLandmarkType.rightHip]) {
+      if (person.landmarkPhysics.containsKey(type)) {
+        final physics = person.landmarkPhysics[type]!;
+        if (physics.vy > maxDownVel) maxDownVel = physics.vy;
+        if (physics.acceleration > maxAcc) maxAcc = physics.acceleration;
+      }
+    }
+    
+    // Fall: Downward speed > 1.5 body heights/sec OR Impact > 6 body heights/sec^2
+    // Reduced impact threshold slightly to be more sensitive to sudden stops
+    return maxDownVel > (height * 1.5) || maxAcc > (height * 6.0);
+  }
+
+  double _getBodyHeight(Map<PoseLandmarkType, PoseLandmark> landmarks) {
+      final nose = landmarks[PoseLandmarkType.nose];
+      final leftAnkle = landmarks[PoseLandmarkType.leftAnkle]; 
+      final rightAnkle = landmarks[PoseLandmarkType.rightAnkle];
+      
+      final double? y1 = nose?.y;
+      double? y2;
+      
+      if (leftAnkle != null && rightAnkle != null) {
+          y2 = (leftAnkle.y + rightAnkle.y) / 2;
+      } else if (leftAnkle != null) {
+          y2 = leftAnkle.y;
+      } else if (rightAnkle != null) {
+          y2 = rightAnkle.y;
+      }
+      
+      if (y1 != null && y2 != null) {
+          return (y1 - y2).abs();
+      }
+      return 100.0;
   }
 }

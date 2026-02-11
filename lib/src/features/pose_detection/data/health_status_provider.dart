@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../statistics/domain/simulation_event.dart';
+import '../../events/data/cloud_verification_service.dart';
 
 enum HealthStatus { normal, warning, emergency, none }
 
@@ -90,7 +92,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
     _startTimer();
   }
 
-  static const _storageKey = 'health_state_v1';
+  static const _storageKey = 'health_state_v2';
 
   Future<void> _loadState() async {
     try {
@@ -129,22 +131,116 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
     _saveState();
   }
 
-  void updateActivity(String activity) {
-    if (state.currentActivity == activity) return;
+  void reset() {
+    state = HealthState.initial();
+    _saveState();
+  }
+
+  Future<void> clearAllData({String? cameraId}) async {
+    // 1. Physically delete matching snapshot files
+    final List<SimulationEvent> remainingEvents = [];
+    
+    for (var event in state.events) {
+      if (cameraId == null || event.cameraId == cameraId) {
+        if (event.snapshotUrl != null) {
+          try {
+            final file = File(event.snapshotUrl!);
+            if (await file.exists()) {
+              await file.delete();
+              debugPrint("Deleted snapshot: ${event.snapshotUrl}");
+            }
+          } catch (e) {
+            debugPrint("Error deleting snapshot: $e");
+          }
+        }
+      } else {
+        remainingEvents.add(event);
+      }
+    }
+
+    // 2. Update state to only include non-deleted events
+    if (cameraId == null) {
+      state = HealthState.initial();
+    } else {
+      state = state.copyWith(events: remainingEvents);
+    }
+    await _saveState();
+  }
+
+  // Activity Buffering State
+  String? _pendingActivity;
+  int _bufferCount = 0;
+  static const int _requiredFrames = 45; // ~1.5 seconds at 30fps
+
+  void updateActivity(String activity, {String? snapshotPath, String? cameraId}) {
+    // Immediate Critical Events Check
+    if (activity == 'falling' || activity == 'near_fall') {
+      _processActivityChange(activity, snapshotPath, cameraId: cameraId);
+      return;
+    }
+
+    // Debounce Logic for Non-Critical Activities
+    if (_pendingActivity == activity) {
+      _bufferCount++;
+    } else {
+      _pendingActivity = activity;
+      _bufferCount = 0;
+    }
+
+    // Only update if activity persists for 1.5s
+    if (_bufferCount >= _requiredFrames) {
+      if (state.currentActivity != activity) {
+        _processActivityChange(activity, snapshotPath, cameraId: cameraId);
+      }
+    }
+  }
+
+  void _processActivityChange(String activity, String? snapshotPath, {String? cameraId}) {
+    if (state.currentActivity == activity && snapshotPath == null) return;
 
     final now = DateTime.now();
     final timestamp = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+    final dateStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+    // 1. Close the previous event if it exists
+    final List<SimulationEvent> updatedEvents = List.from(state.events);
     
-    // Create new event
+    // Find the most recent event (which should be the one we are transitioning FROM)
+    // We assume the first event in the list is the most recent one.
+    if (updatedEvents.isNotEmpty) {
+      final lastEvent = updatedEvents.first;
+      
+      // If the last event is "open" (no duration or we just want to update it based on time elapsed)
+      // Actually, we should check if it corresponds to `state.currentActivity`.
+      // But since we just want to "close" the timeline segment for the previous activity:
+      
+      if (lastEvent.startTimeMs != null) {
+        final durationSec = (now.millisecondsSinceEpoch - lastEvent.startTimeMs!) ~/ 1000;
+        final durationHrs = (durationSec / 3600).toStringAsFixed(2); // precise string for UI match
+        
+        updatedEvents[0] = lastEvent.copyWith(
+          durationSeconds: durationSec,
+          duration: "$durationHrs hr", // Update legacy string for compatibility
+        );
+      }
+    }
+
+    // 2. Create new event
     final newEvent = SimulationEvent(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
+      cameraId: cameraId,
       type: activity,
       timestamp: timestamp,
-      date: "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}",
-      isCritical: activity == 'falling',
+      date: dateStr,
+      isCritical: activity == 'falling' || activity == 'near_fall',
+      snapshotUrl: snapshotPath,
+      startTimeMs: now.millisecondsSinceEpoch, // Start tracking time
+      durationSeconds: 0, // Initial duration
+      duration: "0.00 hr", 
+      description: _getActivityDescription(activity),
     );
 
-    final updatedEvents = [newEvent, ...state.events];
+    updatedEvents.insert(0, newEvent);
 
     if (activity == 'falling' || activity == 'near_fall') {
       final penalty = activity == 'falling' ? 600 : 200;
@@ -155,6 +251,11 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         status: _getStatus(newScore),
         events: updatedEvents,
       );
+      
+      // Trigger Cloud Verification
+      if (snapshotPath != null) {
+        _verifyEvent(newEvent);
+      }
     } else {
       state = state.copyWith(
         currentActivity: activity,
@@ -163,6 +264,56 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       );
     }
     _saveState();
+  }
+  
+  // Cloud Verification Integration
+  final _verificationService = CloudVerificationService();
+
+  Future<void> _verifyEvent(SimulationEvent event) async {
+    try {
+      if (event.snapshotUrl == null) return;
+      
+      debugPrint("Uploading event ${event.id} for cloud verification...");
+      final result = await _verificationService.verifyEvent(event.snapshotUrl!);
+      
+      final isVerified = result['verified'] as bool;
+      final confidence = result['confidence'] as double;
+      
+      if (isVerified) {
+        debugPrint("Event ${event.id} verified with confidence: $confidence");
+        
+        // Update event in list
+        final updatedEvents = state.events.map((e) {
+          if (e.id == event.id) {
+            return e.copyWith(
+              isVerified: true,
+              confidence: confidence,
+              description: "${e.description} (Verified)",
+            );
+          }
+          return e;
+        }).toList();
+        
+        state = state.copyWith(events: updatedEvents);
+        _saveState();
+      }
+    } catch (e) {
+      debugPrint("Verification failed: $e");
+    }
+  }
+
+  String _getActivityDescription(String type) {
+    switch (type) {
+      case 'sitting': return 'Common office posture. Take breaks often.';
+      case 'slouching': return 'Subject is slumping or in a vulnerable position.';
+      case 'laying': return 'Subject is resting in a horizontal position.';
+      case 'walking': return 'Active movement detected. Healthy state.';
+      case 'standing': return 'Upright position. Standard activity.';
+      case 'exercise': return 'Intense activity. Great for heart health!';
+      case 'falling': return 'CRITICAL: Sudden impact detected. Check subject!';
+      case 'near_fall': return 'WARNING: Unusual stumble or imbalance.';
+      default: return 'Normal daily activity.';
+    }
   }
 
   void _updateScoreBasedOnActivity() {
@@ -189,9 +340,29 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         break;
     }
 
-    int newScore = (state.score + change).round().clamp(0, 1000);
+    final int newScore = (state.score + change).round().clamp(0, 1000);
     
-    if (newScore != state.score) {
+    // Update active event duration
+    final List<SimulationEvent> updatedEvents = List.from(state.events);
+    if (updatedEvents.isNotEmpty) {
+      final activeEvent = updatedEvents.first;
+      if (activeEvent.startTimeMs != null && activeEvent.type == state.currentActivity) {
+        final durationSec = (DateTime.now().millisecondsSinceEpoch - activeEvent.startTimeMs!) ~/ 1000;
+        // Only update if changes to avoid rebuild spam if not needed? 
+        // Actually we need rebuilds for UI counters if displayed.
+        final durationHrs = (durationSec / 3600).toStringAsFixed(2);
+        
+        updatedEvents[0] = activeEvent.copyWith(
+          durationSeconds: durationSec,
+          duration: "$durationHrs hr",
+        );
+      }
+    }
+
+    final bool hasEvents = updatedEvents.isNotEmpty && state.events.isNotEmpty;
+    final bool durationChanged = hasEvents && updatedEvents.first.durationSeconds != state.events.first.durationSeconds;
+
+    if (newScore != state.score || durationChanged) {
       final now = DateTime.now();
       final dateStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
       final updatedDailyScores = Map<String, double>.from(state.dailyScores);
@@ -201,8 +372,13 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         score: newScore,
         status: _getStatus(newScore),
         dailyScores: updatedDailyScores,
+        events: updatedEvents,
       );
-      _saveState();
+      // We might not want to save to disk EVERY second for duration updates to avoid IO thrashing?
+      // But for prototype/demo it's fine.
+      if (newScore != state.score) { // Only save if score changed or periodically?
+         _saveState();
+      }
     }
   }
 

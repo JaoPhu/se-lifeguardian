@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:lifeguardian/src/features/pose_detection/data/pose_detection_service.dart';
+import 'package:lifeguardian/src/features/pose_detection/data/pose_models.dart';
 
 // Mock Landmark for testing
 class MockPoseLandmark implements PoseLandmark {

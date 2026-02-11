@@ -47,6 +47,34 @@ flutter build apk # For Android
 flutter build ios # For iOS
 ```
 
+### 🍎 iOS Setup (Mac Only)
+If you are running on macOS and want to build for iOS, you must install dependencies for CocoaPods:
+
+```bash
+# 1. Enter iOS directory
+cd ios
+
+# 2. Install Pods
+pod install
+
+# 3. Return to root
+cd ..
+```
+
+## ❓ Troubleshooting
+
+### iOS: "Framework Pods_Runner not found"
+If you encounter this error, it means the CocoaPods dependencies are not linked correctly. Run the following:
+
+```bash
+flutter clean
+flutter pub get
+cd ios
+pod install
+cd ..
+```
+Then try running the app again.
+
 ---
 
 ## 📂 Project Structure
@@ -67,10 +95,15 @@ assets/
 ```
 
 ## 💡 Key Features Implemented
-- **On-Device AI Pose Detection**: Real-time skeletal tracking using Google ML Kit for privacy and speed.
+- **Multi-Camera Management**: Ability to register and manage multiple cameras with custom display names.
+- **Camera-Specific Data Segregation**: Every event is tagged with a unique `cameraId`, allowing for independent history logs and targeted data cleanup per camera.
+- **Advanced Posture Classification**: Granular detection for **Sitting** (`นั่งพัก`) and **Slouching/Unconscious** (`สลบ / ซบ`) states, alongside Fall, Laying, and Walking.
+- **Smart Date-Range Display**: Dashboard cards automatically calculate and display the event date range (`YYYY/MM/DD`) for each specific camera.
+- **Optimized 16:9 Analysis Layout**: Refined video analysis screen with a centered 16:9 aspect ratio and automated black-bar padding for consistent skeletal overlay alignment.
+- **Clean-State Data Management**: Integrated confirmation-guarded "Clear History" deletion for local logs and cached snapshots.
+- **On-Device AI Pose Detection**: Real-time skeletal tracking using Google ML Kit (v2025) for privacy and zero-latency performance.
 - **Precision Activity Ring**: High-fidelity circular gauge for monitoring daily health goals.
 - **Weekly Analytics**: Clean, minimal bar charts for long-term activity tracking.
-- **Multi-Camera Dashboard**: Interactive management of multiple monitoring sources.
 - **Premium Navigation**: Custom semi-floating bottom navigation bar mirroring high-end mobile designs.
 - **Global Theme Support**: Full support for system-aware dark and light modes.
 
@@ -79,7 +112,7 @@ assets/
 ## 🇹🇭 สำหรับนักพัฒนา (Thai Summary)
 
 **LifeGuardian คืออะไร?**
-โปรเจกต์นี้เป็นแอปพลิเคชันระบบตรวจจับท่าทางและอาการออฟฟิศซินโดรมด้วย AI (On-device) พัฒนาด้วย Flutter โดยเน้นที่ความรวดเร็วในการประมวลผลและความสวยงามของ UI
+โปรเจกต์นี้เป็นแอปพลิเคชันระบบตรวจจับท่าทางและอาการออฟฟิศซินโดรมด้วย AI (On-device) พัฒนาด้วย Flutter โดยเน้นที่ความรวดเร็วในการประมวลผลและความสวยงามของ UI ระดับ Premium
 
 **ภาษาและเทคโนโลยี:**
 *   **Dart (Flutter)**: ใช้เป็นภาษาหลักในการพัฒนาแบบ Cross-platform
@@ -90,7 +123,7 @@ assets/
 1.  `flutter pub get`
 2.  `flutter run`
 
-> **สถานะปัจจุบัน**: พัฒนาส่วน UI Mirroring จากต้นฉบับเสร็จสมบูรณ์ 100% ทั้งระบบสถิติ (Statistics), กราฟรายสัปดาห์ (Weekly Chart), และแถบเมนูนำทาง (Custom Bottom Navbar) พร้อมสำหรับการเชื่อมต่อ Logic ตรวจจับแบบเต็มรูปแบบ
+> **สถานะปัจจุบัน**: พัฒนาเสร็จสมบูรณ์ทั้งระบบ **AI Stability Engine**, **Multi-Camera Support**, และระบบ **Smart History Cleanup** (ล้างข้อมูลแยกตามรายกล้อง) พร้อมการประมวลผลท่าทางละเอียดระดับ Sitting/Slouching และดีไซน์ระดับ Premium Teal
 
 ---
 

@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import 'package:lifeguardian/src/routing/scaffold_with_nav_bar.dart';
 import 'package:lifeguardian/src/features/dashboard/presentation/overview_screen.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/splash_screen.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/welcome_screen.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/pre_login_screen.dart';
-import 'package:lifeguardian/src/features/authentication/presentation/login_screen.dart';
-import 'package:lifeguardian/src/features/authentication/presentation/register_screen.dart';
+
+// ✅ เหลือแค่ alias เท่านั้น (ลบ import แบบธรรมดาออก)
+import 'package:lifeguardian/src/features/authentication/presentation/login_screen.dart' as login;
+import 'package:lifeguardian/src/features/authentication/presentation/register_screen.dart' as reg;
+
 import 'package:lifeguardian/src/features/authentication/presentation/forgot_password_screen.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/otp_verification_screen.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/reset_password_screen.dart';
+
 import 'package:lifeguardian/src/features/settings/presentation/settings_screen.dart';
 import 'package:lifeguardian/src/features/status/presentation/status_screen.dart';
 import 'package:lifeguardian/src/features/group/presentation/group_management_screen.dart';
@@ -21,6 +26,8 @@ import 'package:lifeguardian/src/features/pose_detection/presentation/demo_setup
 import 'package:lifeguardian/src/features/notification/presentation/notification_screen.dart';
 import 'package:lifeguardian/src/features/events/presentation/events_screen.dart';
 import 'package:lifeguardian/src/features/pose_detection/presentation/pose_detector_view.dart';
+import 'package:lifeguardian/src/features/subscription/data/trial_provider.dart';
+import 'package:lifeguardian/src/features/subscription/presentation/expired_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -47,12 +54,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/login',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const LoginScreen(),
+        builder: (context, state) => const login.LoginScreen(),
       ),
       GoRoute(
         path: '/register',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const RegisterScreen(),
+       builder: (context, state) => const reg.RegisterScreen(),
       ),
       GoRoute(
         path: '/forgot-password',
@@ -82,7 +89,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/edit-profile',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const EditProfileScreen(),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final fromRegistration = extra?['fromRegistration'] as bool? ?? false;
+          return EditProfileScreen(fromRegistration: fromRegistration);
+        },
       ),
       GoRoute(
         path: '/demo-setup',
@@ -93,8 +104,20 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/analysis',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) {
-          final videoPath = state.extra as String?;
-          return PoseDetectorView(videoPath: videoPath);
+          final extra = state.extra;
+          if (extra is Map<String, dynamic>) {
+            return PoseDetectorView(
+              videoPath: extra['videoPath'] as String?,
+              displayCameraName: extra['cameraName'] as String?,
+            );
+          } else if (extra is Map) {
+             // Handle _Map<String, String?> or other Map variants
+             return PoseDetectorView(
+               videoPath: extra['videoPath']?.toString(),
+               displayCameraName: extra['cameraName']?.toString(),
+             );
+          }
+          return const PoseDetectorView();
         },
       ),
       GoRoute(
@@ -109,6 +132,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           final cameraId = state.pathParameters['cameraId']!;
           return EventsScreen(cameraId: cameraId);
         },
+      ),
+      GoRoute(
+        path: '/expired',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const ExpiredScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
@@ -163,5 +191,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
     ],
+    redirect: (context, state) {
+      final trialState = ref.read(trialProvider);
+      if (trialState.isLoading) return null; // Wait for check
+
+      if (trialState.isExpired && state.matchedLocation != '/expired') {
+        return '/expired';
+      }
+      return null;
+    },
   );
 });
