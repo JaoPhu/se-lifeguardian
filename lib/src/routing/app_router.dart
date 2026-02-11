@@ -1,23 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import 'package:lifeguardian/src/routing/scaffold_with_nav_bar.dart';
 import 'package:lifeguardian/src/features/dashboard/presentation/overview_screen.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/splash_screen.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/welcome_screen.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/pre_login_screen.dart';
-import 'package:lifeguardian/src/features/authentication/presentation/login_screen.dart';
-import 'package:lifeguardian/src/features/authentication/presentation/register_screen.dart';
+
+// ✅ เหลือแค่ alias เท่านั้น (ลบ import แบบธรรมดาออก)
+import 'package:lifeguardian/src/features/authentication/presentation/login_screen.dart' as login;
+import 'package:lifeguardian/src/features/authentication/presentation/register_screen.dart' as reg;
+
 import 'package:lifeguardian/src/features/authentication/presentation/forgot_password_screen.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/otp_verification_screen.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/reset_password_screen.dart';
+
 import 'package:lifeguardian/src/features/settings/presentation/settings_screen.dart';
 import 'package:lifeguardian/src/features/status/presentation/status_screen.dart';
 import 'package:lifeguardian/src/features/group/presentation/group_management_screen.dart';
 import 'package:lifeguardian/src/features/statistics/presentation/statistics_screen.dart';
 import 'package:lifeguardian/src/features/profile/presentation/profile_screen.dart';
 import 'package:lifeguardian/src/features/profile/presentation/edit_profile_screen.dart';
-import 'package:lifeguardian/src/features/debug/presentation/ai_debug_screen.dart';
 import 'package:lifeguardian/src/features/pose_detection/presentation/demo_setup_screen.dart';
 import 'package:lifeguardian/src/features/notification/presentation/notification_screen.dart';
 import 'package:lifeguardian/src/features/events/presentation/events_screen.dart';
@@ -50,12 +54,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/login',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const LoginScreen(),
+        builder: (context, state) => const login.LoginScreen(),
       ),
       GoRoute(
         path: '/register',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const RegisterScreen(),
+       builder: (context, state) => const reg.RegisterScreen(),
       ),
       GoRoute(
         path: '/forgot-password',
@@ -90,11 +94,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           final fromRegistration = extra?['fromRegistration'] as bool? ?? false;
           return EditProfileScreen(fromRegistration: fromRegistration);
         },
-      ),
-      GoRoute(
-        path: '/ai-debug',
-        parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const AIDebugScreen(),
       ),
       GoRoute(
         path: '/demo-setup',
