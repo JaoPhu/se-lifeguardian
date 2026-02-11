@@ -35,9 +35,9 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: const Color(0xFF0D9488),
-              onPrimary: Colors.white,
-            ),
+                  primary: const Color(0xFF0D9488),
+                  onPrimary: Colors.white,
+                ),
           ),
           child: child!,
         );
@@ -118,7 +118,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
 
     final stats = _calculateDurations(events);
     final List<PieChartSectionData> sections = [];
-    
     if (stats['relax']! > 0) {
       sections.add(PieChartSectionData(
         color: Colors.blue.shade500,
@@ -169,16 +168,18 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     }
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return sections.isEmpty ? [
-      PieChartSectionData(
-        color: isDark ? Colors.white10 : const Color(0xFFE8EBF0),
-        value: 1,
-        radius: 90,
-        showTitle: false,
-      )
-    ] : sections;
+    return sections.isEmpty
+        ? [
+            PieChartSectionData(
+              color: isDark ? Colors.white10 : const Color(0xFFE8EBF0),
+              value: 1,
+              radius: 90,
+              showTitle: false,
+            )
+          ]
+        : sections;
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final healthState = ref.watch(healthStatusProvider);
@@ -191,7 +192,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
         children: [
           // Header
           Container(
-            padding: const EdgeInsets.only(top: 56, bottom: 24, left: 24, right: 24),
+            padding:
+                const EdgeInsets.only(top: 56, bottom: 24, left: 24, right: 24),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -206,7 +208,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                 ),
                 Row(
                   children: [
-                    const NotificationBell(color: Colors.white, whiteBorder: true),
+                    const NotificationBell(
+                        color: Colors.white, whiteBorder: true),
                     const SizedBox(width: 16),
                     GestureDetector(
                       onTap: () => context.push('/profile'),
@@ -218,7 +221,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 2),
                           image: const DecorationImage(
-                            image: NetworkImage('https://api.dicebear.com/7.x/avataaars/svg?seed=Felix'),
+                            image: NetworkImage(
+                                'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix'),
                             fit: BoxFit.cover,
                           ),
                         ),
@@ -241,7 +245,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                 ),
               ),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
                 child: Column(
                   children: [
                     // Date Picker
@@ -251,9 +256,13 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade200,
+                              color: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade200,
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -261,7 +270,10 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
-                                color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade300 : Colors.grey.shade600,
+                                color: Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? Colors.grey.shade300
+                                    : Colors.grey.shade600,
                               ),
                             ),
                           ),
@@ -269,9 +281,13 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                           GestureDetector(
                             onTap: () => _selectDate(context),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade200,
+                                color: Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? Colors.grey.shade800
+                                    : Colors.grey.shade200,
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
@@ -279,7 +295,10 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade400 : Colors.grey.shade500,
+                                  color: Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Colors.grey.shade400
+                                      : Colors.grey.shade500,
                                 ),
                               ),
                             ),
@@ -304,11 +323,12 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                             height: 230,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: const Color(0xFFBDC6D3), width: 1.2),
+                              border: Border.all(
+                                  color: const Color(0xFFBDC6D3), width: 1.2),
                               color: Colors.transparent,
                             ),
                           ),
-                          
+
                           // Pie Chart for activities (Solid Circle)
                           SizedBox(
                             width: 180, // Radius 90 - 78% of 115 radius
@@ -328,7 +348,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                           ...List.generate(4, (index) {
                             final angles = [0.0, 90.0, 180.0, 270.0];
                             return RotationTransition(
-                              turns: AlwaysStoppedAnimation(angles[index] / 360),
+                              turns:
+                                  AlwaysStoppedAnimation(angles[index] / 360),
                               child: Center(
                                 child: Container(
                                   width: 2,
@@ -395,39 +416,41 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
 
                     const SizedBox(height: 32),
 
-                    // Summary Cards Grouped
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.only(left: 4, bottom: 12),
-                          child: Text('Activities (Hours)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
-                        ),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            _buildSummaryCard('Relax: ${stats['relax']!.toStringAsFixed(1)}h', Icons.chair, Colors.blue.shade50, Colors.blue.shade900),
-                            _buildSummaryCard('Work: ${stats['work']!.toStringAsFixed(1)}h', Icons.work, Colors.amber.shade50, Colors.amber.shade900),
-                            _buildSummaryCard('Walk: ${stats['walk']!.toStringAsFixed(1)}h', Icons.directions_walk, const Color(0xFFECFDF5), const Color(0xFF065F46)),
-                            _buildSummaryCard('Slouch: ${stats['slouch']!.toStringAsFixed(1)}h', Icons.accessibility_new, Colors.purple.shade50, Colors.purple.shade900),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        const Padding(
-                          padding: EdgeInsets.only(left: 4, bottom: 12),
-                          child: Text('Safety & Wellness (Counts)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
-                        ),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            _buildSummaryCard('Exercise: ${stats['exercise']!.toStringAsFixed(1)}h', Icons.fitness_center, Colors.indigo.shade50, Colors.indigo.shade900),
-                            _buildSummaryCard('Near Falls: ${stats['nearFalls']!.toInt()}', Icons.error_outline, Colors.orange.shade50, Colors.orange.shade900),
-                            _buildSummaryCard('Falls: ${stats['falls']!.toInt()}', Icons.warning, Colors.red.shade50, Colors.red.shade900),
-                          ],
-                        ),
-                      ],
+                    // Summary Cards (Single Row)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 24),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          Expanded(
+                              child: _buildSummaryCard(
+                                  'Relax\n${stats['relax']!.toStringAsFixed(1)}h',
+                                  Icons.weekend,
+                                  const Color(0xFFE3F2FD),
+                                  const Color(0xFF1565C0))), // Blue
+                          const SizedBox(width: 12),
+                          Expanded(
+                              child: _buildSummaryCard(
+                                  'Work\n${stats['work']!.toStringAsFixed(1)}h',
+                                  Icons.work,
+                                  const Color(0xFFFFF8E1),
+                                  const Color(0xFFF57F17))), // Amber
+                          const SizedBox(width: 12),
+                          Expanded(
+                              child: _buildSummaryCard(
+                                  'Walk\n${stats['walk']!.toStringAsFixed(1)}h',
+                                  Icons.directions_walk,
+                                  const Color(0xFFECFDF5),
+                                  const Color(0xFF047857))), // Emerald
+                          const SizedBox(width: 12),
+                          Expanded(
+                              child: _buildSummaryCard(
+                                  'Falls\n${stats['falls']!.toInt()}',
+                                  Icons.warning_amber_rounded,
+                                  const Color(0xFFFFEBEE),
+                                  const Color(0xFFC62828))), // Red
+                        ],
+                      ),
                     ),
 
                     const SizedBox(height: 32),
@@ -443,7 +466,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.03),
+                            color: Colors.black
+                                .withValues(alpha: isDark ? 0.3 : 0.03),
                             blurRadius: 20,
                             offset: const Offset(0, 10),
                           ),
@@ -457,7 +481,9 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                             style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white : const Color(0xFF1E293B),
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF1E293B),
                             ),
                           ),
                           const SizedBox(height: 30),
@@ -465,15 +491,26 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: List.generate(7, (index) {
-                              final date = DateTime.now().subtract(Duration(days: 6 - index));
-                              final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
-                              final score = healthState.dailyScores[dateStr] ?? 1000.0;
-                              final labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                              final date = DateTime.now()
+                                  .subtract(Duration(days: 6 - index));
+                              final dateStr =
+                                  "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+                              final score =
+                                  healthState.dailyScores[dateStr] ?? 1000.0;
+                              final labels = [
+                                'Mon',
+                                'Tue',
+                                'Wed',
+                                'Thu',
+                                'Fri',
+                                'Sat',
+                                'Sun'
+                              ];
                               final label = labels[date.weekday - 1];
-                              
+
                               return _WeeklyBarItem(
                                 label: label,
-                                value: score / 1000, 
+                                value: score / 1000,
                                 isToday: index == 6,
                               );
                             }),
@@ -504,25 +541,26 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     );
   }
 
-  Widget _buildSummaryCard(String text, IconData icon, Color bg, Color textColor) {
+  Widget _buildSummaryCard(
+      String text, IconData icon, Color bg, Color textColor) {
     return Container(
-      width: 64,
-      height: 64,
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 20, color: textColor),
-          const SizedBox(height: 4),
+          Icon(icon, size: 24, color: textColor),
+          const SizedBox(height: 8),
           Text(
             text,
             style: TextStyle(
-              fontSize: 8,
-              fontWeight: FontWeight.bold,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
               color: textColor,
+              height: 1.2,
             ),
             textAlign: TextAlign.center,
           ),
@@ -556,8 +594,8 @@ class _WeeklyBarItem extends StatelessWidget {
               width: 14,
               height: maxHeight,
               decoration: BoxDecoration(
-                color: Theme.of(context).brightness == Brightness.dark 
-                    ? Colors.grey.shade800 
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey.shade800
                     : const Color(0xFFE2E8F0),
                 borderRadius: BorderRadius.circular(10),
               ),
@@ -567,15 +605,18 @@ class _WeeklyBarItem extends StatelessWidget {
               width: 14,
               height: maxHeight * value,
               decoration: BoxDecoration(
-                color: isToday ? const Color(0xFF0D9488) : const Color(0xFF94A3B8),
+                color:
+                    isToday ? const Color(0xFF0D9488) : const Color(0xFF94A3B8),
                 borderRadius: BorderRadius.circular(10),
-                boxShadow: isToday ? [
-                  BoxShadow(
-                    color: const Color(0xFF0D9488).withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  )
-                ] : null,
+                boxShadow: isToday
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFF0D9488).withValues(alpha: 0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        )
+                      ]
+                    : null,
               ),
             ),
           ],
