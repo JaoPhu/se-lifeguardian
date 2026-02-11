@@ -6,21 +6,7 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Mock user data
-    const user = {
-      'name': 'PhuTheOwner',
-      'username': '@PhuTheOwner',
-      'avatarUrl': 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',
-      'gender': 'Male',
-      'bloodType': 'AB',
-      'age': '24',
-      'height': '175',
-      'weight': '69',
-      'medicalCondition': '-',
-      'currentMedications': '-',
-      'drugAllergies': '-',
-      'foodAllergies': '-',
-    };
+
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
 

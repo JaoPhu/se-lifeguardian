@@ -46,9 +46,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: 16),
-              Align(
+              const Align(
                 alignment: Alignment.centerLeft,
-                child: const Text(
+                child: Text(
                   'Forgot password',
                   style: TextStyle(
                     fontSize: 24,
@@ -114,7 +114,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     backgroundColor: const Color(0xFF0D9488),
                     foregroundColor: Colors.white,
                     elevation: 4,
-                    shadowColor: Color(0xFF0D9488).withValues(alpha: 0.4),
+                    shadowColor: const Color(0xFF0D9488).withValues(alpha: 0.4),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),

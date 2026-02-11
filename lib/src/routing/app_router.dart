@@ -22,11 +22,12 @@ import 'package:lifeguardian/src/features/group/presentation/group_management_sc
 import 'package:lifeguardian/src/features/statistics/presentation/statistics_screen.dart';
 import 'package:lifeguardian/src/features/profile/presentation/profile_screen.dart';
 import 'package:lifeguardian/src/features/profile/presentation/edit_profile_screen.dart';
-import 'package:lifeguardian/src/features/debug/presentation/ai_debug_screen.dart';
 import 'package:lifeguardian/src/features/pose_detection/presentation/demo_setup_screen.dart';
 import 'package:lifeguardian/src/features/notification/presentation/notification_screen.dart';
 import 'package:lifeguardian/src/features/events/presentation/events_screen.dart';
 import 'package:lifeguardian/src/features/pose_detection/presentation/pose_detector_view.dart';
+import 'package:lifeguardian/src/features/subscription/data/trial_provider.dart';
+import 'package:lifeguardian/src/features/subscription/presentation/expired_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -91,11 +92,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const EditProfileScreen(),
       ),
       GoRoute(
-        path: '/ai-debug',
-        parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const AIDebugScreen(),
-      ),
-      GoRoute(
         path: '/demo-setup',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const DemoSetupScreen(),
@@ -104,8 +100,20 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/analysis',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) {
-          final videoPath = state.extra as String?;
-          return PoseDetectorView(videoPath: videoPath);
+          final extra = state.extra;
+          if (extra is Map<String, dynamic>) {
+            return PoseDetectorView(
+              videoPath: extra['videoPath'] as String?,
+              displayCameraName: extra['cameraName'] as String?,
+            );
+          } else if (extra is Map) {
+             // Handle _Map<String, String?> or other Map variants
+             return PoseDetectorView(
+               videoPath: extra['videoPath']?.toString(),
+               displayCameraName: extra['cameraName']?.toString(),
+             );
+          }
+          return const PoseDetectorView();
         },
       ),
       GoRoute(
@@ -120,6 +128,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           final cameraId = state.pathParameters['cameraId']!;
           return EventsScreen(cameraId: cameraId);
         },
+      ),
+      GoRoute(
+        path: '/expired',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const ExpiredScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
@@ -174,5 +187,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
     ],
+    redirect: (context, state) {
+      final trialState = ref.read(trialProvider);
+      if (trialState.isLoading) return null; // Wait for check
+
+      if (trialState.isExpired && state.matchedLocation != '/expired') {
+        return '/expired';
+      }
+      return null;
+    },
   );
 });
