@@ -1,223 +1,227 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import 'package:lifeguardian/src/common/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../notification/presentation/notification_bell.dart';
+import 'package:go_router/go_router.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import '../../../common_widgets/theme_provider.dart';
+import '../../profile/data/user_repository.dart';
 
-class SettingsScreen extends ConsumerStatefulWidget {
+class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
-  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  void _toggleTheme() {
-    final currentMode = ref.read(themeModeProvider);
-    ref.read(themeModeProvider.notifier).state = 
-      currentMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final themeMode = ref.watch(themeModeProvider);
-    final isDarkMode = themeMode == ThemeMode.dark;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+    final user = ref.watch(userProvider);
     
-    // Colors
-    final bgColor = isDarkMode ? const Color(0xFF111827) : const Color(0xFFFAFAFA); // gray-900 or almost white
-    final cardColor = isDarkMode ? const Color(0xFF1F2937) : Colors.white; // gray-800 or white
-    final textColor = isDarkMode ? Colors.white : const Color(0xFF1F2937); // white or gray-800
-    final subTextColor = isDarkMode ? const Color(0xFF9CA3AF) : const Color(0xFF6B7280); // gray-400 or gray-500
-
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Column(
         children: [
           // Header
           Container(
-            padding: const EdgeInsets.only(top: 56, bottom: 32, left: 24, right: 24),
-            decoration: const BoxDecoration(
-              color: Color(0xFF0D9488),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
+            padding: const EdgeInsets.only(top: 48, left: 16, right: 16, bottom: 16),
+            color: const Color(0xFF0D9488),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        GestureDetector(
-                          onTap: () => context.pop(),
-                          child: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
-                        ),
-                        const SizedBox(width: 16),
-                        const Text(
-                          'Settings',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
+                    IconButton(
+                      icon: const Icon(LucideIcons.arrowLeft, color: Colors.white, size: 24),
+                      onPressed: () => context.go('/overview'), 
                     ),
-                    const NotificationBell(color: Colors.white, whiteBorder: true),
+                    const SizedBox(width: 4),
+                    const Text(
+                      'Settings',
+                      style: TextStyle(
+                        fontSize: 24, 
+                        fontWeight: FontWeight.w700, 
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+                Stack(
+                  children: [
+                    IconButton(
+                      icon: const Icon(LucideIcons.bell, color: Colors.white, size: 28),
+                      onPressed: () => context.push('/notifications'),
+                    ),
+                    Positioned(
+                      right: 10,
+                      top: 10,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(minWidth: 8, minHeight: 8),
+                      ),
+                    ),
                   ],
                 ),
               ],
             ),
           ),
 
-          // Profile Card (Overlapping)
-          Transform.translate(
-            offset: const Offset(0, 0), // Removed negative margin to simplify layout for now
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
-              child: GestureDetector(
-                onTap: () {
-                   // Navigate to profile
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 64,
-                        height: 64,
+          // Content
+          Expanded(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 24),
+                    // Profile Card
+                    GestureDetector(
+                      onTap: () => context.push('/profile'),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.grey.shade100, width: 2),
-                          image: const DecorationImage(
-                            image: NetworkImage('https://api.dicebear.com/7.x/avataaars/svg?seed=Felix'), // Mock avatar
-                            fit: BoxFit.cover,
-                          ),
+                          color: theme.cardColor,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.08),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                          border: Border.all(color: theme.dividerColor),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Text(
-                              'PhuTheOwner',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: textColor,
+                            Container(
+                              padding: const EdgeInsets.all(3),
+                                decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: theme.dividerColor, width: 1.5),
+                              ),
+                              child: CircleAvatar(
+                                radius: 34,
+                                backgroundImage: NetworkImage(user.avatarUrl),
                               ),
                             ),
-                            Text(
-                              '@PhuTheOwner',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: subTextColor,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'life guardian account',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDarkMode ? Colors.grey.shade600 : Colors.grey.shade300,
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.only(bottom: 2),
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        bottom: BorderSide(color: theme.dividerColor, width: 1.5),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      user.name,
+                                      style: theme.textTheme.titleLarge?.copyWith(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '@${user.username}',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                                    ),
+                                  ),
+                                  Text(
+                                    'life guardain account',
+                                    style: TextStyle(
+                                      color: theme.textTheme.bodySmall?.color?.withOpacity(0.5),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+                    ),
 
-          // Menu Content
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              children: [
-                // Theme Toggle
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(50),
-                    border: Border.all(color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade100),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Center(
-                          child: Text(
-                            'Light Mode',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: isDarkMode ? Colors.grey.shade400 : const Color(0xFF374151),
+                    const SizedBox(height: 20),
+
+                    // Theme Toggle Card
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: theme.cardColor,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.06),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                        border: Border.all(color: theme.dividerColor),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              alignment: Alignment.center,
+                              child: Text(
+                                "Light Mode",
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDarkMode ? theme.disabledColor : theme.textTheme.bodyLarge?.color,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      Container(width: 1, height: 24, color: Colors.grey.shade200),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: _toggleTheme,
-                          child: Container(
-                            color: Colors.transparent,
+                          Container(width: 1, height: 24, color: theme.dividerColor),
+                          Expanded(
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text(
-                                  'Dark Mode',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: isDarkMode ? FontWeight.bold : FontWeight.normal,
-                                    color: isDarkMode ? Colors.white : Colors.grey.shade400,
+                                Flexible(
+                                  child: Text(
+                                    "Dark Mode",
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      color: isDarkMode ? theme.textTheme.bodyLarge?.color : theme.disabledColor,
+                                      fontWeight: isDarkMode ? FontWeight.w700 : FontWeight.w500,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  width: 40,
-                                  height: 24,
-                                  padding: const EdgeInsets.all(2),
-                                  decoration: BoxDecoration(
-                                    color: isDarkMode ? const Color(0xFF0D9488) : Colors.grey.shade300,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Align(
-                                    alignment: isDarkMode ? Alignment.centerRight : Alignment.centerLeft,
-                                    child: Container(
-                                      width: 20,
-                                      height: 20,
-                                      decoration: const BoxDecoration(
-                                        color: Colors.white,
-                                        shape: BoxShape.circle,
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black26,
-                                            blurRadius: 2,
-                                            offset: Offset(0, 1),
-                                          ),
-                                        ],
+                                const SizedBox(width: 6),
+                                GestureDetector(
+                                  onTap: () => ref.read(themeProvider.notifier).toggle(),
+                                  child: Container(
+                                    width: 40,
+                                    height: 22,
+                                    decoration: BoxDecoration(
+                                      color: isDarkMode ? const Color(0xFF0D9488) : const Color(0xFF94A3B8),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: AnimatedAlign(
+                                      duration: const Duration(milliseconds: 200),
+                                      alignment: isDarkMode ? Alignment.centerRight : Alignment.centerLeft,
+                                      child: Container(
+                                        width: 16,
+                                        height: 16,
+                                        margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                                        decoration: const BoxDecoration(
+                                          color: Colors.white,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: isDarkMode 
+                                          ? const Icon(Icons.check, size: 10, color: Color(0xFF0D9488))
+                                          : const VerticalDivider(width: 1, thickness: 1.5, color: Color(0xFF94A3B8), indent: 4, endIndent: 4),
                                       ),
                                     ),
                                   ),
@@ -225,109 +229,77 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               ],
                             ),
                           ),
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Menu Items
-                Container(
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(32),
-                    border: Border.all(color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade100),
-                  ),
-                  child: Column(
-                    children: [
-                      _buildMenuItem(
-                        icon: Icons.lock_outline,
-                        label: 'Reset Password',
-                        onTap: () => context.push('/reset-password'),
-                        isDarkMode: isDarkMode,
-                        textColor: Colors.red,
-                        iconColor: Colors.red,
-                      ),
-                      _buildDivider(isDarkMode: isDarkMode),
-                      _buildMenuItem(
-                        icon: Icons.logout,
-                        label: 'Logout',
-                        onTap: () => context.go('/welcome'),
-                        isDarkMode: isDarkMode,
-                        textColor: Colors.red,
-                        iconColor: Colors.red,
-                      ),
-                    ],
-                  ),
-                ),
-                
-                const SizedBox(height: 24),
-                Center(
-                  child: Text(
-                    'version 1.0.0',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: subTextColor,
                     ),
-                  ),
+
+                    const SizedBox(height: 20),
+
+                    // Action List Card
+                    Container(
+                      decoration: BoxDecoration(
+                        color: theme.cardColor,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.08),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                        border: Border.all(color: theme.dividerColor),
+                      ),
+                      child: Column(
+                        children: [
+
+                          // Reset Password
+                          ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
+                            title: const Text(
+                              'Reset Password',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Color(0xFFEF4444),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            onTap: () {},
+                          ),
+                          Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
+                          // Logout
+                          ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
+                            title: const Text(
+                              'Logout',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Color(0xFFEF4444),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            onTap: () {},
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+                    Text(
+                      "version 1.0.0",
+                      style: TextStyle(
+                        color: theme.disabledColor,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
                 ),
-                const SizedBox(height: 24),
-              ],
+              ),
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildMenuItem({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    required bool isDarkMode,
-    Color? textColor,
-    Color? iconColor,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              color: iconColor ?? (isDarkMode ? Colors.white : Colors.black87),
-              size: 24,
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: textColor ?? (isDarkMode ? Colors.white : Colors.black87),
-                ),
-              ),
-            ),
-            Icon(
-              Icons.chevron_right,
-              color: isDarkMode ? Colors.grey.shade500 : Colors.grey.shade400,
-              size: 20,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDivider({required bool isDarkMode}) {
-    return Divider(
-      height: 1,
-      thickness: 1,
-      color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade100,
     );
   }
 }
