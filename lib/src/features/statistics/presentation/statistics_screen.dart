@@ -5,7 +5,6 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../../pose_detection/data/health_status_provider.dart';
 import '../domain/simulation_event.dart';
-import '../../notification/presentation/notification_bell.dart';
 
 class StatisticsScreen extends ConsumerStatefulWidget {
   const StatisticsScreen({super.key});
@@ -200,8 +199,23 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                 ),
                 Row(
                   children: [
-                    const NotificationBell(
-                        color: Colors.white, whiteBorder: true),
+                    // Replaced NotificationBell with custom Shield button
+                    GestureDetector(
+                      onTap: () => context.push('/notifications'),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.health_and_safety, // Shield with plus
+                          color: Color(0xFF0D9488), // Teal color to match theme
+                          size: 24,
+                        ),
+                      ),
+                    ),
                     const SizedBox(width: 16),
                     GestureDetector(
                       onTap: () => context.push('/profile'),
