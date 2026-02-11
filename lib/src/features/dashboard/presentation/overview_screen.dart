@@ -19,7 +19,7 @@ class OverviewScreen extends ConsumerWidget {
     final healthState = ref.watch(healthStatusProvider);
 
     return Scaffold(
-      backgroundColor: Colors.white, // Changed to white as requested
+
       body: Column(
         children: [
           // Header
@@ -237,7 +237,9 @@ class OverviewScreen extends ConsumerWidget {
             child: Container(
               width: double.infinity,
               decoration: BoxDecoration(
-                color: camera.status == CameraStatus.online ? Colors.black : const Color(0xFFD9D9D9),
+                color: camera.status == CameraStatus.online 
+                    ? Colors.black 
+                    : (isDark ? const Color(0xFF111827) : const Color(0xFFD9D9D9)),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: camera.status == CameraStatus.offline 

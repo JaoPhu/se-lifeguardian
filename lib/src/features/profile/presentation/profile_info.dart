@@ -17,6 +17,8 @@ class ProfileInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Column(
       children: [
         const SizedBox(height: 16),
@@ -26,7 +28,7 @@ class ProfileInfo extends StatelessWidget {
           height: 100,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.grey.shade300, width: 2),
+            border: Border.all(color: theme.dividerColor, width: 2),
             image: DecorationImage(
               image: NetworkImage(avatarUrl),
               fit: BoxFit.cover,
@@ -37,18 +39,17 @@ class ProfileInfo extends StatelessWidget {
         // Info Section
         Text(
           name,
-          style: const TextStyle(
-            fontSize: 20,
+          style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.w700,
-            color: Color(0xFF1F2937),
+            fontSize: 20,
           ),
         ),
         Text(
           '@$username',
-          style: TextStyle(
+          style: theme.textTheme.bodyMedium?.copyWith(
             fontSize: 14,
-            color: Colors.grey.shade500,
             fontWeight: FontWeight.w500,
+            color: theme.colorScheme.onSurface.withOpacity(0.6),
           ),
         ),
         const SizedBox(height: 12),

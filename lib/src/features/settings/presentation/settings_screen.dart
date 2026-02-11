@@ -10,17 +10,12 @@ class SettingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isDarkMode = ref.watch(themeProvider);
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
     final user = ref.watch(userProvider);
     
-    final bgColor = isDarkMode ? const Color(0xFF111827) : Colors.white;
-    final cardColor = isDarkMode ? const Color(0xFF1F2937) : Colors.white;
-    final primaryTextColor = isDarkMode ? Colors.white : const Color(0xFF1F2937);
-    final secondaryTextColor = isDarkMode ? Colors.grey.shade400 : const Color(0xFF374151);
-    final borderColor = isDarkMode ? Colors.white.withOpacity(0.05) : Colors.grey.shade200;
-
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Column(
         children: [
           // Header
@@ -85,7 +80,7 @@ class SettingsScreen extends ConsumerWidget {
                       child: Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: cardColor,
+                          color: theme.cardColor,
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
@@ -94,15 +89,15 @@ class SettingsScreen extends ConsumerWidget {
                               offset: const Offset(0, 4),
                             ),
                           ],
-                          border: Border.all(color: borderColor),
+                          border: Border.all(color: theme.dividerColor),
                         ),
                         child: Row(
                           children: [
                             Container(
                               padding: const EdgeInsets.all(3),
-                              decoration: BoxDecoration(
+                                decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                border: Border.all(color: isDarkMode ? Colors.white.withOpacity(0.08) : Colors.grey.shade200, width: 1.5),
+                                border: Border.all(color: theme.dividerColor, width: 1.5),
                               ),
                               child: CircleAvatar(
                                 radius: 34,
@@ -118,31 +113,30 @@ class SettingsScreen extends ConsumerWidget {
                                     padding: const EdgeInsets.only(bottom: 2),
                                     decoration: BoxDecoration(
                                       border: Border(
-                                        bottom: BorderSide(color: isDarkMode ? Colors.white.withOpacity(0.1) : const Color(0xFFD1D5DB), width: 1.5),
+                                        bottom: BorderSide(color: theme.dividerColor, width: 1.5),
                                       ),
                                     ),
                                     child: Text(
                                       user.name,
-                                      style: TextStyle(
+                                      style: theme.textTheme.titleLarge?.copyWith(
                                         fontSize: 18,
                                         fontWeight: FontWeight.w700,
-                                        color: primaryTextColor,
                                       ),
                                     ),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
                                     '@${user.username}',
-                                    style: TextStyle(
+                                    style: theme.textTheme.bodyMedium?.copyWith(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
-                                      color: secondaryTextColor,
+                                      color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
                                     ),
                                   ),
                                   Text(
                                     'life guardain account',
                                     style: TextStyle(
-                                      color: isDarkMode ? Colors.grey.shade500 : Colors.grey.shade400,
+                                      color: theme.textTheme.bodySmall?.color?.withOpacity(0.5),
                                       fontSize: 12,
                                       fontWeight: FontWeight.w500,
                                     ),
@@ -161,7 +155,7 @@ class SettingsScreen extends ConsumerWidget {
                     Container(
                       padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
-                        color: cardColor,
+                        color: theme.cardColor,
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
@@ -170,7 +164,7 @@ class SettingsScreen extends ConsumerWidget {
                             offset: const Offset(0, 3),
                           ),
                         ],
-                        border: Border.all(color: borderColor),
+                        border: Border.all(color: theme.dividerColor),
                       ),
                       child: Row(
                         children: [
@@ -183,12 +177,12 @@ class SettingsScreen extends ConsumerWidget {
                                 style: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w700,
-                                  color: isDarkMode ? Colors.grey.shade500 : const Color(0xFF1F2937),
+                                  color: isDarkMode ? theme.disabledColor : theme.textTheme.bodyLarge?.color,
                                 ),
                               ),
                             ),
                           ),
-                          Container(width: 1, height: 24, color: isDarkMode ? Colors.white.withOpacity(0.1) : const Color(0xFFE5E7EB)),
+                          Container(width: 1, height: 24, color: theme.dividerColor),
                           Expanded(
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -198,7 +192,7 @@ class SettingsScreen extends ConsumerWidget {
                                     "Dark Mode",
                                     style: TextStyle(
                                       fontSize: 15,
-                                      color: isDarkMode ? Colors.white : Colors.grey.shade400,
+                                      color: isDarkMode ? theme.textTheme.bodyLarge?.color : theme.disabledColor,
                                       fontWeight: isDarkMode ? FontWeight.w700 : FontWeight.w500,
                                     ),
                                     overflow: TextOverflow.ellipsis,
@@ -244,7 +238,7 @@ class SettingsScreen extends ConsumerWidget {
                     // Action List Card
                     Container(
                       decoration: BoxDecoration(
-                        color: cardColor,
+                        color: theme.cardColor,
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
@@ -253,7 +247,7 @@ class SettingsScreen extends ConsumerWidget {
                             offset: const Offset(0, 4),
                           ),
                         ],
-                        border: Border.all(color: borderColor),
+                        border: Border.all(color: theme.dividerColor),
                       ),
                       child: Column(
                         children: [
@@ -271,7 +265,7 @@ class SettingsScreen extends ConsumerWidget {
                             ),
                             onTap: () {},
                           ),
-                          Divider(height: 1, indent: 20, endIndent: 20, color: isDarkMode ? Colors.white.withOpacity(0.05) : const Color(0xFFE5E7EB)),
+                          Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
                           // Logout
                           ListTile(
                             contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
@@ -293,7 +287,7 @@ class SettingsScreen extends ConsumerWidget {
                     Text(
                       "version 1.0.0",
                       style: TextStyle(
-                        color: Colors.grey.shade400,
+                        color: theme.disabledColor,
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),

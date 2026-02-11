@@ -8,18 +8,20 @@ class MedicalHistory extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6),
+        color: theme.colorScheme.secondaryContainer,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -35,13 +37,13 @@ class MedicalHistory extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          ...items.map((item) => _buildHistoryItem(item)),
+          ...items.map((item) => _buildHistoryItem(item, theme)),
         ],
       ),
     );
   }
 
-  Widget _buildHistoryItem(Map<String, String> item) {
+  Widget _buildHistoryItem(Map<String, String> item, ThemeData theme) {
     IconData icon;
     switch (item['type']) {
       case 'medication':
@@ -76,9 +78,8 @@ class MedicalHistory extends StatelessWidget {
                 ),
                 Text(
                   item['value'] ?? '-',
-                  style: TextStyle(
+                  style: theme.textTheme.bodyMedium?.copyWith(
                     fontSize: 13,
-                    color: Colors.grey.shade600,
                     fontWeight: FontWeight.w500,
                   ),
                 ),

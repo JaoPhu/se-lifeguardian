@@ -80,16 +80,18 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(userProvider);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(LucideIcons.chevronLeft, color: Colors.grey),
+          icon: Icon(LucideIcons.chevronLeft, color: theme.iconTheme.color),
           onPressed: () => context.pop(),
         ),
-        title: const Text('edit profile', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
+        title: Text('edit profile', style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontWeight: FontWeight.bold)),
+        backgroundColor: theme.appBarTheme.backgroundColor,
         elevation: 0,
       ),
       body: SafeArea(
@@ -106,7 +108,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       height: 100,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.grey.shade200, width: 2),
+                        border: Border.all(color: theme.dividerColor, width: 2),
                         image: DecorationImage(
                           image: NetworkImage(user.avatarUrl),
                           fit: BoxFit.cover,
@@ -119,11 +121,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: Colors.grey[200],
+                          color: theme.cardColor,
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
+                          border: Border.all(color: theme.scaffoldBackgroundColor, width: 2),
                         ),
-                        child: const Icon(LucideIcons.camera, size: 16, color: Colors.grey),
+                        child: Icon(LucideIcons.camera, size: 16, color: theme.iconTheme.color),
                       ),
                     ),
                   ],
@@ -132,15 +134,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               const SizedBox(height: 24),
 
               // Form
-              _buildInputField('Name', _nameController),
-              _buildInputField('Username', _usernameController),
-              _buildInputField('Email', _emailController),
+              _buildInputField('Name', _nameController, theme),
+              _buildInputField('Username', _usernameController, theme),
+              _buildInputField('Email', _emailController, theme),
               
               Row(
                 children: [
-                  Expanded(child: _buildInputField('Birth Date', _birthDateController)),
+                  Expanded(child: _buildInputField('Birth Date', _birthDateController, theme)),
                   const SizedBox(width: 16),
-                  Expanded(child: _buildInputField('Age', _ageController)),
+                  Expanded(child: _buildInputField('Age', _ageController, theme)),
                 ],
               ),
               Row(
@@ -151,32 +153,34 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       _genderController.text,
                       ['Male', 'Female', 'Other'],
                       (value) => setState(() => _genderController.text = value!),
+                      theme,
                     ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: _buildDropdownField(
                       'Blood Type',
-                      // Normalize O+ to O etc. for display if needed, but the user said no +/-
+                      // Normalize O+ to O etc. for display if needed
                       _bloodTypeController.text.replaceAll('+', '').replaceAll('-', ''),
                       ['A', 'B', 'AB', 'O'],
                       (value) => setState(() => _bloodTypeController.text = value!),
+                      theme,
                     ),
                   ),
                 ],
               ),
               Row(
                 children: [
-                  Expanded(child: _buildInputField('Height', _heightController)),
+                  Expanded(child: _buildInputField('Height', _heightController, theme)),
                   const SizedBox(width: 16),
-                  Expanded(child: _buildInputField('Weight', _weightController)),
+                  Expanded(child: _buildInputField('Weight', _weightController, theme)),
                 ],
               ),
 
-              _buildInputField('Medical condition', _medicalController),
-              _buildInputField('Current Medications', _medicationsController),
-              _buildInputField('Drug Allergies', _drugAllergiesController),
-              _buildInputField('Food Allergies', _foodAllergiesController),
+              _buildInputField('Medical condition', _medicalController, theme),
+              _buildInputField('Current Medications', _medicationsController, theme),
+              _buildInputField('Drug Allergies', _drugAllergiesController, theme),
+              _buildInputField('Food Allergies', _foodAllergiesController, theme),
 
               const SizedBox(height: 24),
               Row(
@@ -200,7 +204,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF0D9488),
                         side: BorderSide.none,
-                        backgroundColor: const Color(0xFFEEEEEE),
+                        backgroundColor: theme.colorScheme.secondaryContainer,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -216,7 +220,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     );
   }
 
-  Widget _buildInputField(String label, TextEditingController controller) {
+  Widget _buildInputField(String label, TextEditingController controller, ThemeData theme) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
       child: Column(
@@ -235,22 +239,22 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             controller: controller,
             decoration: InputDecoration(
               filled: true,
-              fillColor: const Color(0xFFEEEEEE),
+              fillColor: theme.inputDecorationTheme.fillColor,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide.none,
               ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              suffixIcon: const Icon(LucideIcons.pencil, size: 16, color: Colors.grey),
+              suffixIcon: Icon(LucideIcons.pencil, size: 16, color: theme.iconTheme.color?.withOpacity(0.5)),
             ),
-            style: const TextStyle(fontSize: 14, color: Colors.black87),
+            style: TextStyle(fontSize: 14, color: theme.textTheme.bodyMedium?.color),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDropdownField(String label, String value, List<String> items, void Function(String?) onChanged) {
+  Widget _buildDropdownField(String label, String value, List<String> items, void Function(String?) onChanged, ThemeData theme) {
     // Ensure value is present in items or use null
     final String? selectedValue = items.contains(value) ? value : null;
 
@@ -273,20 +277,21 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             items: items.map((String item) {
               return DropdownMenuItem<String>(
                 value: item,
-                child: Text(item, style: const TextStyle(fontSize: 14, color: Colors.black87)),
+                child: Text(item, style: TextStyle(fontSize: 14, color: theme.textTheme.bodyMedium?.color)),
               );
             }).toList(),
             onChanged: onChanged,
+            dropdownColor: theme.cardColor,
             decoration: InputDecoration(
               filled: true,
-              fillColor: const Color(0xFFEEEEEE),
+              fillColor: theme.inputDecorationTheme.fillColor,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide.none,
               ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
-            icon: const Icon(LucideIcons.chevronDown, size: 16, color: Colors.grey),
+            icon: Icon(LucideIcons.chevronDown, size: 16, color: theme.iconTheme.color?.withOpacity(0.5)),
           ),
         ],
       ),

@@ -9,29 +9,30 @@ class ProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
     return Container(
       padding: const EdgeInsets.only(top: 4, left: 4, right: 12, bottom: 2),
-      color: Colors.white,
+      color: theme.scaffoldBackgroundColor,
       child: Column(
         children: [
           Row(
             children: [
               IconButton(
                 onPressed: onBack,
-                icon: const Icon(LucideIcons.arrowLeft, color: Colors.black, size: 20),
+                icon: Icon(LucideIcons.arrowLeft, color: theme.iconTheme.color, size: 20),
               ),
               const SizedBox(width: 4),
               Text(
                 title,
-                style: const TextStyle(
-                  fontSize: 16,
+                style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w700,
-                  color: Colors.black87,
+                  fontSize: 16,
                 ),
               ),
             ],
           ),
-          const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
+          Divider(height: 1, thickness: 1, color: theme.dividerColor),
         ],
       ),
     );

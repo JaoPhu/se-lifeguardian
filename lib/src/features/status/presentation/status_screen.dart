@@ -25,7 +25,7 @@ class StatusScreen extends ConsumerWidget {
               gradient: LinearGradient(
                 colors: [
                   const Color(0xFF0D9488),
-                  const Color(0xFF0D9488).withValues(alpha: 0.8),
+                  const Color(0xFF0D9488).withOpacity(0.8),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -92,7 +92,7 @@ class StatusScreen extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(32),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
+                          color: Colors.black.withOpacity(0.05),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -154,12 +154,12 @@ class StatusScreen extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(32),
                       border: Border.all(
                         color: Theme.of(context).brightness == Brightness.dark 
-                            ? Colors.white.withValues(alpha: 0.05) 
-                            : Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                            ? Colors.white.withOpacity(0.05) 
+                            : Theme.of(context).dividerColor.withOpacity(0.1),
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: Theme.of(context).brightness == Brightness.dark ? 0.2 : 0.04),
+                          color: Colors.black.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.2 : 0.04),
                           blurRadius: 20,
                           offset: const Offset(0, 8),
                         ),
@@ -262,13 +262,13 @@ class StatusScreen extends ConsumerWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: highlight 
-          ? Theme.of(context).dividerColor.withValues(alpha: 0.1)
+          ? Theme.of(context).dividerColor.withOpacity(0.1)
           : Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: highlight 
-              ? const Color(0xFF0D9488).withValues(alpha: 0.3)
-              : Theme.of(context).dividerColor.withValues(alpha: 0.05)
+              ? const Color(0xFF0D9488).withOpacity(0.3)
+              : Theme.of(context).dividerColor.withOpacity(0.05)
         ),
       ),
       child: Row(
@@ -295,28 +295,34 @@ class StatusScreen extends ConsumerWidget {
         return _StatusConfig(
           title: 'Status : Normal',
           description: 'No abnormal behavior detected.',
-          bgColor: const Color(0xFF34D399),
-          iconBgColor: const Color(0xFF10B981).withValues(alpha: 0.3),
+          bgColor: isDark ? Colors.green.shade900.withOpacity(0.5) : const Color(0xFF34D399),
+          iconBgColor: isDark 
+              ? Colors.green.shade800 
+              : const Color(0xFF10B981).withOpacity(0.3),
           icon: Icons.check,
-          textColor: const Color(0xFF064E3B),
-          iconColor: const Color(0xFF064E3B),
+          textColor: isDark ? Colors.green.shade100 : const Color(0xFF064E3B),
+          iconColor: isDark ? Colors.green.shade100 : const Color(0xFF064E3B),
         );
       case HealthStatus.warning:
         return _StatusConfig(
           title: 'Status : Warning',
           description: 'Detect risky behavior.',
-          bgColor: const Color(0xFFFBBF24),
-          iconBgColor: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+          bgColor: isDark ? Colors.amber.shade900.withOpacity(0.5) : const Color(0xFFFBBF24),
+          iconBgColor: isDark 
+              ? Colors.amber.shade800 
+              : const Color(0xFFF59E0B).withOpacity(0.3),
           icon: Icons.warning_amber_rounded,
-          textColor: const Color(0xFF78350F),
-          iconColor: const Color(0xFF78350F),
+          textColor: isDark ? Colors.amber.shade100 : const Color(0xFF78350F),
+          iconColor: isDark ? Colors.amber.shade100 : const Color(0xFF78350F),
         );
       case HealthStatus.emergency:
         return _StatusConfig(
           title: 'Status : Emergency',
           description: 'Emergency detected.',
-          bgColor: const Color(0xFFEF4444),
-          iconBgColor: const Color(0xFFDC2626).withValues(alpha: 0.3),
+          bgColor: isDark ? Colors.red.shade900.withOpacity(0.5) : const Color(0xFFEF4444),
+          iconBgColor: isDark 
+              ? Colors.red.shade800 
+              : const Color(0xFFDC2626).withOpacity(0.3),
           icon: Icons.add,
           textColor: Colors.white,
           iconColor: Colors.white,
@@ -325,7 +331,7 @@ class StatusScreen extends ConsumerWidget {
         return _StatusConfig(
           title: 'Status : None',
           description: 'No information.',
-          bgColor: Theme.of(context).dividerColor.withValues(alpha: 0.05),
+          bgColor: Theme.of(context).dividerColor.withOpacity(0.05),
           iconBgColor: Colors.transparent,
           icon: null,
           textColor: isDark ? Colors.grey.shade500 : Colors.grey.shade500,

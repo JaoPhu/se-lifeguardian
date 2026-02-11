@@ -50,25 +50,25 @@ class ScaffoldWithNavBar extends StatelessWidget {
             GestureDetector(
               onTap: () => _onTap(context, 2),
               child: Transform.translate(
-                offset: const Offset(0, -15),
+                offset: const Offset(0, 0),
                 child: Container(
-                  width: 65,
-                  height: 65,
+                  width: 64,
+                  height: 64,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF009688), // Teal
+                    color: const Color(0xFF0D9488), // Teal
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF009688).withValues(alpha: 0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6),
+                        color: const Color(0xFF0D9488).withValues(alpha: 0.4),
+                        blurRadius: 15,
+                        offset: const Offset(0, 8),
                       ),
                     ],
                   ),
                   child: const Icon(
-                    Icons.add_moderator_outlined,
+                    Icons.health_and_safety_outlined,
                     color: Colors.white,
-                    size: 32,
+                    size: 40,
                   ),
                 ),
               ),
@@ -105,7 +105,7 @@ class ScaffoldWithNavBar extends StatelessWidget {
         color: active 
             ? const Color(0xFF0D9488) 
             : (isDark ? Colors.grey.shade600 : const Color(0xFF94A3B8)),
-        size: 28,
+        size: 32,
       ),
     );
   }
