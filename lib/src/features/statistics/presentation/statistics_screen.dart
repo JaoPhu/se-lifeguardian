@@ -5,7 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../../pose_detection/data/health_status_provider.dart';
 import '../domain/simulation_event.dart';
-import '../../notification/presentation/notification_bell.dart';
+import '../../profile/data/user_repository.dart';
 
 class StatisticsScreen extends ConsumerStatefulWidget {
   const StatisticsScreen({super.key});
@@ -18,7 +18,11 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
   DateTime _selectedDate = DateTime.now();
 
   String get _formattedDate {
-    return DateFormat('dd MMM yyyy').format(_selectedDate);
+    // Format: Today DD/MM/YY (BE)
+    final d = DateFormat('dd/MM').format(_selectedDate);
+    final y = (_selectedDate.year + 543).toString().substring(2);
+    final isToday = DateUtils.isSameDay(_selectedDate, DateTime.now());
+    return "${isToday ? 'Today ' : ''}$d/$y";
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -30,11 +34,10 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF111827), // Dark theme for picker to match app feel
-              onPrimary: Colors.white,
-              onSurface: Color(0xFF111827),
-            ),
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+                  primary: const Color(0xFF0D9488),
+                  onPrimary: Colors.white,
+                ),
           ),
           child: child!,
         );
@@ -44,20 +47,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       setState(() {
         _selectedDate = picked;
       });
-      // Trigger provider refresh if needed, but since we use local state for date
-      // and providers might watch this state if lifted up.
-      // Current architecture seems to rely on selectedDateProvider in history.
-      // But user said "H้ามแก้ feature history".
-      // Wait, the previous implementation used `_selectedDate` local state.
-      // So I keep it local based on "H้ามแก้ feature history" instruction.
-      // But for "ref.refresh provider", if the data depends on it...
-      // The previous code passed `healthState.events` which comes from `healthStatusProvider`.
-      // `healthStatusProvider` usually gives current live data or data for a date?
-      // Looking at imports: `../../pose_detection/data/health_status_provider.dart`
-      // It seems to be the global health status.
-      // User said: "เมื่อเลือกวันที่ → setState และ ref.refresh provider" in requirement.
-      // So I will add `ref.refresh(healthStatusProvider)`.
-      ref.refresh(healthStatusProvider);
     }
   }
 
@@ -68,20 +57,27 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     double slouch = 0;
     double exercise = 0;
     int falls = 0;
+    int nearFalls = 0;
 
     for (var event in events) {
       final type = event.type.toLowerCase();
+      // Use precise seconds if available, otherwise fallback (though v2 should have seconds)
       double duration = 0.0;
       if (event.durationSeconds != null) {
-        duration = event.durationSeconds! / 3600;
+        duration = event.durationSeconds! / 3600; // Convert seconds to hours
       } else {
         final durationStr = event.duration ?? '0.0h';
         duration = double.tryParse(durationStr.replaceAll('h', '')) ?? 0.0;
       }
 
+      // Robust matching
       if (type == 'sitting' || type == 'laying' || type == 'relax') {
         relax += duration;
-      } else if (type == 'working' || type == 'work' || type == 'standing') {
+      } else if (type == 'working' || type == 'work' || type == 'standing') { // Group standing with working/neutral? Or separate? 
+        // Original code didn't explicitly handle 'standing' in the counters above, it might have been missed or grouped?
+        // Looking at the original 'else if (type.contains('working')...' logic, 'standing' wasn't there.
+        // Let's assume 'standing' is 'work' or 'neutral'. Given 'Work' is usually associated with desk standing/sitting.
+        // Let's map 'standing' to 'work' for now as it's a common active-office state.
         work += duration;
       } else if (type == 'walking' || type == 'walk') {
         walk += duration;
@@ -91,6 +87,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
         exercise += duration;
       } else if (type == 'falling' || type == 'fall') {
         falls++;
+      } else if (type == 'near_fall') {
+        nearFalls++;
       }
     }
 
@@ -101,446 +99,485 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       'slouch': slouch,
       'exercise': exercise,
       'falls': falls.toDouble(),
+      'nearFalls': nearFalls.toDouble(),
     };
+  }
+
+  List<PieChartSectionData> _getPieSections(List<SimulationEvent> events) {
+    if (events.isEmpty) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      return [
+        PieChartSectionData(
+          color: isDark ? Colors.white10 : const Color(0xFFE8EBF0),
+          value: 1,
+          radius: 90,
+          showTitle: false,
+        )
+      ];
+    }
+
+    final stats = _calculateDurations(events);
+    final List<PieChartSectionData> sections = [];
+    if (stats['relax']! > 0) {
+      sections.add(PieChartSectionData(
+        color: Colors.blue.shade500,
+        value: stats['relax']!,
+        radius: 90,
+        showTitle: false,
+      ));
+    }
+    if (stats['work']! > 0) {
+      sections.add(PieChartSectionData(
+        color: Colors.amber.shade400,
+        value: stats['work']!,
+        radius: 90,
+        showTitle: false,
+      ));
+    }
+    if (stats['walk']! > 0) {
+      sections.add(PieChartSectionData(
+        color: const Color(0xFF10B981),
+        value: stats['walk']!,
+        radius: 90,
+        showTitle: false,
+      ));
+    }
+    if (stats['slouch']! > 0) {
+      sections.add(PieChartSectionData(
+        color: Colors.purple.shade500,
+        value: stats['slouch']!,
+        radius: 90,
+        showTitle: false,
+      ));
+    }
+    if (stats['exercise']! > 0) {
+      sections.add(PieChartSectionData(
+        color: Colors.indigo.shade500,
+        value: stats['exercise']!,
+        radius: 90,
+        showTitle: false,
+      ));
+    }
+    if (stats['falls']! > 0) {
+      sections.add(PieChartSectionData(
+        color: Colors.red.shade500,
+        value: (stats['falls']! * 0.1).clamp(0.1, 1),
+        radius: 90,
+        showTitle: false,
+      ));
+    }
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return sections.isEmpty
+        ? [
+            PieChartSectionData(
+              color: isDark ? Colors.white10 : const Color(0xFFE8EBF0),
+              value: 1,
+              radius: 90,
+              showTitle: false,
+            )
+          ]
+        : sections;
   }
 
   @override
   Widget build(BuildContext context) {
     final healthState = ref.watch(healthStatusProvider);
+    final user = ref.watch(userProvider);
     final stats = _calculateDurations(healthState.events);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(context),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+      backgroundColor: const Color(0xFF0D9488),
+      body: Column(
+        children: [
+          // Header
+          Container(
+            padding:
+                const EdgeInsets.only(top: 56, bottom: 24, left: 24, right: 24),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Statistics',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                Row(
+                  children: [
+                    // Replaced NotificationBell with custom Shield button
+                    GestureDetector(
+                      onTap: () => context.push('/notifications'),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.health_and_safety, // Shield with plus
+                          color: Color(0xFF0D9488), // Teal color to match theme
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    GestureDetector(
+                      onTap: () => context.push('/profile'),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.yellow.shade100,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                          image: DecorationImage(
+                            image: NetworkImage(user.avatarUrl),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Content
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(0),
+                ),
+              ),
+              child: SingleChildScrollView(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
                 child: Column(
                   children: [
-                    const SizedBox(height: 20),
-                    _buildDateSelector(context),
-                    const SizedBox(height: 20),
-                    _buildSummaryGrid(context, stats),
-                    const SizedBox(height: 20),
-                    _buildPieChartSection(context, stats),
-                    const SizedBox(height: 20),
-                    _buildWeeklyChartSection(context),
-                    const SizedBox(height: 40),
+                    // Date Picker
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              _formattedDate,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? Colors.grey.shade300
+                                    : Colors.grey.shade600,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          GestureDetector(
+                            onTap: () => _selectDate(context),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? Colors.grey.shade800
+                                    : Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'choose date',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Colors.grey.shade400
+                                      : Colors.grey.shade500,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Daily Progress Circle (Matched to Prototype)
+                    // Daily Progress Circle (Matched to Prototype)
+                    SizedBox(
+                      height: 290,
+                      width: 290,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Outer Border Container (Clock Face)
+                          Container(
+                            width: 230,
+                            height: 230,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                  color: const Color(0xFFBDC6D3), width: 1.2),
+                              color: Colors.transparent,
+                            ),
+                          ),
+
+                          // Pie Chart for activities (Solid Circle)
+                          SizedBox(
+                            width: 180, // Radius 90 - 78% of 115 radius
+                            height: 180,
+                            child: PieChart(
+                              PieChartData(
+                                sections: _getPieSections(healthState.events),
+                                sectionsSpace: 0,
+                                centerSpaceRadius: 0,
+                                startDegreeOffset: 270,
+                                borderData: FlBorderData(show: false),
+                              ),
+                            ),
+                          ),
+
+                          // Clock Ticks
+                          ...List.generate(4, (index) {
+                            final angles = [0.0, 90.0, 180.0, 270.0];
+                            return RotationTransition(
+                              turns:
+                                  AlwaysStoppedAnimation(angles[index] / 360),
+                              child: Center(
+                                child: Container(
+                                  width: 2,
+                                  height: 230,
+                                  alignment: Alignment.topCenter,
+                                  child: Container(
+                                    width: 1.5,
+                                    height: 6, // Precision tick length
+                                    color: const Color(0xFFBDC6D3),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+
+                          // Clock Labels (Centered in the gap)
+                          const Positioned(
+                            top: 36, // Moved up from 38
+                            child: Text(
+                              '12',
+                              style: TextStyle(
+                                color: Color(0xFF4A5568),
+                                fontSize: 13, // Slightly smaller for premium feel
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          const Positioned(
+                            bottom: 36, // Moved down from 38
+                            child: Text(
+                              '6',
+                              style: TextStyle(
+                                color: Color(0xFF4A5568),
+                                fontSize: 13, // Slightly smaller for premium feel
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          const Positioned(
+                            left: 38,
+                            child: Text(
+                              '9',
+                              style: TextStyle(
+                                color: Color(0xFF4A5568),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          const Positioned(
+                            right: 38,
+                            child: Text(
+                              '3',
+                              style: TextStyle(
+                                color: Color(0xFF4A5568),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 32),
+
+                    // Summary Cards (Single Row)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 24),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          Expanded(
+                              child: _buildSummaryCard(
+                                  'Relax\n${stats['relax']!.toStringAsFixed(1)}h',
+                                  Icons.weekend,
+                                  const Color(0xFFE3F2FD),
+                                  const Color(0xFF1565C0))), // Blue
+                          const SizedBox(width: 12),
+                          Expanded(
+                              child: _buildSummaryCard(
+                                  'Work\n${stats['work']!.toStringAsFixed(1)}h',
+                                  Icons.work,
+                                  const Color(0xFFFFF8E1),
+                                  const Color(0xFFF57F17))), // Amber
+                          const SizedBox(width: 12),
+                          Expanded(
+                              child: _buildSummaryCard(
+                                  'Walk\n${stats['walk']!.toStringAsFixed(1)}h',
+                                  Icons.directions_walk,
+                                  const Color(0xFFECFDF5),
+                                  const Color(0xFF047857))), // Emerald
+                          const SizedBox(width: 12),
+                          Expanded(
+                              child: _buildSummaryCard(
+                                  'Falls\n${stats['falls']!.toInt()}',
+                                  Icons.warning_amber_rounded,
+                                  const Color(0xFFFFEBEE),
+                                  const Color(0xFFC62828))), // Red
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 32),
+                    const Divider(),
+                    const SizedBox(height: 24),
+
+                    // Weekly Statistics
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardColor,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black
+                                .withValues(alpha: isDark ? 0.3 : 0.03),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Weekly',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF1E293B),
+                            ),
+                          ),
+                          const SizedBox(height: 30),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: List.generate(7, (index) {
+                              final date = DateTime.now()
+                                  .subtract(Duration(days: 6 - index));
+                              final dateStr =
+                                  "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+                              final score =
+                                  healthState.dailyScores[dateStr] ?? 1000.0;
+                              final labels = [
+                                'Mon',
+                                'Tue',
+                                'Wed',
+                                'Thu',
+                                'Fri',
+                                'Sat',
+                                'Sun'
+                              ];
+                              final label = labels[date.weekday - 1];
+
+                              return _WeeklyBarItem(
+                                label: label,
+                                value: score / 1000,
+                                isToday: index == 6,
+                              );
+                            }),
+                          ),
+                          const SizedBox(height: 25),
+                          const Center(
+                            child: Text(
+                              'Weekly statistics for this week',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF94A3B8),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Add spacing at bottom to ensure content isn't hidden by bottom nav
+                    const SizedBox(height: 120),
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text(
-            'Statistics',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF111827),
             ),
-          ),
-          Row(
-            children: [
-              GestureDetector(
-                onTap: () => context.push('/notification'),
-                child: const Icon(Icons.notifications_none, color: Color(0xFF111827)),
-              ),
-              const SizedBox(width: 16),
-              GestureDetector(
-                onTap: () => context.push('/profile'),
-                child: CircleAvatar(
-                  radius: 16,
-                  backgroundColor: Colors.grey.shade200,
-                  child: const Icon(Icons.person, size: 20, color: Colors.grey),
-                ),
-              ),
-            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDateSelector(BuildContext context) {
-    return GestureDetector(
-      onTap: () => _selectDate(context),
-      child: Container(
-        height: 44,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.calendar_today, size: 18, color: Color(0xFF111827)),
-            const SizedBox(width: 8),
-            Text(
-              _formattedDate,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFF111827),
-              ),
-            ),
-            const Spacer(),
-            const Icon(Icons.arrow_drop_down, color: Color(0xFF111827)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryGrid(BuildContext context, Map<String, double> stats) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cardWidth = (constraints.maxWidth - 12) / 2;
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            _buildStatCard(
-              title: 'Relax',
-              value: '${stats['relax']?.toStringAsFixed(1)}h',
-              icon: Icons.weekend, // chair replacement
-              color: const Color(0xFF3B82F6),
-              width: cardWidth,
-            ),
-            _buildStatCard(
-              title: 'Work',
-              value: '${stats['work']?.toStringAsFixed(1)}h',
-              icon: Icons.work,
-              color: const Color(0xFFF59E0B),
-              width: cardWidth,
-            ),
-            _buildStatCard(
-              title: 'Walk',
-              value: '${stats['walk']?.toStringAsFixed(1)}h',
-              icon: Icons.directions_walk,
-              color: const Color(0xFF22C55E),
-              width: cardWidth,
-            ),
-            _buildStatCard(
-              title: 'Falls',
-              value: '${stats['falls']?.toInt()}',
-              icon: Icons.warning,
-              color: const Color(0xFFEF4444),
-              width: cardWidth,
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildStatCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required Color color,
-    required double width,
-  }) {
-    return GestureDetector(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$title: $value')),
-        );
-      },
-      child: Container(
-        width: width,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF111827),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF6B7280),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPieChartSection(BuildContext context, Map<String, double> stats) {
+  Widget _buildSummaryCard(
+      String text, IconData icon, Color bg, Color textColor) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: bg,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text(
-            'Daily Activity',
+          Icon(icon, size: 24, color: textColor),
+          const SizedBox(height: 8),
+          Text(
+            text,
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF111827),
+              color: textColor,
+              height: 1.2,
             ),
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            height: 180,
-            child: PieChart(
-              PieChartData(
-                sectionsSpace: 2,
-                centerSpaceRadius: 70,
-                sections: _getPieSections(stats),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          _buildLegend(),
-        ],
-      ),
-    );
-  }
-
-  List<PieChartSectionData> _getPieSections(Map<String, double> stats) {
-    final total = (stats['relax'] ?? 0) + (stats['work'] ?? 0) + (stats['walk'] ?? 0) + (stats['falls'] ?? 0);
-    // Add default if total is 0 to show empty chart
-    if (total == 0) {
-      return [
-         PieChartSectionData(
-          color: const Color(0xFFF3F4F6),
-          value: 1,
-          radius: 60,
-          showTitle: false,
-        ),
-      ];
-    }
-    
-    return [
-      if ((stats['relax'] ?? 0) > 0)
-        PieChartSectionData(
-          color: const Color(0xFF3B82F6).withValues(alpha: 0.85),
-          value: stats['relax']!,
-          radius: 60,
-          showTitle: false,
-        ),
-      if ((stats['work'] ?? 0) > 0)
-        PieChartSectionData(
-          color: const Color(0xFFF59E0B).withValues(alpha: 0.85),
-          value: stats['work']!,
-          radius: 60,
-          showTitle: false,
-        ),
-      if ((stats['walk'] ?? 0) > 0)
-        PieChartSectionData(
-          color: const Color(0xFF22C55E).withValues(alpha: 0.85),
-          value: stats['walk']!,
-          radius: 60,
-          showTitle: false,
-        ),
-      if ((stats['falls'] ?? 0) > 0)
-        PieChartSectionData(
-          color: const Color(0xFFEF4444).withValues(alpha: 0.85),
-          value: stats['falls']!,
-          radius: 60,
-          showTitle: false,
-        ),
-    ];
-  }
-
-  Widget _buildLegend() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _buildLegendItem('Relax', const Color(0xFF3B82F6)),
-        const SizedBox(width: 16),
-        _buildLegendItem('Work', const Color(0xFFF59E0B)),
-        const SizedBox(width: 16),
-        _buildLegendItem('Walk', const Color(0xFF22C55E)),
-      ],
-    );
-  }
-
-  Widget _buildLegendItem(String title, Color color) {
-    return Row(
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Color(0xFF6B7280),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildWeeklyChartSection(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Weekly Overview',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF111827),
-            ),
-          ),
-          const SizedBox(height: 20),
-          AspectRatio(
-            aspectRatio: 1.7,
-            child: BarChart(
-              BarChartData(
-                alignment: BarChartAlignment.spaceAround,
-                maxY: 1,
-                barTouchData: BarTouchData(enabled: false),
-                titlesData: FlTitlesData(
-                  show: true,
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (double value, TitleMeta meta) {
-                        const style = TextStyle(
-                          color: Color(0xFF9CA3AF),
-                          fontSize: 10,
-                        );
-                        Widget text;
-                        switch (value.toInt()) {
-                          case 0:
-                            text = const Text('M', style: style);
-                            break;
-                          case 1:
-                            text = const Text('T', style: style);
-                            break;
-                          case 2:
-                            text = const Text('W', style: style);
-                            break;
-                          case 3:
-                            text = const Text('T', style: style);
-                            break;
-                          case 4:
-                            text = const Text('F', style: style);
-                            break;
-                          case 5:
-                            text = const Text('S', style: style);
-                            break;
-                          case 6:
-                            text = const Text('S', style: style);
-                            break;
-                          default:
-                            text = const Text('', style: style);
-                        }
-                        return SideTitleWidget(
-                          meta: meta,
-                          space: 4,
-                          child: text,
-                        );
-                      },
-                    ),
-                  ),
-                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                ),
-                gridData: const FlGridData(show: false),
-                borderData: FlBorderData(show: false),
-                barGroups: List.generate(7, (index) {
-                  return BarChartGroupData(
-                    x: index,
-                    barRods: [
-                      BarChartRodData(
-                        toY: 0.4 + (index % 3) * 0.2, // Mock data logic similar to prev
-                        color: index == 6 ? const Color(0xFF111827) : const Color(0xFFE5E7EB),
-                        width: 12,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ],
-                  );
-                }),
-              ),
-            ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -548,4 +585,67 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
   }
 }
 
+class _WeeklyBarItem extends StatelessWidget {
+  final String label;
+  final double value;
+  final bool isToday;
 
+  const _WeeklyBarItem({
+    required this.label,
+    this.value = 0.5,
+    this.isToday = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const double maxHeight = 140;
+    return Column(
+      children: [
+        Stack(
+          alignment: Alignment.bottomCenter,
+          children: [
+            // Background track
+            Container(
+              width: 14,
+              height: maxHeight,
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey.shade800
+                    : const Color(0xFFE2E8F0),
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            // Value bar
+            Container(
+              width: 14,
+              height: maxHeight * value,
+              decoration: BoxDecoration(
+                color:
+                    isToday ? const Color(0xFF0D9488) : const Color(0xFF94A3B8),
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: isToday
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFF0D9488).withValues(alpha: 0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        )
+                      ]
+                    : null,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: isToday ? FontWeight.bold : FontWeight.w600,
+            color: isToday ? const Color(0xFF0D9488) : const Color(0xFF64748B),
+          ),
+        ),
+      ],
+    );
+  }
+}

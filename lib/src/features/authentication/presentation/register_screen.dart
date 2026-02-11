@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/widgets/auth_text_field.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/widgets/social_button.dart';
-import 'package:lifeguardian/src/features/authentication/data/auth_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class RegisterScreen extends StatefulWidget {
+// ✅ ใช้ controller แทน AuthService
+import 'package:lifeguardian/src/features/authentication/controllers/auth_controller.dart';
+
+class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
 
   @override
-  State<RegisterScreen> createState() => _RegisterScreenState();
+  ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen> {
+class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -26,9 +29,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final authState = ref.watch(authControllerProvider);
+    final isLoading = authState.isLoading;
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
@@ -37,12 +50,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
         leading: Padding(
           padding: const EdgeInsets.only(left: 16.0),
           child: IconButton(
-            icon: Icon(Icons.arrow_back_ios_new, color: isDark ? Colors.white : Colors.black, size: 20),
+            icon: Icon(
+              Icons.arrow_back_ios_new,
+              color: isDark ? Colors.white : Colors.black,
+              size: 20,
+            ),
             onPressed: () => context.pop(),
             style: IconButton.styleFrom(
               backgroundColor: Theme.of(context).cardColor,
               shape: const CircleBorder(),
-              side: BorderSide(color: isDark ? Colors.grey.shade700 : Colors.grey.shade200),
+              side: BorderSide(
+                color: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
+              ),
             ),
           ),
         ),
@@ -71,7 +90,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
               ),
               const SizedBox(height: 32),
-              
               AuthTextField(
                 label: 'Email',
                 hintText: 'example@gmail.com',
@@ -95,7 +113,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 isPassword: true,
                 controller: _confirmPasswordController,
               ),
-              
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -104,13 +121,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     width: 24,
                     child: Checkbox(
                       value: _agreeTerms,
-                      onChanged: (value) {
-                        setState(() {
-                          _agreeTerms = value ?? false;
-                        });
-                      },
+                      onChanged: isLoading
+                          ? null
+                          : (value) {
+                              setState(() {
+                                _agreeTerms = value ?? false;
+                              });
+                            },
                       activeColor: const Color(0xFF0D9488),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -118,16 +139,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     child: RichText(
                       text: TextSpan(
                         text: 'I agree to ',
-                        style: const TextStyle(fontSize: 14, color: Colors.grey),
+                        style:
+                            const TextStyle(fontSize: 14, color: Colors.grey),
                         children: [
                           TextSpan(
                             text: 'Terms',
-                            style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
                           ),
                           const TextSpan(text: ' and '),
                           TextSpan(
                             text: 'Conditions',
-                            style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
                           ),
                         ],
                       ),
@@ -135,16 +163,44 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ],
               ),
-              
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () {
-                    // Logic to validate and register
-                    context.go('/edit-profile');
-                  },
+                  onPressed: isLoading
+                      ? null
+                      : () async {
+                          final email = _emailController.text.trim();
+                          final password = _passwordController.text.trim();
+                          final confirm =
+                              _confirmPasswordController.text.trim();
+
+                          if (email.isEmpty ||
+                              password.isEmpty ||
+                              confirm.isEmpty) {
+                            _showSnack('กรอกข้อมูลให้ครบก่อนนะ');
+                            return;
+                          }
+                          if (!_agreeTerms) {
+                            _showSnack('กรุณาติ๊กยอมรับ Terms & Conditions');
+                            return;
+                          }
+                          if (password != confirm) {
+                            _showSnack('รหัสผ่านไม่ตรงกัน');
+                            return;
+                          }
+
+                          await ref
+                              .read(authControllerProvider.notifier)
+                              .register(email, password);
+
+                          final s = ref.read(authControllerProvider);
+                          s.whenOrNull(
+                            error: (e, st) => _showSnack(e.toString()),
+                            data: (_) => context.go('/edit-profile'),
+                          );
+                        },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0D9488),
                     foregroundColor: Colors.white,
@@ -154,16 +210,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Create account',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: isLoading
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text(
+                          'Create account',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
-              
               const SizedBox(height: 32),
               const Row(
                 children: [
@@ -179,7 +240,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ],
               ),
               const SizedBox(height: 24),
-              
               Row(
                 children: [
                   Expanded(
@@ -190,7 +250,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         height: 24,
                         width: 24,
                       ),
-                      onPressed: () => AuthService().signInWithGoogle(),
+                      onPressed: () {
+                        if (isLoading) return;
+
+                        Future(() async {
+                          await ref
+                              .read(authControllerProvider.notifier)
+                              .loginWithGoogle();
+
+                          final s = ref.read(authControllerProvider);
+                          s.whenOrNull(
+                            error: (e, st) => _showSnack(e.toString()),
+                            data: (_) => context.go('/edit-profile'),
+                          );
+                        });
+                      },
                     ),
                   ),
                   if (defaultTargetPlatform == TargetPlatform.iOS) ...[
@@ -198,14 +272,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     Expanded(
                       child: SocialButton(
                         label: 'Apple',
-                        icon: Icon(Icons.apple, color: isDark ? Colors.white : Colors.black, size: 24),
-                        onPressed: () => AuthService().signInWithApple(),
+                        icon: Icon(
+                          Icons.apple,
+                          color: isDark ? Colors.white : Colors.black,
+                          size: 24,
+                        ),
+                        onPressed: () =>
+                            _showSnack('Apple sign-in ยังไม่ตั้งค่า'),
                       ),
                     ),
                   ],
                 ],
               ),
-              
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -215,7 +293,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     style: TextStyle(color: Colors.grey),
                   ),
                   GestureDetector(
-                    onTap: () => context.pushReplacement('/login'),
+                    onTap: isLoading
+                        ? null
+                        : () => context.pushReplacement('/login'),
                     child: Text(
                       'Login',
                       style: TextStyle(
