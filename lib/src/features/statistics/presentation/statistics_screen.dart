@@ -6,6 +6,11 @@ import 'package:intl/intl.dart';
 import '../../pose_detection/data/health_status_provider.dart';
 import '../domain/simulation_event.dart';
 import '../../profile/data/user_repository.dart';
+import '../../notification/presentation/notification_bell.dart';
+import '../../../common_widgets/user_avatar.dart';
+
+import '../../history/data/history_repository_provider.dart';
+
 
 class StatisticsScreen extends ConsumerStatefulWidget {
   const StatisticsScreen({super.key});
@@ -61,7 +66,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
 
     for (var event in events) {
       final type = event.type.toLowerCase();
-      // Use precise seconds if available, otherwise fallback (though v2 should have seconds)
+      // Use precise seconds if available, otherwise fallback
       double duration = 0.0;
       if (event.durationSeconds != null) {
         duration = event.durationSeconds! / 3600; // Convert seconds to hours
@@ -73,11 +78,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       // Robust matching
       if (type == 'sitting' || type == 'laying' || type == 'relax') {
         relax += duration;
-      } else if (type == 'working' || type == 'work' || type == 'standing') { // Group standing with working/neutral? Or separate? 
-        // Original code didn't explicitly handle 'standing' in the counters above, it might have been missed or grouped?
-        // Looking at the original 'else if (type.contains('working')...' logic, 'standing' wasn't there.
-        // Let's assume 'standing' is 'work' or 'neutral'. Given 'Work' is usually associated with desk standing/sitting.
-        // Let's map 'standing' to 'work' for now as it's a common active-office state.
+      } else if (type == 'working' || type == 'work' || type == 'standing') {
         work += duration;
       } else if (type == 'walking' || type == 'walk') {
         walk += duration;
@@ -180,12 +181,26 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
         : sections;
   }
 
+  DateTime _getStartOfWeek(DateTime date) {
+    // Assuming week starts on Monday (1)
+    // .weekday returns 1 for Mon, 7 for Sun
+    return date.subtract(Duration(days: date.weekday - 1));
+  }
+  
+  // Hardcoded labels for Mon-Sun
+  final List<String> _weekLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
   @override
   Widget build(BuildContext context) {
     final healthState = ref.watch(healthStatusProvider);
     final user = ref.watch(userProvider);
     final stats = _calculateDurations(healthState.events);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Fetch Weekly Stats (Based on current selected date or Today?)
+    // Usually "Weekly" shows the *current* week of the selected date.
+    final startOfWeek = _getStartOfWeek(_selectedDate);
+    final weeklyStatsAsync = ref.watch(weeklyStatsProvider(startOfWeek));
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D9488),
@@ -210,37 +225,13 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                 Row(
                   children: [
                     // Replaced NotificationBell with custom Shield button
-                    GestureDetector(
-                      onTap: () => context.push('/notifications'),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.health_and_safety, // Shield with plus
-                          color: Color(0xFF0D9488), // Teal color to match theme
-                          size: 24,
-                        ),
-                      ),
-                    ),
+                    const NotificationBell(color: Colors.white, whiteBorder: true),
                     const SizedBox(width: 16),
                     GestureDetector(
                       onTap: () => context.push('/profile'),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.yellow.shade100,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                          image: DecorationImage(
-                            image: NetworkImage(user.avatarUrl),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
+                      child: UserAvatar(
+                        avatarUrl: user.avatarUrl,
+                        radius: 18,
                       ),
                     ),
                   ],
@@ -324,7 +315,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
 
                     const SizedBox(height: 24),
 
-                    // Daily Progress Circle (Matched to Prototype)
                     // Daily Progress Circle (Matched to Prototype)
                     SizedBox(
                       height: 290,
@@ -441,29 +431,29 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                               child: _buildSummaryCard(
                                   'Relax\n${stats['relax']!.toStringAsFixed(1)}h',
                                   Icons.weekend,
-                                  const Color(0xFFE3F2FD),
-                                  const Color(0xFF1565C0))), // Blue
+                                  isDark ? Colors.blue.shade900.withValues(alpha: 0.6) : const Color(0xFFE3F2FD),
+                                  isDark ? Colors.blue.shade100 : const Color(0xFF1565C0))), // Blue
                           const SizedBox(width: 12),
                           Expanded(
                               child: _buildSummaryCard(
                                   'Work\n${stats['work']!.toStringAsFixed(1)}h',
                                   Icons.work,
-                                  const Color(0xFFFFF8E1),
-                                  const Color(0xFFF57F17))), // Amber
+                                  isDark ? Colors.amber.shade900.withValues(alpha: 0.6) : const Color(0xFFFFF8E1),
+                                  isDark ? Colors.amber.shade100 : const Color(0xFFF57F17))), // Amber
                           const SizedBox(width: 12),
                           Expanded(
                               child: _buildSummaryCard(
                                   'Walk\n${stats['walk']!.toStringAsFixed(1)}h',
                                   Icons.directions_walk,
-                                  const Color(0xFFECFDF5),
-                                  const Color(0xFF047857))), // Emerald
+                                  isDark ? Colors.green.shade900.withValues(alpha: 0.6) : const Color(0xFFECFDF5),
+                                  isDark ? Colors.green.shade100 : const Color(0xFF047857))), // Emerald
                           const SizedBox(width: 12),
                           Expanded(
                               child: _buildSummaryCard(
                                   'Falls\n${stats['falls']!.toInt()}',
                                   Icons.warning_amber_rounded,
-                                  const Color(0xFFFFEBEE),
-                                  const Color(0xFFC62828))), // Red
+                                  isDark ? Colors.red.shade900.withValues(alpha: 0.6) : const Color(0xFFFFEBEE),
+                                  isDark ? Colors.red.shade100 : const Color(0xFFC62828))), // Red
                         ],
                       ),
                     ),
@@ -472,7 +462,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                     const Divider(),
                     const SizedBox(height: 24),
 
-                    // Weekly Statistics
+                    // Weekly Statistics with FlChart
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(24),
@@ -501,35 +491,116 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                                   : const Color(0xFF1E293B),
                             ),
                           ),
-                          const SizedBox(height: 30),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: List.generate(7, (index) {
-                              final date = DateTime.now()
-                                  .subtract(Duration(days: 6 - index));
-                              final dateStr =
-                                  "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
-                              final score =
-                                  healthState.dailyScores[dateStr] ?? 1000.0;
-                              final labels = [
-                                'Mon',
-                                'Tue',
-                                'Wed',
-                                'Thu',
-                                'Fri',
-                                'Sat',
-                                'Sun'
-                              ];
-                              final label = labels[date.weekday - 1];
-
-                              return _WeeklyBarItem(
-                                label: label,
-                                value: score / 1000,
-                                isToday: index == 6,
-                              );
-                            }),
+                          const SizedBox(height: 20), // Spacing for "!" icon
+                          
+                          AspectRatio(
+                            aspectRatio: 1.5,
+                            child: weeklyStatsAsync.when(
+                              loading: () => const Center(child: CircularProgressIndicator()),
+                              error: (err, stack) => Center(child: Text('Error: $err')),
+                              data: (weeklyStats) {
+                                return BarChart(
+                                  BarChartData(
+                                    alignment: BarChartAlignment.spaceBetween,
+                                    maxY: 24, // Max hours in a day
+                                    barTouchData: BarTouchData(
+                                      enabled: true,
+                                      touchTooltipData: BarTouchTooltipData(
+                                        getTooltipColor: (_) => Colors.blueGrey,
+                                        tooltipBorderRadius: BorderRadius.circular(8),
+                                        getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                                          return BarTooltipItem(
+                                            '${_weekLabels[group.x.toInt()]}\n',
+                                            const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                            children: [
+                                              TextSpan(text: (rod.toY - 1).toStringAsFixed(1)) // -1 for base? No, just rod.toY
+                                            ]
+                                          );
+                                        }
+                                      ),
+                                    ),
+                                    titlesData: FlTitlesData(
+                                      show: true,
+                                      leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                      rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                      topTitles: AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: true,
+                                          reservedSize: 20, // Space for "!"
+                                          getTitlesWidget: (value, meta) {
+                                            final index = value.toInt();
+                                            if (index < 0 || index >= weeklyStats.dailyStats.length) return const SizedBox();
+                                            final dayStat = weeklyStats.dailyStats[index];
+                                            if (dayStat.falls > 0) {
+                                              return const Icon(Icons.error, color: Color(0xFFC62828), size: 16); // Red Exclamation
+                                            }
+                                            return const SizedBox();
+                                          },
+                                        ),
+                                      ),
+                                      bottomTitles: AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: true,
+                                          reservedSize: 30,
+                                          getTitlesWidget: (value, meta) {
+                                            final index = value.toInt();
+                                            if (index >= 0 && index < _weekLabels.length) {
+                                              return Padding(
+                                                padding: const EdgeInsets.only(top: 8.0),
+                                                child: Text(
+                                                  _weekLabels[index],
+                                                  style: TextStyle(
+                                                    fontSize: 12, 
+                                                    color: isDark ? Colors.grey.shade400 : const Color(0xFF64748B),
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                            return const SizedBox();
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                    gridData: const FlGridData(
+                                      show: false,
+                                    ),
+                                    borderData: FlBorderData(show: false),
+                                    barGroups: weeklyStats.dailyStats.asMap().entries.map((entry) {
+                                      final index = entry.key;
+                                      final stat = entry.value;
+                                      final totalHours = stat.relaxHours + stat.workHours + stat.walkHours;
+                                      
+                                      return BarChartGroupData(
+                                        x: index,
+                                        barRods: [
+                                          BarChartRodData(
+                                            toY: totalHours,
+                                            width: 16,
+                                            borderRadius: BorderRadius.circular(6),
+                                            // Max capacity background bar (always 24h)
+                                            backDrawRodData: BackgroundBarChartRodData(
+                                              show: true,
+                                              toY: 24,
+                                              color: isDark 
+                                                  ? Colors.white.withValues(alpha: 0.1) 
+                                                  : Colors.grey.shade200,
+                                            ),
+                                            rodStackItems: totalHours == 0 ? [] : [
+                                              BarChartRodStackItem(0, stat.relaxHours, Colors.blue.shade200), // Relax (Bottom)
+                                              BarChartRodStackItem(stat.relaxHours, stat.relaxHours + stat.workHours, Colors.amber.shade200), // Work (Middle)
+                                              BarChartRodStackItem(stat.relaxHours + stat.workHours, totalHours, const Color(0xFF10B981).withValues(alpha: 0.5)), // Walk (Top)
+                                            ],
+                                          ),
+                                        ],
+                                      );
+                                    }).toList(),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
+
                           const SizedBox(height: 25),
                           const Center(
                             child: Text(
@@ -581,71 +652,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _WeeklyBarItem extends StatelessWidget {
-  final String label;
-  final double value;
-  final bool isToday;
-
-  const _WeeklyBarItem({
-    required this.label,
-    this.value = 0.5,
-    this.isToday = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    const double maxHeight = 140;
-    return Column(
-      children: [
-        Stack(
-          alignment: Alignment.bottomCenter,
-          children: [
-            // Background track
-            Container(
-              width: 14,
-              height: maxHeight,
-              decoration: BoxDecoration(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.grey.shade800
-                    : const Color(0xFFE2E8F0),
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            // Value bar
-            Container(
-              width: 14,
-              height: maxHeight * value,
-              decoration: BoxDecoration(
-                color:
-                    isToday ? const Color(0xFF0D9488) : const Color(0xFF94A3B8),
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: isToday
-                    ? [
-                        BoxShadow(
-                          color: const Color(0xFF0D9488).withValues(alpha: 0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        )
-                      ]
-                    : null,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: isToday ? FontWeight.bold : FontWeight.w600,
-            color: isToday ? const Color(0xFF0D9488) : const Color(0xFF64748B),
-          ),
-        ),
-      ],
     );
   }
 }

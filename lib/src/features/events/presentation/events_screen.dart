@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../pose_detection/data/health_status_provider.dart';
 import '../../dashboard/data/camera_provider.dart';
+import '../../events/data/event_repository.dart';
 import '../../statistics/domain/simulation_event.dart';
 import '../../profile/data/user_repository.dart';
 
@@ -14,8 +15,9 @@ class EventsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(userProvider);
-    final healthState = ref.watch(healthStatusProvider);
-    final events = healthState.events;
+    // final healthState = ref.watch(healthStatusProvider);
+    final eventsStream = ref.watch(eventsStreamProvider);
+    
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     // Get camera name for context
@@ -95,94 +97,102 @@ class EventsScreen extends ConsumerWidget {
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                 children: [
-                  
-                  // Horizontal Gallery
-                  Text(
-                    'Events of $cameraName',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF0D9488),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    height: 180,
-                    child: events.isEmpty 
-                      ? _buildEmptyGallery(context)
-                      : ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: events.length,
-                          separatorBuilder: (context, index) => const SizedBox(width: 16),
-                          itemBuilder: (context, index) {
-                            final event = events[index];
-                            return _buildGalleryItem(context, event, cameraName);
-                          },
-                        ),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Recent Events List
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Recent Events',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF0D9492),
-                        ),
-                      ),
-                      Row(
+                                   eventsStream.when(
+                    data: (allEvents) {
+                      final events = allEvents.where((e) => e.cameraId == cameraId).toList();
+                      return Column(
                         children: [
-                          if (events.isNotEmpty)
-                            TextButton(
-                              onPressed: () async {
-                                final confirm = await showDialog<bool>(
-                                  context: context,
-                                  builder: (context) => AlertDialog(
-                                    title: const Text('Clear History?'),
-                                    content: const Text('This will permanently delete all event logs and images from your device.'),
-                                    actions: [
-                                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                                      TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Clear All', style: TextStyle(color: Colors.red))),
-                                    ],
-                                  ),
-                                );
-                                if (confirm == true) {
-                                  ref.read(healthStatusProvider.notifier).clearAllData(cameraId: cameraId);
-                                }
-                              },
-                              child: const Text('Clear History', style: TextStyle(fontSize: 12, color: Colors.blue)),
-                            ),
-                          const SizedBox(width: 8),
+                          // Horizontal Gallery
                           Text(
-                            'Total: ${events.length}',
-                            style: TextStyle(fontSize: 12, color: Colors.grey.withValues(alpha: 0.6)),
+                            'Events of $cameraName',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0D9488),
+                            ),
                           ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            height: 180,
+                            child: events.isEmpty 
+                              ? _buildEmptyGallery(context)
+                              : ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: events.length,
+                                  separatorBuilder: (context, index) => const SizedBox(width: 16),
+                                  itemBuilder: (context, index) {
+                                    final event = events[index];
+                                    return _buildGalleryItem(context, event, cameraName);
+                                  },
+                                ),
+                          ),
+                          const SizedBox(height: 32),
+                          // Recent Events List
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Recent Events',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF0D9492),
+                                ),
+                              ),
+                              Row(
+                                children: [
+                                  if (events.isNotEmpty)
+                                    TextButton(
+                                      onPressed: () async {
+                                        final confirm = await showDialog<bool>(
+                                          context: context,
+                                          builder: (context) => AlertDialog(
+                                            title: const Text('Clear History?'),
+                                            content: const Text('This will permanently delete all event logs and images from your device.'),
+                                            actions: [
+                                              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                                              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Clear All', style: TextStyle(color: Colors.red))),
+                                            ],
+                                          ),
+                                        );
+                                        if (confirm == true) {
+                                          ref.read(healthStatusProvider.notifier).clearAllData(cameraId: cameraId);
+                                        }
+                                      },
+                                      child: const Text('Clear History', style: TextStyle(fontSize: 12, color: Colors.blue)),
+                                    ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Total: ${events.length}',
+                                    style: TextStyle(fontSize: 12, color: Colors.grey.withValues(alpha: 0.6)),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          events.isEmpty
+                            ? const SizedBox(
+                                height: 100,
+                                child: Center(child: Text('No events detected yet.', style: TextStyle(color: Colors.grey)))
+                              )
+                            : ListView.separated(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                padding: EdgeInsets.zero,
+                                itemCount: events.length,
+                                separatorBuilder: (context, index) => const Divider(height: 1, color: Colors.black12),
+                                itemBuilder: (context, index) {
+                                  final event = events[index];
+                                  return _buildEventListItem(context, event);
+                                },
+                              ),
                         ],
-                      ),
-                    ],
+                      );
+                    },
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (e, st) => Center(child: Text('Error: $e')),
                   ),
-                  const SizedBox(height: 16),
-                  events.isEmpty
-                    ? const SizedBox(
-                        height: 100,
-                        child: Center(child: Text('No events detected yet.', style: TextStyle(color: Colors.grey)))
-                      )
-                    : ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        padding: EdgeInsets.zero,
-                        itemCount: events.length,
-                        separatorBuilder: (context, index) => const Divider(height: 1, color: Colors.black12),
-                        itemBuilder: (context, index) {
-                          final event = events[index];
-                          return _buildEventListItem(context, event);
-                        },
-                      ),
 
                   const SizedBox(height: 32),
 
@@ -247,23 +257,44 @@ class EventsScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: event.snapshotUrl != null
-                ? Image.file(
-                    File(event.snapshotUrl!),
-                    fit: BoxFit.cover,
-                  )
-                : Container(
-                    color: Colors.teal.shade50,
-                    child: Center(
-                      child: Icon(
-                        _getIconForType(event.type),
-                        size: 32,
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: event.remoteImageUrl != null
+                    ? Image.network(
+                        event.remoteImageUrl!,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                        errorBuilder: (context, error, stackTrace) => _buildLocalOrPlaceholder(event),
+                      )
+                    : _buildLocalOrPlaceholder(event),
+                ),
+                if (event.isVerified)
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      decoration: BoxDecoration(
                         color: const Color(0xFF0D9488),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.check_circle, color: Colors.white, size: 8),
+                          const SizedBox(width: 2),
+                          Text(
+                            'AI Verified ${(event.confidence ?? 0 * 100).toStringAsFixed(0)}%',
+                            style: const TextStyle(color: Colors.white, fontSize: 6, fontWeight: FontWeight.bold),
+                          ),
+                        ],
                       ),
                     ),
                   ),
+              ],
             ),
           ),
           const SizedBox(height: 8),
@@ -316,6 +347,19 @@ class EventsScreen extends ConsumerWidget {
                   event.description ?? "Subject is resting in a horizontal position",
                   style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
+                if (event.isVerified) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.verified_user, size: 12, color: Color(0xFF0D9488)),
+                      const SizedBox(width: 4),
+                      Text(
+                        'AI Verified (${(event.confidence ?? 0 * 100).toStringAsFixed(0)}% Confidence)',
+                        style: const TextStyle(fontSize: 10, color: Color(0xFF0D9488), fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -334,6 +378,29 @@ class EventsScreen extends ConsumerWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLocalOrPlaceholder(SimulationEvent event) {
+    if (event.snapshotUrl != null && File(event.snapshotUrl!).existsSync()) {
+      return Image.file(
+        File(event.snapshotUrl!),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+      );
+    }
+    return Container(
+      color: Colors.teal.shade50,
+      width: double.infinity,
+      height: double.infinity,
+      child: Center(
+        child: Icon(
+          _getIconForType(event.type),
+          size: 32,
+          color: const Color(0xFF0D9488),
+        ),
       ),
     );
   }

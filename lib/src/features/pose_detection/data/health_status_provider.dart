@@ -3,8 +3,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../statistics/domain/simulation_event.dart';
+import '../../events/data/event_repository.dart';
 import '../../events/data/cloud_verification_service.dart';
 
 enum HealthStatus { normal, warning, emergency, none }
@@ -85,9 +88,10 @@ class HealthState {
 }
 
 class HealthStatusNotifier extends StateNotifier<HealthState> {
+  final EventRepository _eventRepository;
   Timer? _timer;
 
-  HealthStatusNotifier() : super(HealthState.initial()) {
+  HealthStatusNotifier(this._eventRepository) : super(HealthState.initial()) {
     _loadState();
     _startTimer();
   }
@@ -101,6 +105,44 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       if (jsonStr != null) {
         state = HealthState.fromJson(json.decode(jsonStr) as Map<String, dynamic>);
       }
+
+      // 2. Fetch latest events and status from Firestore (Override local if online)
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        try {
+          // Fetch events
+          final eventsSnapshot = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('events')
+              .orderBy('startTimeMs', descending: true)
+              .limit(50)
+              .get();
+
+          final remoteEvents = eventsSnapshot.docs
+              .map((doc) => SimulationEvent.fromJson(doc.data()))
+              .toList();
+
+          // Fetch current status/score
+          final statusDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
+
+          if (statusDoc.exists) {
+            final data = statusDoc.data()!;
+            state = state.copyWith(
+              score: (data['health_score'] as num?)?.toInt() ?? state.score,
+              status: HealthStatus.values[(data['health_status'] as int?) ?? state.status.index],
+              events: remoteEvents.isNotEmpty ? remoteEvents : state.events,
+            );
+          } else if (remoteEvents.isNotEmpty) {
+            state = state.copyWith(events: remoteEvents);
+          }
+        } catch (e) {
+          debugPrint("Firestore load failed, using local: $e");
+        }
+      }
     } catch (e) {
       debugPrint("Error loading health state: $e");
     }
@@ -110,6 +152,17 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_storageKey, json.encode(state.toJson()));
+      
+      // Sync basic status to Firestore root user doc for quick access
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'health_score': state.score,
+          'health_status': state.status.index,
+          'last_activity': state.currentActivity,
+          'last_updated': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
     } catch (e) {
       debugPrint("Error saving health state: $e");
     }
@@ -252,18 +305,43 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         events: updatedEvents,
       );
       
-      // Trigger Cloud Verification
-      if (snapshotPath != null) {
-        _verifyEvent(newEvent);
-      }
+      // Trigger Cloud Verification and Sync
+      _syncAndVerify(newEvent);
     } else {
       state = state.copyWith(
         currentActivity: activity,
         events: updatedEvents,
         status: state.status == HealthStatus.none ? HealthStatus.normal : state.status,
       );
+      // Sync basic activity change to Firestore
+      _eventRepository.syncEvent(newEvent);
     }
     _saveState();
+  }
+
+  Future<void> _syncAndVerify(SimulationEvent event) async {
+    SimulationEvent currentEvent = event;
+    
+    // 1. Sync to Firestore (Initial)
+    await _eventRepository.syncEvent(currentEvent);
+
+    // 2. Upload Snapshot to Storage if available
+    if (currentEvent.snapshotUrl != null) {
+      final remoteUrl = await _eventRepository.uploadSnapshot(currentEvent.snapshotUrl!, currentEvent.id);
+      if (remoteUrl != null) {
+        currentEvent = currentEvent.copyWith(remoteImageUrl: remoteUrl);
+        // Update local state with remote URL
+        final updatedEvents = state.events.map((e) => e.id == event.id ? currentEvent : e).toList();
+        state = state.copyWith(events: updatedEvents);
+        // Sync updated event with remote image URL
+        await _eventRepository.syncEvent(currentEvent);
+      }
+    }
+
+    // 3. Trigger Cloud Verification
+    if (currentEvent.snapshotUrl != null) {
+      _verifyEvent(currentEvent);
+    }
   }
   
   // Cloud Verification Integration
@@ -285,11 +363,14 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         // Update event in list
         final updatedEvents = state.events.map((e) {
           if (e.id == event.id) {
-            return e.copyWith(
+            final updated = e.copyWith(
               isVerified: true,
               confidence: confidence,
               description: "${e.description} (Verified)",
             );
+            // Sync verified status to Firestore
+            _eventRepository.syncEvent(updated);
+            return updated;
           }
           return e;
         }).toList();
@@ -396,5 +477,6 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 }
 
 final healthStatusProvider = StateNotifierProvider<HealthStatusNotifier, HealthState>((ref) {
-  return HealthStatusNotifier();
+  final eventRepo = ref.watch(eventRepositoryProvider);
+  return HealthStatusNotifier(eventRepo);
 });

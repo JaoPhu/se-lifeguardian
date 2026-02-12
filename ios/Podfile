@@ -44,7 +44,22 @@ post_install do |installer|
       
       # Fix for iOS Simulator architecture mismatch (Intel vs Apple Silicon)
       config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
-    end
 
+      # Fix for nanopb non-modular header issue
+      config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+
+      # Sanitize HEADER_SEARCH_PATHS to prevent picking up Homebrew GCC headers
+      if config.build_settings['HEADER_SEARCH_PATHS']
+        paths = config.build_settings['HEADER_SEARCH_PATHS']
+        if paths.is_a?(String)
+          paths = paths.split(' ')
+        end
+        
+        # Remove any Homebrew or local include paths that might contain conflicting C++ headers
+        paths.reject! { |path| path.include?('/opt/homebrew/include') || path.include?('/usr/local/include') }
+        
+        config.build_settings['HEADER_SEARCH_PATHS'] = paths.join(' ')
+      end
+    end
   end
 end

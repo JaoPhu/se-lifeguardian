@@ -7,6 +7,8 @@ import '../domain/camera.dart';
 import '../../pose_detection/data/health_status_provider.dart';
 import '../../notification/presentation/notification_bell.dart';
 import '../../profile/data/user_repository.dart';
+import '../../statistics/domain/simulation_event.dart';
+import '../../../common_widgets/user_avatar.dart';
 
 class OverviewScreen extends ConsumerWidget {
   const OverviewScreen({super.key});
@@ -53,18 +55,9 @@ class OverviewScreen extends ConsumerWidget {
                     const SizedBox(width: 16),
                     GestureDetector(
                       onTap: () => context.push('/profile'),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.yellow.shade100,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                          image: DecorationImage(
-                            image: NetworkImage(user.avatarUrl),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
+                      child: UserAvatar(
+                        avatarUrl: user.avatarUrl,
+                        radius: 18,
                       ),
                     ),
                   ],
@@ -265,32 +258,26 @@ class OverviewScreen extends ConsumerWidget {
                   )
                 : Builder(
                     builder: (context) {
-                      String? imagePath;
-                      // Priority 1: Config thumbnail (from Demo setup)
-                      if (camera.config?.thumbnailUrl != null) {
-                        imagePath = camera.config!.thumbnailUrl;
-                      }
-                      // Priority 2: Latest Event Snapshot
-                      else if (camera.events.isNotEmpty && camera.events.any((e) => e.snapshotUrl != null)) {
-                        imagePath = camera.events.firstWhere((e) => e.snapshotUrl != null).snapshotUrl;
-                      }
+                      final configThumbnail = camera.config?.thumbnailUrl;
 
-                      if (imagePath != null) {
-                        return Container(
-                          width: double.infinity,
-                          height: double.infinity,
-                          color: Colors.black, // Background for the fitted image
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.file(
-                              File(imagePath),
-                              fit: BoxFit.contain, // Changed to contain as requested
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(color: Colors.grey[900]);
-                              },
+                      // Find the latest event for this camera from the global state
+                      final cameraEvents = healthState.events.where((e) => e.cameraId == camera.id).toList();
+                      final latestEvent = cameraEvents.isNotEmpty ? cameraEvents.first : null;
+
+                      if (configThumbnail != null) {
+                        return _buildImageWrapper(File(configThumbnail).existsSync() ? Image.file(File(configThumbnail)) : null);
+                      } else if (latestEvent != null) {
+                        if (latestEvent.remoteImageUrl != null) {
+                          return _buildImageWrapper(
+                            Image.network(
+                              latestEvent.remoteImageUrl!,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) => _buildLocalFallback(latestEvent),
                             ),
-                          ),
-                        );
+                          );
+                        } else if (latestEvent.snapshotUrl != null) {
+                          return _buildImageWrapper(_buildLocalFallback(latestEvent));
+                        }
                       }
                       return const Center(child: Icon(Icons.videocam_off, color: Colors.white54));
                     },
@@ -382,5 +369,25 @@ class OverviewScreen extends ConsumerWidget {
     );
   }
 
+  Widget _buildImageWrapper(Widget? child) {
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      color: Colors.black,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: child ?? Container(color: Colors.grey[900]),
+      ),
+    );
+  }
 
+  Widget _buildLocalFallback(SimulationEvent event) {
+    if (event.snapshotUrl != null && File(event.snapshotUrl!).existsSync()) {
+      return Image.file(
+        File(event.snapshotUrl!),
+        fit: BoxFit.contain,
+      );
+    }
+    return Container(color: Colors.grey[900]);
+  }
 }

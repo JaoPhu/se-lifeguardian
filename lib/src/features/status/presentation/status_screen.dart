@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../pose_detection/data/health_status_provider.dart';
 import '../../notification/presentation/notification_bell.dart';
 import '../../profile/data/user_repository.dart';
+import '../../../common_widgets/user_avatar.dart';
 
 class StatusScreen extends ConsumerWidget {
   const StatusScreen({super.key});
@@ -49,18 +50,9 @@ class StatusScreen extends ConsumerWidget {
                     const SizedBox(width: 16),
                     GestureDetector(
                       onTap: () => context.push('/profile'),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.yellow.shade100,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                          image: DecorationImage(
-                            image: NetworkImage(user.avatarUrl),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
+                      child: UserAvatar(
+                        avatarUrl: user.avatarUrl,
+                        radius: 18,
                       ),
                     ),
                   ],

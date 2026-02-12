@@ -7,6 +7,7 @@ class SimulationEvent {
   final String? duration; // X.XX hr
   final String? description;
   final String? snapshotUrl;
+  final String? remoteImageUrl; // Firebase Storage URL
   final bool isCritical;
   final bool isVerified; // Cloud verification status
   final double? confidence; // Verification confidence score
@@ -22,6 +23,7 @@ class SimulationEvent {
     this.duration,
     this.description,
     this.snapshotUrl,
+    this.remoteImageUrl,
     this.isCritical = false,
     this.isVerified = false,
     this.confidence,
@@ -61,6 +63,7 @@ class SimulationEvent {
     String? duration,
     String? description,
     String? snapshotUrl,
+    String? remoteImageUrl,
     bool? isCritical,
     bool? isVerified,
     double? confidence,
@@ -76,6 +79,7 @@ class SimulationEvent {
       duration: duration ?? this.duration,
       description: description ?? this.description,
       snapshotUrl: snapshotUrl ?? this.snapshotUrl,
+      remoteImageUrl: remoteImageUrl ?? this.remoteImageUrl,
       isCritical: isCritical ?? this.isCritical,
       isVerified: isVerified ?? this.isVerified,
       confidence: confidence ?? this.confidence,
@@ -94,6 +98,7 @@ class SimulationEvent {
       'duration': duration,
       'description': description,
       'snapshotUrl': snapshotUrl,
+      'remoteImageUrl': remoteImageUrl,
       'isCritical': isCritical,
       'isVerified': isVerified,
       'confidence': confidence,
@@ -112,6 +117,7 @@ class SimulationEvent {
       duration: json['duration'] as String?,
       description: json['description'] as String?,
       snapshotUrl: json['snapshotUrl'] as String?,
+      remoteImageUrl: json['remoteImageUrl'] as String?,
       isCritical: json['isCritical'] as bool? ?? false,
       isVerified: json['isVerified'] as bool? ?? false,
       confidence: (json['confidence'] as num?)?.toDouble(),

@@ -1,21 +1,129 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lifeguardian/src/features/authentication/data/email_service.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/widgets/auth_text_field.dart';
+import 'package:lifeguardian/src/features/authentication/providers/auth_providers.dart';
 
-class ForgotPasswordScreen extends StatefulWidget {
+class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
 
   @override
-  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+  ConsumerState<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
-class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   final _emailController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void dispose() {
     _emailController.dispose();
     super.dispose();
+  }
+
+  Future<void> _sendOtp() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your email')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // 1. Check if user exists
+      final authRepo = ref.read(authRepositoryProvider);
+      final exists = await authRepo.checkUserExists(email);
+
+      if (!exists) {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Account Not Found'),
+            content: const Text('There is no account associated with this email address. Please check your email or register a new account.'),
+            actions: [
+              TextButton(
+                onPressed: () => context.pop(),
+                child: const Text('OK', style: TextStyle(color: Color(0xFF0D9488))),
+              ),
+            ],
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // 2. Generate and Send OTP
+      if (!mounted) return;
+      
+      final otp = EmailService.generateOTP();
+      final success = await EmailService.sendOTP(email, otp);
+
+      if (!mounted) return;
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ส่งรหัสยืนยันไปยังอีเมลของคุณแล้ว')),
+        );
+        context.push('/otp-verification', extra: {
+          'email': email,
+          'targetOTP': otp, // Pass the generated OTP for verification
+        });
+      } else {
+        // Fallback option
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('ส่งรหัสไม่สำเร็จ'),
+            content: const Text('ไม่สามารถส่งรหัส OTP ได้ คุณต้องการรับลิ้งค์รีเซ็ตรหัสผ่านแทนหรือไม่?'),
+            actions: [
+              TextButton(
+                onPressed: () => context.pop(),
+                child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey)),
+              ),
+              TextButton(
+                onPressed: () {
+                  context.pop();
+                  _sendResetLink(email);
+                },
+                child: const Text('ส่งลิ้งค์', style: TextStyle(color: Color(0xFF0D9488))),
+              ),
+            ],
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _sendResetLink(String email) async {
+    setState(() => _isLoading = true);
+    try {
+      await ref.read(authRepositoryProvider).sendPasswordReset(email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password reset link sent to your email')),
+      );
+      context.pop(); // Go back to login
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -107,9 +215,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () {
-                    context.push('/otp-verification');
-                  },
+                  onPressed: _isLoading ? null : _sendOtp,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0D9488),
                     foregroundColor: Colors.white,
@@ -119,13 +225,19 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Send',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Text(
+                          'Send',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
             ],

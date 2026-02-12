@@ -3,6 +3,7 @@ class User {
   final String name;
   final String username;
   final String email;
+  final String phoneNumber;
   final String avatarUrl;
   final String birthDate;
   final String age;
@@ -14,12 +15,15 @@ class User {
   final String currentMedications;
   final String drugAllergies;
   final String foodAllergies;
+  final String? inviteCode;
+  final String? sessionId;
 
   const User({
     required this.id,
     required this.name,
     required this.username,
     required this.email,
+    required this.phoneNumber,
     required this.avatarUrl,
     required this.birthDate,
     required this.age,
@@ -31,6 +35,8 @@ class User {
     required this.currentMedications,
     required this.drugAllergies,
     required this.foodAllergies,
+    this.inviteCode,
+    this.sessionId,
   });
 
   User copyWith({
@@ -38,6 +44,7 @@ class User {
     String? name,
     String? username,
     String? email,
+    String? phoneNumber,
     String? avatarUrl,
     String? birthDate,
     String? age,
@@ -49,12 +56,15 @@ class User {
     String? currentMedications,
     String? drugAllergies,
     String? foodAllergies,
+    String? inviteCode,
+    String? sessionId,
   }) {
     return User(
       id: id ?? this.id,
       name: name ?? this.name,
       username: username ?? this.username,
       email: email ?? this.email,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       birthDate: birthDate ?? this.birthDate,
       age: age ?? this.age,
@@ -66,6 +76,8 @@ class User {
       currentMedications: currentMedications ?? this.currentMedications,
       drugAllergies: drugAllergies ?? this.drugAllergies,
       foodAllergies: foodAllergies ?? this.foodAllergies,
+      inviteCode: inviteCode ?? this.inviteCode,
+      sessionId: sessionId ?? this.sessionId,
     );
   }
 }

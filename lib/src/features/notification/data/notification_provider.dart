@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../presentation/notification_screen.dart'; // Import NotificationItem class
+import '../presentation/notification_screen.dart';
+import 'notification_repository.dart';
 
 class NotificationState {
   final List<NotificationItem> notifications;
@@ -10,31 +12,51 @@ class NotificationState {
 }
 
 class NotificationNotifier extends StateNotifier<NotificationState> {
-  NotificationNotifier() : super(NotificationState(notifications: [
-    // Initial Mock Data
-      NotificationItem(
-        id: '1',
-        message: 'Your health signal is stable for the last 24 hours.',
-        type: 'success',
-        isNew: true,
-      ),
-      NotificationItem(
-        id: '2',
-        message: 'Suspicious movement detected at 3:15 PM.',
-        type: 'warning',
-        isNew: true,
-      ),
-      NotificationItem(
-        id: '3',
-        message: 'System update completed successfully.',
-        type: 'success',
-      ),
-      NotificationItem(
-        id: '4',
-        message: 'Emergency contact "Dad" has been notified.',
-        type: 'error',
-      ),
-  ]));
+  final NotificationRepository _repo;
+  StreamSubscription? _subscription;
+
+  NotificationNotifier(this._repo) : super(NotificationState(notifications: [])) {
+    _init();
+  }
+
+  void _init() async {
+    // TODO: Fetch real subscribed UIDs from UserRepository or GroupRepository
+    // For now, we simulate an empty list or a hardcoded one for testing if needed.
+    // In a real app, this would be: 
+    // final user = _ref.read(userRepositoryProvider).currentUser;
+    // final initialTargets = user.subscribedTo ?? [];
+    
+    final List<String> targetUids = []; 
+    // Example: targetUids.add('owner_uid_123');
+
+    _subscription = _repo.watchNotifications(targetUids: targetUids).listen((models) {
+      final items = models.map((m) {
+        String uiType = 'info';
+        if (m.type.name == 'success') uiType = 'success';
+        if (m.type.name == 'warning') uiType = 'warning';
+        if (m.type.name == 'danger') uiType = 'error';
+
+        // simple logic: if created in last 5 mins, mark as new for now (or manage via local storage/firestore field)
+        // For history, we just show them.
+        final isNew = DateTime.now().difference(m.date).inMinutes < 5; 
+
+        return NotificationItem(
+          id: m.id,
+          message: m.message,
+          type: uiType,
+          isNew: isNew,
+        );
+      }).toList();
+
+      state = NotificationState(notifications: items);
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
 
   void markAllAsRead() {
     final updatedList = state.notifications.map((n) {
@@ -48,11 +70,14 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
     state = NotificationState(notifications: updatedList);
   }
 
-  void addNotification(NotificationItem item) {
-    state = NotificationState(notifications: [item, ...state.notifications]);
+  Future<void> addNotification(NotificationItem item) async {
+    // This might be used by Simulation/Logic to push local alerts to Firestore
+    // But typically the backend or detector does this.
+    // For now, we don't implementation writes here, as Repo handles it.
   }
 }
 
 final notificationProvider = StateNotifierProvider<NotificationNotifier, NotificationState>((ref) {
-  return NotificationNotifier();
+  final repo = ref.watch(notificationRepositoryProvider);
+  return NotificationNotifier(repo);
 });

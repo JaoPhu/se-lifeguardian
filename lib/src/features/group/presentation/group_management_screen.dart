@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../features/profile/data/user_repository.dart';
+import '../../../common_widgets/user_avatar.dart';
 
 class GroupManagementScreen extends ConsumerStatefulWidget {
   const GroupManagementScreen({super.key});
@@ -13,7 +14,6 @@ class GroupManagementScreen extends ConsumerStatefulWidget {
 
 class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
   // Mock Data
-  final String _inviteCode = 'LG-4921';
   String _activeTab = 'my-group'; // 'my-group' or 'join-group'
   String _joinCode = '';
 
@@ -24,6 +24,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
       'name': 'Anna',
       'role': 'Owner (You)',
       'roleType': 'Owner',
+      'avatarUrl': '', // Prepared for real data
       'avatarSeed': 'Anna',
       'email': 'anna@example.com',
       'phone': '081-222-3333'
@@ -33,6 +34,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
       'name': 'Grandson',
       'role': 'Viewer',
       'roleType': 'Viewer',
+      'avatarUrl': '',
       'avatarSeed': 'Grandson',
       'email': 'grandson@example.com',
       'phone': '081-333-4444'
@@ -42,6 +44,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
       'name': 'Doctor Somchai',
       'role': 'Admin',
       'roleType': 'Admin',
+      'avatarUrl': '',
       'avatarSeed': 'Somchai',
       'email': 'somchai@example.com',
       'phone': '081-444-5555'
@@ -57,6 +60,17 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
   ];
 
 
+
+
+  void _handleCopyCode() {
+    final user = ref.read(userProvider);
+    if (user.inviteCode != null) {
+      Clipboard.setData(ClipboardData(text: user.inviteCode!));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invite code copied to clipboard')),
+      );
+    }
+  }
 
   void _showRoleSelector(Map<String, dynamic> member) {
     if (member['roleType'] == 'Owner') return;
@@ -102,16 +116,9 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  image: DecorationImage(
-                    image: NetworkImage('https://api.dicebear.com/7.x/avataaars/svg?seed=${member['avatarSeed']}'),
-                    fit: BoxFit.cover,
-                  ),
-                ),
+              UserAvatar(
+                avatarUrl: member['avatarUrl'] ?? '',
+                radius: 50,
               ),
               const SizedBox(height: 16),
               Text(member['name'], style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
@@ -152,12 +159,6 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
     );
   }
 
-  void _handleCopyCode() {
-    Clipboard.setData(ClipboardData(text: _inviteCode));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Invite code copied to clipboard')),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -200,18 +201,9 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                         const SizedBox(width: 16),
                         GestureDetector(
                           onTap: () => context.push('/profile'),
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: Colors.yellow.shade100,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2),
-                              image: DecorationImage(
-                                image: NetworkImage(user.avatarUrl),
-                                fit: BoxFit.cover,
-                              ),
-                            ),
+                          child: UserAvatar(
+                            avatarUrl: user.avatarUrl,
+                            radius: 18,
                           ),
                         ),
                       ],
@@ -322,6 +314,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
   }
 
   Widget _buildMyGroupContent() {
+    final user = ref.watch(userProvider);
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -350,7 +343,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      _inviteCode,
+                      user.inviteCode ?? 'Loading...',
                       style: const TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
@@ -534,16 +527,9 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
         children: [
           Row(
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: theme.scaffoldBackgroundColor,
-                  shape: BoxShape.circle,
-                  image: DecorationImage(
-                     image: NetworkImage('https://api.dicebear.com/7.x/avataaars/svg?seed=${req['avatarSeed']}'),
-                  ),
-                ),
+              UserAvatar(
+                avatarUrl: req['avatarUrl'] ?? '',
+                radius: 20,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -606,6 +592,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
   }
 
   Widget _buildMemberItem(Map<String, dynamic> member) {
+    final user = ref.watch(userProvider);
     final roleType = member['roleType'];
     final isDark = Theme.of(context).brightness == Brightness.dark;
     Color roleBgColor;
@@ -643,16 +630,9 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
         ),
         child: Row(
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                image: DecorationImage(
-                  image: NetworkImage('https://api.dicebear.com/7.x/avataaars/svg?seed=${member['avatarSeed']}'),
-                  fit: BoxFit.cover,
-                ),
-              ),
+            UserAvatar(
+              avatarUrl: (member['id'] == '1' && member['name'] == 'Anna') ? user.avatarUrl : (member['avatarUrl'] ?? ''),
+              radius: 20,
             ),
             const SizedBox(width: 12),
             Expanded(

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-// import 'package:lucide_icons/lucide_icons.dart'; // Unused
+import '../../../common_widgets/user_avatar.dart';
 
 class ProfileInfo extends StatelessWidget {
   final String name;
@@ -23,17 +23,9 @@ class ProfileInfo extends StatelessWidget {
       children: [
         const SizedBox(height: 16),
         // Avatar Section
-        Container(
-          width: 100,
-          height: 100,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: theme.dividerColor, width: 2),
-            image: DecorationImage(
-              image: NetworkImage(avatarUrl),
-              fit: BoxFit.cover,
-            ),
-          ),
+        UserAvatar(
+          avatarUrl: avatarUrl,
+          radius: 50,
         ),
         const SizedBox(height: 12),
         // Info Section

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_providers.dart';
+import '../../profile/data/user_repository.dart';
 
 final authControllerProvider =
     StateNotifierProvider<AuthController, AsyncValue<void>>((ref) {
@@ -14,6 +15,7 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
       await ref.read(authRepositoryProvider).registerWithEmail(email, password);
+      await ref.read(userProvider.notifier).loadUser();
     });
   }
 
@@ -21,6 +23,7 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
       await ref.read(authRepositoryProvider).signInWithEmail(email, password);
+      await ref.read(userProvider.notifier).loadUser();
     });
   }
 
@@ -31,11 +34,37 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
     });
   }
 
-  // ✅ เพิ่มอันนี้ (Google Sign-in)
+  // ✅ ปรับปรุงให้แยก Login / Register
   Future<void> loginWithGoogle() async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      await ref.read(authRepositoryProvider).signInWithGoogle();
+      await ref.read(authRepositoryProvider).signInWithGoogle(isLogin: true);
+      await ref.read(userProvider.notifier).loadUser();
+    });
+  }
+
+  Future<void> registerWithGoogle() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      await ref.read(authRepositoryProvider).signInWithGoogle(isLogin: false);
+      await ref.read(userProvider.notifier).loadUser();
+    });
+  }
+
+  // ✅ ปรับปรุงให้แยก Login / Register
+  Future<void> loginWithApple() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      await ref.read(authRepositoryProvider).signInWithApple(isLogin: true);
+      await ref.read(userProvider.notifier).loadUser();
+    });
+  }
+
+  Future<void> registerWithApple() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      await ref.read(authRepositoryProvider).signInWithApple(isLogin: false);
+      await ref.read(userProvider.notifier).loadUser();
     });
   }
 
@@ -43,6 +72,15 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
       await ref.read(authRepositoryProvider).signOut();
+      await ref.read(userProvider.notifier).loadUser();
+    });
+  }
+
+  Future<void> deleteAccount() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      await ref.read(authRepositoryProvider).deleteAccount();
+      await ref.read(userProvider.notifier).loadUser();
     });
   }
 }
