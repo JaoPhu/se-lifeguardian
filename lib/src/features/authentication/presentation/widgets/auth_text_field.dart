@@ -9,6 +9,9 @@ class AuthTextField extends StatefulWidget {
   final TextInputType keyboardType;
   final Widget? suffixIcon;
 
+  final bool readOnly;
+  final FocusNode? focusNode;
+
   const AuthTextField({
     super.key,
     required this.label,
@@ -18,6 +21,8 @@ class AuthTextField extends StatefulWidget {
     this.controller,
     this.keyboardType = TextInputType.text,
     this.suffixIcon,
+    this.readOnly = false,
+    this.focusNode,
   });
 
   @override
@@ -77,6 +82,8 @@ class _AuthTextFieldState extends State<AuthTextField> {
             ),
             child: TextField(
               controller: widget.controller,
+              focusNode: widget.focusNode,
+              readOnly: widget.readOnly,
               obscureText: widget.isPassword && _obscureText,
               keyboardType: widget.keyboardType,
               style: TextStyle(

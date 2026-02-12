@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'history_repository.dart';
 import 'history_repository_impl.dart';
@@ -9,7 +11,7 @@ final selectedDateProvider = StateProvider<DateTime>((ref) {
 });
 
 final historyRepositoryProvider = Provider<HistoryRepository>((ref) {
-  return HistoryRepositoryImpl();
+  return HistoryRepositoryImpl(FirebaseFirestore.instance, FirebaseAuth.instance);
 });
 
 final dailyStatsProvider = FutureProvider.family<DailyStatsModel, DateTime>((ref, date) async {

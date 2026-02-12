@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../common_widgets/theme_provider.dart';
 import '../../profile/data/user_repository.dart';
+import '../../authentication/controllers/auth_controller.dart';
+import '../../../common_widgets/user_avatar.dart';
+import '../../notification/presentation/notification_bell.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -42,26 +45,7 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
-                Stack(
-                  children: [
-                    IconButton(
-                      icon: const Icon(LucideIcons.bell, color: Colors.white, size: 28),
-                      onPressed: () => context.push('/notifications'),
-                    ),
-                    Positioned(
-                      right: 10,
-                      top: 10,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                        constraints: const BoxConstraints(minWidth: 8, minHeight: 8),
-                      ),
-                    ),
-                  ],
-                ),
+                const NotificationBell(color: Colors.white, whiteBorder: true),
               ],
             ),
           ),
@@ -99,9 +83,9 @@ class SettingsScreen extends ConsumerWidget {
                                 shape: BoxShape.circle,
                                 border: Border.all(color: theme.dividerColor, width: 1.5),
                               ),
-                              child: CircleAvatar(
+                              child: UserAvatar(
+                                avatarUrl: user.avatarUrl,
                                 radius: 34,
-                                backgroundImage: NetworkImage(user.avatarUrl),
                               ),
                             ),
                             const SizedBox(width: 16),
@@ -252,20 +236,6 @@ class SettingsScreen extends ConsumerWidget {
                       child: Column(
                         children: [
 
-                          // Reset Password
-                          ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
-                            title: const Text(
-                              'Reset Password',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Color(0xFFEF4444),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            onTap: () {},
-                          ),
-                          Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
                           // Logout
                           ListTile(
                             contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
@@ -277,7 +247,116 @@ class SettingsScreen extends ConsumerWidget {
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
-                            onTap: () {},
+                            onTap: () {
+                              ref.read(authControllerProvider.notifier).logout();
+                              context.go('/welcome');
+                            },
+                          ),
+                          Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
+                          // Reset Password
+                          ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
+                            title: const Text(
+                              'Reset Password',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Color(0xFFEF4444), // Kept red as requested? Or should it be normal? Previous code had it red.
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            onTap: () {
+                              // Forgot password logic or navigation
+                              // Assuming navigation or dialog
+                            },
+                          ),
+                          Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
+                          // Delete Account
+                          ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
+                            title: const Text(
+                              'Delete Account',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Color(0xFFEF4444), // Red color
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            onTap: () {
+                              showDialog(
+                                context: context,
+                                builder: (context) {
+                                  String confirmText = '';
+                                  return StatefulBuilder(
+                                    builder: (context, setState) {
+                                      return AlertDialog(
+                                        title: const Text('Delete Account'),
+                                        content: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'Are you sure you want to delete your account? This action cannot be undone.',
+                                            ),
+                                            const SizedBox(height: 16),
+                                            const Text(
+                                              'Type "Confirm" to proceed:',
+                                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            TextField(
+                                              autofocus: true,
+                                              onChanged: (value) {
+                                                setState(() {
+                                                  confirmText = value;
+                                                });
+                                              },
+                                              decoration: InputDecoration(
+                                                hintText: 'Type "Confirm"',
+                                                border: OutlineInputBorder(
+                                                  borderRadius: BorderRadius.circular(8),
+                                                ),
+                                                contentPadding: const EdgeInsets.all(12),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.of(context).pop(),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          TextButton(
+                                            onPressed: confirmText.trim().toLowerCase() == 'confirm' ? () async {
+                                              Navigator.of(context).pop(); // Close dialog
+                                              
+                                              // Show loading indicator if you want, but authController state handles it
+                                              await ref.read(authControllerProvider.notifier).deleteAccount();
+                                              
+                                              final authState = ref.read(authControllerProvider);
+                                              if (authState.hasError) {
+                                                if (context.mounted) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    SnackBar(
+                                                      content: Text('Failed to delete: ${authState.error}'),
+                                                      backgroundColor: Colors.red,
+                                                    ),
+                                                  );
+                                                }
+                                              } else {
+                                                if (context.mounted) {
+                                                  context.go('/welcome');
+                                                }
+                                              }
+                                            } : null,
+                                            child: Text('Delete', style: TextStyle(color: confirmText.trim().toLowerCase() == 'confirm' ? Colors.red : Colors.grey)),
+                                          ),
+                                        ],
+                                      );
+                                    }
+                                  );
+                                },
+                              );
+                            },
                           ),
                         ],
                       ),

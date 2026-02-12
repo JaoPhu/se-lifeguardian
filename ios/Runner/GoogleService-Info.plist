@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>292872685738-s8muujp6hdv453lpknjakpa8cr4m3q9v.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.292872685738-s8muujp6hdv453lpknjakpa8cr4m3q9v</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>292872685738-6ot8uu0g5u27seulvjgc6tub0ujgtbn4.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyA9qxbNlv-Dy0LQ5TDqn14lgoVQta2pKaM</string>
+	<key>GCM_SENDER_ID</key>
+	<string>292872685738</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.example.lifeguardian</string>
+	<key>PROJECT_ID</key>
+	<string>lifeguardian-app</string>
+	<key>STORAGE_BUCKET</key>
+	<string>lifeguardian-app.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:292872685738:ios:84c1ea1cd00e3db5d6a8d3</string>
+</dict>
+</plist>

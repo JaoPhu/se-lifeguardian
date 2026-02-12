@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../profile/data/user_repository.dart';
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends ConsumerState<SplashScreen> {
   double _progress = 0.0;
   Timer? _timer;
 
@@ -19,16 +22,37 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
     
     // Progress animation (20ms steps, 2000ms duration)
-    _timer = Timer.periodic(const Duration(milliseconds: 20), (timer) {
+    _timer = Timer.periodic(const Duration(milliseconds: 20), (timer) async {
       if (!mounted) return;
+      
       setState(() {
         _progress += 0.01;
-        if (_progress >= 1.0) {
-          _progress = 1.0;
-          timer.cancel();
+      });
+
+      if (_progress >= 1.0) {
+        _progress = 1.0;
+        timer.cancel();
+        
+        // Check Auth
+        final firebaseUser = FirebaseAuth.instance.currentUser;
+        if (firebaseUser != null) {
+          // Verify user data exists in Firestore & Load
+          await ref.read(userProvider.notifier).loadUser();
+          final user = ref.read(userProvider);
+          
+          if (mounted) {
+            // Only go to overview if the profile exists (has a name)
+            if (user.name.isNotEmpty) {
+              context.go('/overview');
+            } else {
+              // No profile found in Firestore, redirect to welcome
+              context.go('/welcome');
+            }
+          }
+        } else {
           if (mounted) context.go('/welcome');
         }
-      });
+      }
     });
   }
 

@@ -2,7 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
-  const OtpVerificationScreen({super.key});
+  const OtpVerificationScreen({
+    super.key,
+    required this.email,
+    required this.targetOTP,
+  });
+
+  final String email;
+  final String targetOTP;
 
   @override
   State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
@@ -11,6 +18,7 @@ class OtpVerificationScreen extends StatefulWidget {
 class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   final List<TextEditingController> _controllers = List.generate(4, (index) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(4, (index) => FocusNode());
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -34,6 +42,38 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       if (index > 0) {
         _focusNodes[index - 1].requestFocus();
       }
+    }
+  }
+
+  Future<void> _verifyOtp() async {
+    final otp = _controllers.map((c) => c.text).join();
+    if (otp.length != 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('กรุณากรอกรหัส 4 หลัก')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    // Simulate network delay for better UX
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    if (otp == widget.targetOTP) {
+       if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ยืนยันตัวตนสำเร็จ')),
+        );
+        // Navigate to reset password
+        context.push('/reset-password', extra: {
+          'email': widget.email,
+        });
+    } else {
+       if (!mounted) return;
+       ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('รหัส OTP ไม่ถูกต้อง')),
+      );
+      setState(() => _isLoading = false);
     }
   }
 
@@ -109,7 +149,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                   style: const TextStyle(fontSize: 14, color: Colors.grey, height: 1.5),
                   children: [
                     TextSpan(
-                      text: 'xxxx@gmail.com',
+                      text: widget.email,
                       style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87),
                     ),
                   ],
@@ -158,7 +198,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     children: [
                       const Text("Don't have a code? ", style: TextStyle(color: Colors.grey, fontSize: 12)),
                       GestureDetector(
-                        onTap: () {},
+                        onTap: () {
+                          // Optional: Implement resend logic using widget.emailOTP.sendOTP() again
+                        },
                         child: const Text('Re-Send', style: TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.bold, fontSize: 12)),
                       ),
                     ],
@@ -172,9 +214,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () {
-                    context.push('/reset-password');
-                  },
+                  onPressed: _isLoading ? null : _verifyOtp,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0D9488),
                     foregroundColor: Colors.white,
@@ -184,13 +224,19 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Continue',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Text(
+                          'Continue',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
             ],

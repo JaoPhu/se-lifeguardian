@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart' as auth;
+import 'package:lifeguardian/src/features/profile/data/user_repository.dart';
+import 'package:lifeguardian/src/features/authentication/providers/auth_providers.dart';
+import 'dart:async';
 
 import 'package:lifeguardian/src/routing/scaffold_with_nav_bar.dart';
 import 'package:lifeguardian/src/features/dashboard/presentation/overview_screen.dart';
@@ -38,7 +42,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/splash',
+    refreshListenable: _AuthRefreshListenable(ref),
     routes: [
+      // ... (routes stay same)
       GoRoute(
         path: '/splash',
         parentNavigatorKey: _rootNavigatorKey,
@@ -72,12 +78,23 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/otp-verification',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const OtpVerificationScreen(),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>;
+          return OtpVerificationScreen(
+            email: extra['email'] as String,
+            targetOTP: extra['targetOTP'] as String,
+          );
+        },
       ),
       GoRoute(
         path: '/reset-password',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const ResetPasswordScreen(),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>;
+          return ResetPasswordScreen(
+            email: extra['email'] as String,
+          );
+        },
       ),
       GoRoute(
         path: '/group',
@@ -208,13 +225,72 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
     ],
     redirect: (context, state) {
-      final trialState = ref.read(trialProvider);
-      if (trialState.isLoading) return null; // Wait for check
+      final firebaseUser = ref.read(firebaseAuthProvider).currentUser;
+      final user = ref.read(userProvider);
+      final loggingIn = state.matchedLocation == '/login' || 
+                        state.matchedLocation == '/register' || 
+                        state.matchedLocation == '/welcome' ||
+                        state.matchedLocation == '/splash' ||
+                        state.matchedLocation == '/pre-login' ||
+                        state.matchedLocation == '/forgot-password' ||
+                        state.matchedLocation == '/otp-verification' ||
+                        state.matchedLocation == '/reset-password';
 
+      // 1. Not logged in -> Must go to /welcome or auth pages
+      if (firebaseUser == null) {
+        return loggingIn ? null : '/welcome';
+      }
+
+      // 2. Logged in -> Check profile completeness
+      // IMPORTANT: Wait for profile to start/finish loading (user.id becomes non-empty)
+      if (user.id.isNotEmpty && user.name.isEmpty && state.matchedLocation != '/splash') {
+        // If logged in but no profile name yet, only allow registration-related routes
+        final isAuthRoute = state.matchedLocation == '/welcome' ||
+                            state.matchedLocation == '/pre-login' ||
+                            state.matchedLocation == '/login' ||
+                            state.matchedLocation == '/register' ||
+                            state.matchedLocation == '/edit-profile';
+        
+        return isAuthRoute ? null : '/edit-profile';
+      }
+
+      // 3. Subscription/Trial check
+      final trialState = ref.read(trialProvider);
       if (trialState.isExpired && state.matchedLocation != '/expired') {
         return '/expired';
       }
+
+      // 4. Logged in and has profile -> Don't show login pages
+      if (loggingIn && user.name.isNotEmpty) {
+        return '/overview';
+      }
+
       return null;
     },
   );
 });
+
+/// A Listenable that notifies GoRouter when the Auth state changes.
+class _AuthRefreshListenable extends ChangeNotifier {
+  _AuthRefreshListenable(Ref ref) {
+    _subscription = ref.read(firebaseAuthProvider).authStateChanges().listen((_) {
+      notifyListeners();
+    });
+    // Also listen to user profile changes
+    _userSubscription = ref.listen(userProvider, (prev, next) {
+      if (prev?.name != next.name) {
+        notifyListeners();
+      }
+    }, fireImmediately: true);
+  }
+
+  late final StreamSubscription<auth.User?> _subscription;
+  late final ProviderSubscription _userSubscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    _userSubscription.close();
+    super.dispose();
+  }
+}

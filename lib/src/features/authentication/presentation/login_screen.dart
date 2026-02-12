@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // ✅ ใช้ controller
 import 'package:lifeguardian/src/features/authentication/controllers/auth_controller.dart';
+// import 'package:lifeguardian/src/features/profile/data/user_repository.dart'; // Unused
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -25,6 +26,53 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  void _onAuthError(Object e) {
+    final err = e.toString().toLowerCase();
+    if (err.contains('user-not-found') || 
+        err.contains('no user record') || 
+        err.contains('user not found')) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.account_circle_outlined, color: Color(0xFF0D9488)),
+              SizedBox(width: 8),
+              Text('ไม่พบข้อมูลบัญชี'),
+            ],
+          ),
+          content: const Text(
+            'ไม่พบอีเมลนี้ในระบบ หรือบัญชีของคุณอาจถูกลบไปแล้ว กรุณาสมัครสมาชิกเพื่อเริ่มต้นใช้งานใหม่',
+            style: TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                context.pushReplacement('/register');
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0D9488),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('สมัครสมาชิก'),
+            ),
+          ],
+        ),
+      );
+    } else if (err.contains('wrong-password') || err.contains('invalid-credential')) {
+      _showSnack('รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง');
+    } else {
+      _showSnack(e.toString());
+    }
   }
 
   void _showSnack(String msg) {
@@ -175,8 +223,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                           final s = ref.read(authControllerProvider);
                           s.whenOrNull(
-                            error: (e, st) => _showSnack(e.toString()),
-                            data: (_) => context.go('/overview'),
+                            error: (e, st) => _onAuthError(e),
+                            data: (_) {
+                              if (mounted) context.go('/overview');
+                            },
                           );
                         },
                   style: ElevatedButton.styleFrom(
@@ -238,8 +288,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                           final s = ref.read(authControllerProvider);
                           s.whenOrNull(
-                            error: (e, st) => _showSnack(e.toString()),
-                            data: (_) => context.go('/overview'),
+                            error: (e, st) => _onAuthError(e),
+                             data: (_) {
+                               if (mounted) context.go('/overview');
+                             },
                           );
                         });
                       },
@@ -256,8 +308,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           size: 24,
                         ),
                         // เดี๋ยวค่อยทำจริงทีหลัง
-                        onPressed: () =>
-                            _showSnack('Apple sign-in ยังไม่ตั้งค่า'),
+                        onPressed: () {
+                          if (isLoading) return;
+
+                          Future(() async {
+                            await ref
+                                .read(authControllerProvider.notifier)
+                                .loginWithApple();
+
+                            final s = ref.read(authControllerProvider);
+                            s.whenOrNull(
+                              error: (e, st) => _onAuthError(e),
+                              data: (_) => context.go('/overview'),
+                            );
+                          });
+                        },
                       ),
                     ),
                   ],
