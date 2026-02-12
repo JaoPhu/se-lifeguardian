@@ -20,7 +20,7 @@ class EmailService {
 
     // Create the message
     final message = Message()
-      ..from = Address(_username, _senderName)
+      ..from = const Address(_username, _senderName)
       ..recipients.add(recipientEmail)
       ..subject = 'รหัสยืนยันตัวตน LifeGuardian ของคุณ: $otp'
       ..html = '''
