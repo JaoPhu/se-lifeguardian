@@ -107,6 +107,9 @@ assets/
 - **Advanced Posture Classification**: Granular detection for **Sitting** and **Slouching** states, alongside Fall, Laying, and Walking.
 - **Temporal Analysis Engine**: Enhanced AI stability using Kalman Filters and temporal buffering for more accurate event logging.
 - **Smart Notification System**: A centralized notification hub with categorize alerts (Success, Warning, Danger).
+- **Secure Password Reset (Backend)**: Custom-built 2nd Gen Firebase Cloud Functions for secure server-side password updates via Admin SDK.
+- **Custom OTP Email System**: Direct SMTP integration with custom Thai templates for professional authentication flows.
+- **In-App Reset Flow**: Fully integrated in-app password reset UI, removing the need for external reset links.
 - **Global Theme Support**: Full support for system-aware dark and light modes using a custom `ThemeProvider`.
 
 ---
@@ -117,11 +120,12 @@ assets/
 โปรเจกต์นี้เป็นแอปพลิเคชันระบบตรวจจับท่าทางและอาการออฟฟิศซินโดรมด้วย AI (On-device) พัฒนาด้วย Flutter โดยเน้นที่ความรวดเร็วในการประมวลผลและความสวยงามของ UI ระดับ Premium
 
 **การปรับปรุงล่าสุด:**
+*   **Custom OTP & Secure Reset**: พัฒนาระบบส่งรหัส OTP ผ่านอีเมลด้วย SMTP ของเราเอง พร้อมระบบ Reset Password ที่ทำงานผ่าน Firebase Cloud Functions เพื่อความปลอดภัยสูงสุด
 *   **Code Consolidation**: ยุบรวม Folder ที่ซ้ำซ้อนและลบไฟล์ที่ไม่ได้ใช้งานออก เพื่อโครงสร้างโค้ดที่สะอาดและดูแลง่าย
-*   **CI Improvement**: แก้ไขปัญหา Linting/Analysis ทั้งหมด (22+ จุด) เพื่อให้สามารถรัน CI/CD บน GitHub ได้อย่างไร้รอยต่อ
+*   **CI Improvement**: แก้ไขปัญหา Linting/Analysis ทั้งหมดเพื่อให้สามารถรัน CI/CD บน GitHub ได้อย่างไร้รอยต่อ
 *   **UI Redesign**: อัปเกรดหน้าสถิติและระบบนำทางให้เป็นรูปแบบ Modern พร้อมปุ่ม Shield UI แบบพิเศษ
 
-> **สถานะปัจจุบัน**: พัฒนาเสร็จสมบูรณ์ทั้งระบบ **AI Stability Engine**, **Multi-Camera Support**, และผ่านการ **Cleanup** โครงสร้างโปรเจกต์ทั้งหมดแล้ว พร้อมสำหรับการต่อยอดในระดับ Production
+> **สถานะปัจจุบัน**: พัฒนาเสร็จสมบูรณ์ทั้งระบบ **Secure Auth**, **AI Stability Engine**, **Multi-Camera Support**, และผ่านการ **Cleanup** โครงสร้างโปรเจกต์ทั้งหมดแล้ว พร้อมสำหรับการต่อยอดในระดับ Production
 ---
 
 ## 📄 License
