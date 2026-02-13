@@ -1,7 +1,6 @@
-import 'dart:ui' as ui;
 import 'dart:io';
-import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart' hide PoseLandmark, PoseLandmarkType;
@@ -34,7 +33,6 @@ class PoseDetectorView extends ConsumerStatefulWidget {
 
 class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with TickerProviderStateMixin {
   final PoseDetectionService _poseService = PoseDetectionService();
-  CameraController? _cameraController;
   bool _isDetecting = false;
   
   // State for UI
@@ -80,8 +78,6 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
 
     if (widget.videoPath != null) {
       _initializeVideo();
-    } else {
-      _initializeCamera();
     }
     
     // Reset health monitoring state for new analysis session
@@ -94,8 +90,6 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   void dispose() {
     _isAnalysisLoopRunning = false;
     _loadingController.dispose();
-    _cameraController?.stopImageStream();
-    _cameraController?.dispose();
     _videoController?.dispose();
     _simTimer?.cancel();
     _poseService.close();
@@ -436,165 +430,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     _isAnalysisLoopRunning = false;
   }
 
-  Future<void> _initializeCamera() async {
-    final status = await Permission.camera.request();
-    if (status != PermissionStatus.granted) {
-      setState(() => _statusText = "Camera permission denied");
-      return;
-    }
 
-    final cameras = await availableCameras();
-    if (cameras.isEmpty) {
-       setState(() => _statusText = "No camera found");
-       return;
-    }
-
-    // Default to front camera for selfie/fitness use-case if available, else back
-    final camera = cameras.firstWhere(
-      (c) => c.lensDirection == CameraLensDirection.front,
-      orElse: () => cameras.first,
-    );
-
-    _cameraController = CameraController(
-      camera,
-      ResolutionPreset.medium,
-      enableAudio: false,
-      imageFormatGroup: Platform.isAndroid 
-          ? ImageFormatGroup.nv21 
-          : ImageFormatGroup.bgra8888,
-    );
-
-    try {
-      await _cameraController!.initialize();
-      await _cameraController!.startImageStream(_processCameraImage);
-      setState(() {
-        _statusText = "Camera Ready";
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _statusText = "Camera error: $e";
-        _isLoading = false;
-      });
-    }
-  }
-
-  int _frameCounter = 0;
-  void _processCameraImage(CameraImage image) async {
-    _frameCounter++;
-    if (_frameCounter % 2 != 0) { // Process every 2nd frame (~15 FPS) for smoother UI
-      return;
-    }
-    if (_isDetecting) {
-      return;
-    }
-    _isDetecting = true;
-
-    try {
-      final inputImage = _inputImageFromCameraImage(image);
-      if (inputImage == null) {
-        return;
-      }
-
-      final poses = await _poseService.detect(inputImage, Uint8List(0));
-      
-      final List<PersonPose> detectedPersons = [];
-      final List<Color> personColors = [
-        const Color(0xFF0D9492), // Teal
-        Colors.orange,
-        Colors.blue,
-        Colors.purple,
-        Colors.pink,
-        Colors.amber,
-        Colors.cyan,
-        Colors.lime,
-      ];
-
-      for (var pose in poses) {
-        final tp = pose;
-        final landmarks = tp.smoothedLandmarks;
-        final personColor = personColors[tp.id % personColors.length];
-        
-        final isLaying = _poseService.isLaying(landmarks);
-        final isSitting = _poseService.isSitting(landmarks);
-        final isSlouching = _poseService.isSlouching(landmarks);
-        final isWalking = _poseService.isWalking(landmarks);
-        final isFalling = _poseService.isFalling(tp);
-
-        detectedPersons.add(PersonPose(
-          id: tp.id,
-          landmarks: landmarks,
-          color: personColor,
-          isLaying: isLaying,
-          isSitting: isSitting,
-          isSlouching: isSlouching,
-          isWalking: isWalking,
-          isFalling: isFalling,
-        ));
-      }
-
-      if (mounted) {
-        setState(() {
-          _persons.clear();
-          _persons.addAll(detectedPersons);
-          _imageSize = inputImage.metadata?.size;
-          _imageRotation = inputImage.metadata?.rotation;
-          
-          if (_persons.isNotEmpty) {
-            final mainPerson = _persons.first;
-            
-             String detectedActivity = 'standing';
-            if (mainPerson.isFalling) {
-              detectedActivity = 'falling';
-            } else if (mainPerson.isLaying) {
-              detectedActivity = 'laying';
-            } else if (mainPerson.isSitting) {
-              detectedActivity = 'sitting';
-            } else if (mainPerson.isSlouching) {
-              detectedActivity = 'slouching';
-            } else if (mainPerson.isWalking) {
-              detectedActivity = 'walking';
-            }
-            
-            if (mainPerson.isFalling) {
-               _statusText = "IMPACT DETECTED!";
-            } else if (mainPerson.isLaying) {
-              _statusText = "Laying / Fallen!";
-            } else if (mainPerson.isSlouching) {
-              _statusText = "Unconscious / Slouching";
-            } else if (mainPerson.isSitting) {
-              _statusText = "Sitting";
-            } else if (mainPerson.isWalking) {
-              _statusText = "Walking / Active";
-            } else {
-              _statusText = "Standing Still";
-            }
-
-            // Report live activity
-            final healthState = ref.read(healthStatusProvider);
-            // Trigger capture on impact or state change
-            if (mainPerson.isFalling || healthState.currentActivity != detectedActivity) {
-               _captureSnapshot(force: mainPerson.isFalling).then((path) {
-                 ref.read(healthStatusProvider.notifier).updateActivity(
-                   detectedActivity, 
-                   snapshotPath: path,
-                   cameraId: _registeredCameraId,
-                 );
-               });
-            }
-          } else {
-             _statusText = "No Pose Detected";
-          }
-        });
-      }
-    } catch (e) {
-      debugPrint("Detection error: $e");
-    } finally {
-      if (mounted) {
-        _isDetecting = false;
-      }
-    }
-  }
 
   Future<String?> _captureSnapshot({bool force = false}) async {
     // Prevent multiple captures for the same fall (debounce 30 seconds)
@@ -637,60 +473,13 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     return null;
   }
 
-  InputImage? _inputImageFromCameraImage(CameraImage image) {
-    if (_cameraController == null) {
-      return null;
-    }
-
-    final camera = _cameraController!.description;
-    final sensorOrientation = camera.sensorOrientation;
-    
-    // Official ML Kit Coordinate Mapping (Matching iOS/Android Docs)
-    InputImageRotation? rotation;
-    if (Platform.isIOS) {
-      rotation = InputImageRotationValue.fromRawValue(sensorOrientation);
-    } else {
-      var rotationOffset = 0;
-      if (camera.lensDirection == CameraLensDirection.front) {
-        rotationOffset = (sensorOrientation + 0) % 360;
-      } else {
-        rotationOffset = (sensorOrientation - 0 + 360) % 360;
-      }
-      rotation = InputImageRotationValue.fromRawValue(rotationOffset);
-    }
-    
-    if (rotation == null) {
-      return null;
-    }
-
-    final format = InputImageFormatValue.fromRawValue(image.format.raw);
-    if (format == null) {
-      return null;
-    }
-
-    if (image.planes.isEmpty) {
-      return null;
-    }
-
-    final plane = image.planes.first;
-
-    return InputImage.fromBytes(
-      bytes: plane.bytes,
-      metadata: InputImageMetadata(
-        size: Size(image.width.toDouble(), image.height.toDouble()),
-        rotation: rotation,
-        format: format,
-        bytesPerRow: plane.bytesPerRow,
-      ),
-    );
-  }
 
 
   @override
   Widget build(BuildContext context) {
-    if (widget.videoPath == null && (_cameraController == null || !_cameraController!.value.isInitialized)) {
-      return Scaffold(
-        body: Center(child: Text(_statusText)),
+    if (widget.videoPath == null) {
+      return const Scaffold(
+        body: Center(child: Text("No video path provided.")),
       );
     }
 
@@ -866,12 +655,9 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                   builder: (context, constraints) {
                     final containerSize = constraints.biggest;
                     
-                    // Determine video ratio
                     double videoRatio = 1.0;
                     if (widget.videoPath != null && _videoController != null && _videoController!.value.isInitialized) {
                       videoRatio = _videoController!.value.aspectRatio;
-                    } else if (_cameraController != null && _cameraController!.value.isInitialized) {
-                      videoRatio = _cameraController!.value.aspectRatio;
                     }
 
                     return Center(
@@ -886,13 +672,12 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                             ),
                             if (_persons.isNotEmpty && _imageSize != null && _imageRotation != null)
                               CustomPaint(
-                                painter: PosePainter(
-                                  _persons,
-                                  _imageSize!,
-                                  _imageRotation!,
-                                  _cameraController?.description.lensDirection ?? CameraLensDirection.back,
+                                  painter: PosePainter(
+                                    _persons,
+                                    _imageSize!,
+                                    _imageRotation!,
+                                  ),
                                 ),
-                              ),
                             if (_showDiagnosticInsights && _isAnalysisComplete) _buildDiagnosticOverlay(),
                           ],
                         ),
@@ -1441,7 +1226,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     if (widget.videoPath != null && _videoController != null && _videoController!.value.isInitialized) {
       return VideoPlayer(_videoController!);
     } else {
-      return CameraPreview(_cameraController!);
+      return const Center(child: Text("Initializing video..."));
     }
   }
 

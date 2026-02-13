@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -34,7 +35,11 @@ class _VideoPreviewState extends State<VideoPreview> {
 
   Future<void> _initialize() async {
     await _controller?.dispose();
-    _controller = VideoPlayerController.file(File(widget.videoPath));
+    if (kIsWeb) {
+      _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoPath));
+    } else {
+      _controller = VideoPlayerController.file(File(widget.videoPath));
+    }
     await _controller!.initialize();
     if (mounted) setState(() {});
   }
@@ -63,9 +68,9 @@ class DemoSetupScreen extends ConsumerStatefulWidget {
 
 class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
   final _cameraNameController = TextEditingController(text: 'Camera view : Desk');
-  final String _startTime = '08:00';
-  final int _speed = 1;
-  final DateTime _date = DateTime.now();
+  TimeOfDay _startTime = const TimeOfDay(hour: 8, minute: 0);
+  double _speed = 1.0;
+  DateTime _date = DateTime.now();
   String? _videoPath;
   final ImagePicker _picker = ImagePicker();
 
@@ -102,37 +107,39 @@ class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                GestureDetector(
-                   onTap: () => context.pop(),
-                   child: const Icon(Icons.arrow_back, color: Colors.white),
-                ),
-                const Text(
-                  'Demo',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
+                // Left: Profile Icon (as requested)
                 Row(
                   children: [
-                    const NotificationBell(color: Colors.white, whiteBorder: true),
-                    const SizedBox(width: 16),
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: Colors.yellow.shade100,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                        image: DecorationImage(
-                          image: NetworkImage(user.avatarUrl),
-                          fit: BoxFit.cover,
+                    GestureDetector(
+                      onTap: () => context.push('/profile'),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.yellow.shade100,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                          image: DecorationImage(
+                            image: NetworkImage(user.avatarUrl),
+                            fit: BoxFit.cover,
+                          ),
                         ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Demo Setup',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
                     ),
                   ],
                 ),
+                
+                // Right: Notification Icon
+                const NotificationBell(color: Colors.white, whiteBorder: true),
               ],
             ),
           ),
@@ -240,7 +247,19 @@ class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildLabel('Start time'),
-                          _buildButton(_startTime, Icons.access_time, () {}),
+                          _buildButton(
+                            _startTime.format(context), 
+                            Icons.access_time, 
+                            () async {
+                              final picked = await showTimePicker(
+                                context: context,
+                                initialTime: _startTime,
+                              );
+                              if (picked != null) {
+                                setState(() => _startTime = picked);
+                              }
+                            }
+                          ),
                         ],
                       ),
                     ),
@@ -251,7 +270,19 @@ class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildLabel('Speed'),
-                           _buildButton('${_speed}x', null, () {}),
+                           _buildButton(
+                             '${_speed.toString().replaceAll(RegExp(r"([.]*0)(?!.*\d)"), "")}x', 
+                             Icons.speed, 
+                             () {
+                               // Simple cycle through speeds
+                               setState(() {
+                                 if (_speed == 1.0) _speed = 2.0;
+                                 else if (_speed == 2.0) _speed = 4.0;
+                                 else if (_speed == 4.0) _speed = 0.5;
+                                 else _speed = 1.0;
+                               });
+                             }
+                           ),
                         ],
                       ),
                     ),
@@ -265,7 +296,17 @@ class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
                           _buildButton(
                             '${_date.day}/${_date.month}/${_date.year + 543}', 
                             Icons.calendar_today, 
-                            () {},
+                            () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: _date,
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime(2100),
+                              );
+                              if (picked != null) {
+                                setState(() => _date = picked);
+                              }
+                            },
                           ),
                         ],
                       ),

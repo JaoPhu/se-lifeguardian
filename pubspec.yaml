@@ -17,7 +17,6 @@ dependencies:
   go_router: ^14.2.0
   google_mlkit_pose_detection: ^0.14.1
   google_mlkit_object_detection: ^0.15.1
-  camera: ^0.11.3
   permission_handler: ^11.3.1
   equatable: ^2.0.5
   cupertino_icons: ^1.0.6
@@ -38,7 +37,6 @@ dependencies:
   lucide_icons: ^0.257.0
   rxdart: ^0.28.0
   email_otp: ^3.1.0
-  mailer: ^6.6.0
   cloud_functions: ^5.6.2
 
 

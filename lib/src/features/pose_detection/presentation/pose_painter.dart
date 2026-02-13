@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'dart:ui' as ui;
-import 'package:camera/camera.dart';
+// Removed camera import
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart' hide PoseLandmark, PoseLandmarkType;
 import '../data/pose_models.dart';
@@ -27,18 +27,18 @@ class PersonPose {
   });
 }
 
+enum CameraLensDirection { front, back, external }
+
 class PosePainter extends CustomPainter {
   PosePainter(
     this.persons,
     this.absoluteImageSize,
     this.rotation,
-    this.cameraLensDirection,
   );
 
   final List<PersonPose> persons;
   final Size absoluteImageSize;
   final InputImageRotation rotation;
-  final CameraLensDirection cameraLensDirection;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -110,11 +110,7 @@ class PosePainter extends CustomPainter {
       double tx = translateX(x, y, rotation);
       final double ty = translateY(x, y, rotation);
 
-      if (cameraLensDirection == CameraLensDirection.front) {
-        // Mirror X-axis for front (selfie) camera
-        tx = size.width - tx;
-      }
-      
+      // Removed mirroring logic for video input
       return Offset(tx, ty);
     }
 

@@ -41,46 +41,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.2"
-  camera:
-    dependency: "direct main"
-    description:
-      name: camera
-      sha256: eefad89f262a873f38d21e5eec853461737ea074d7c9ede39f3ceb135d201cab
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.11.3"
-  camera_android_camerax:
-    dependency: transitive
-    description:
-      name: camera_android_camerax
-      sha256: dba476d6c316671ae943f20ad7d02b3d363eed0dbfd25465bb92d42e35faacd8
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.6.28"
-  camera_avfoundation:
-    dependency: transitive
-    description:
-      name: camera_avfoundation
-      sha256: a600b60a7752cc5fa9de476cd0055539d7a3b9d62662f4f446bae49eba2267df
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.9.22+9"
-  camera_platform_interface:
-    dependency: transitive
-    description:
-      name: camera_platform_interface
-      sha256: "98cfc9357e04bad617671b4c1f78a597f25f08003089dd94050709ae54effc63"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.12.0"
-  camera_web:
-    dependency: transitive
-    description:
-      name: camera_web
-      sha256: "57f49a635c8bf249d07fb95eb693d7e4dda6796dedb3777f9127fb54847beba7"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.3.5+3"
   characters:
     dependency: transitive
     description:
@@ -681,7 +641,7 @@ packages:
     source: hosted
     version: "0.257.0"
   mailer:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: mailer
       sha256: c3b934c0e800ddc946167c0123a900eba5acd009abb73648d0191a742542f2b4
@@ -1029,14 +989,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.4"
-  stream_transform:
-    dependency: transitive
-    description:
-      name: stream_transform
-      sha256: ad47125e588cfd37a9a7f86c7d6356dde8dfe89d071d293f80ca9e9273a33871
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.1.1"
   string_scanner:
     dependency: transitive
     description:

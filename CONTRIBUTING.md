@@ -13,7 +13,9 @@ Welcome to the LifeGuardian team! Here's how to get started and keep our code cl
 4.  **iOS Setup** (Mac Only):
     *   Navigate to the iOS folder: `cd ios`
     *   Install Pods: `pod install`
-    *   **Important**: If you have Homebrew GCC installed, you may face toolchain conflicts. Our `ios/Podfile` contains a workaround to sanitize build paths.
+    *   **Toolchain Conflicts**: If you have Homebrew GCC installed, you may face toolchain conflicts (e.g., `'cstddef' not found` or declaration conflicts).
+        *   **Fix**: Ensure `CPATH` and `LIBRARY_PATH` are NOT set in your shell profile (`.zshrc`, `.bash_profile`).
+        *   **Workaround**: Our `ios/Podfile` contains a `post_init` hook that sanitizes search paths and isolates `leveldb-library` from Homebrew headers.
 
 ## 🏗 Architecture
 

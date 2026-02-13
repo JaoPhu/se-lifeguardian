@@ -44,3 +44,8 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 .github_token
+
+# Local build logs and backups
+*_log.txt
+*_verify.txt
+ios_backup/
