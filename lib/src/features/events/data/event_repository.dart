@@ -67,6 +67,28 @@ class EventRepository {
           .toList();
     });
   }
+
+  Future<void> deleteEventsForCamera(String cameraId) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final events = await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('events')
+          .where('cameraId', isEqualTo: cameraId)
+          .get();
+
+      final batch = _firestore.batch();
+      for (var doc in events.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    } catch (e) {
+      print('Error deleting camera events: $e');
+    }
+  }
 }
 
 final eventRepositoryProvider = Provider<EventRepository>((ref) => EventRepository());

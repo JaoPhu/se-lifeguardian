@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,7 +35,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   late TextEditingController _drugAllergiesController;
   late TextEditingController _foodAllergiesController;
   final _birthDateFocusNode = FocusNode();
-  File? _imageFile;
+  dynamic _imageFile; // File on mobile, XFile on web
   bool _isUploading = false;
 
   @override
@@ -162,7 +164,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
     if (pickedFile != null) {
       setState(() {
-        _imageFile = File(pickedFile.path);
+        if (kIsWeb) {
+          _imageFile = pickedFile; // Store XFile directly on web
+        } else {
+          _imageFile = File(pickedFile.path); // Convert to File on mobile
+        }
       });
     }
   }
@@ -180,7 +186,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
       // Upload image if picked
       if (_imageFile != null) {
-        avatarUrl = await ref.read(userRepositoryProvider).uploadAvatar(currentUser.id, _imageFile!);
+        debugPrint('EditProfileScreen: Starting avatar upload...');
+        final newUrl = await ref.read(userRepositoryProvider).uploadAvatar(currentUser.id, _imageFile!);
+        debugPrint('EditProfileScreen: Upload complete. URL: $newUrl');
+        
+        if (newUrl.isNotEmpty) {
+          avatarUrl = newUrl;
+        } else {
+          throw Exception('Failed to get download URL from storage');
+        }
       }
 
       final updatedUser = currentUser.copyWith(
@@ -235,7 +249,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           onPressed: () => context.pop(),
         ),
         // Use "Information" if it's a new user (empty name) or from registration flow
-        title: Text(widget.fromRegistration || user.name.isEmpty ? 'Information' : 'Edit Profile', style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontWeight: FontWeight.bold)),
+        title: Text(widget.fromRegistration ? 'Information' : 'Edit Profile', style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontWeight: FontWeight.bold)),
         backgroundColor: theme.appBarTheme.backgroundColor,
         elevation: 0,
       ),
@@ -251,18 +265,47 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   child: Stack(
                     children: [
                       _imageFile != null
-                          ? Container(
-                              width: 100,
-                              height: 100,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(color: theme.dividerColor, width: 2),
-                                image: DecorationImage(
-                                  image: FileImage(_imageFile!),
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                            )
+                          ? kIsWeb
+                              ? FutureBuilder<Uint8List>(
+                                  future: _imageFile.readAsBytes(),
+                                  builder: (context, snapshot) {
+                                    if (snapshot.hasData) {
+                                      return Container(
+                                        width: 100,
+                                        height: 100,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: theme.dividerColor, width: 2),
+                                          image: DecorationImage(
+                                            image: MemoryImage(snapshot.data!),
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                    return Container(
+                                      width: 100,
+                                      height: 100,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: theme.dividerColor, width: 2),
+                                      ),
+                                      child: const Center(child: CircularProgressIndicator()),
+                                    );
+                                  },
+                                )
+                              : Container(
+                                  width: 100,
+                                  height: 100,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: theme.dividerColor, width: 2),
+                                    image: DecorationImage(
+                                      image: FileImage(_imageFile),
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                )
                           : UserAvatar(
                               avatarUrl: user.avatarUrl,
                               radius: 50,
@@ -278,7 +321,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                             border: Border.all(color: theme.scaffoldBackgroundColor, width: 2),
                           ),
                           child: Icon(
-                            _isUploading ? LucideIcons.loader : LucideIcons.camera,
+                            _isUploading ? LucideIcons.loader : LucideIcons.image,
                             size: 16,
                             color: theme.iconTheme.color,
                           ),
@@ -350,6 +393,24 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               _buildInputField('Current Medications', _medicationsController, theme, hintText: 'Amlodipine 5mg'),
               _buildInputField('Drug Allergies', _drugAllergiesController, theme, hintText: 'None'),
               _buildInputField('Food Allergies', _foodAllergiesController, theme, hintText: 'Peanuts'),
+
+              const SizedBox(height: 8),
+              if (!widget.fromRegistration)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => context.push('/change-password'),
+                  icon: const Icon(LucideIcons.lock, size: 16, color: Color(0xFF0D9488)),
+                  label: const Text(
+                    'Change Password',
+                    style: TextStyle(
+                      color: Color(0xFF0D9488),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ),
 
               const SizedBox(height: 24),
               Row(

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:async';
 import 'dart:math';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -91,9 +92,9 @@ class UserRepository {
     String code = '';
     bool isUnique = false;
 
-    // We use 6 digits (1,000,000 possibilities) to drastically reduce collisions
+    // We use 4 digits (10,000 possibilities) as requested
     while (!isUnique) {
-      final num = random.nextInt(1000000).toString().padLeft(6, '0');
+      final num = random.nextInt(10000).toString().padLeft(4, '0');
       code = 'LG-$num';
 
       // Check uniqueness in Firestore
@@ -109,7 +110,7 @@ class UserRepository {
     return code;
   }
 
-  Future<String> uploadAvatar(String uid, File file) async {
+  Future<String> uploadAvatar(String uid, dynamic file) async {
     final downloadUrl = await _storage.uploadProfileImage(uid, file);
     // Use set with merge: true instead of update() to support new users
     await _firestore.collection('users').doc(uid).set({'avatarUrl': downloadUrl}, SetOptions(merge: true));

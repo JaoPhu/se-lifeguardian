@@ -54,8 +54,21 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       });
     } catch (e) {
       if (!mounted) return;
+      // Show the FULL error message from the server to debug the "internal" issue
+      final fullMessage = e.toString();
+      String displayMessage = fullMessage;
+      
+      // Attempt to clean it up slightly but keep the core reason
+      if (fullMessage.contains(']')) {
+         displayMessage = fullMessage.split(']').last.trim();
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        SnackBar(
+          content: Text('Error: $displayMessage'),
+          duration: const Duration(seconds: 10), // Longer duration to read
+          action: SnackBarAction(label: 'OK', onPressed: () {}),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);

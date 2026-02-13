@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'dart:async';
+import 'package:lifeguardian/src/features/authentication/data/email_service.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
   const OtpVerificationScreen({
@@ -19,6 +21,19 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   final List<TextEditingController> _controllers = List.generate(4, (index) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(4, (index) => FocusNode());
   bool _isLoading = false;
+  
+  // Timer and OTP State
+  late String _currentOTP;
+  Timer? _timer;
+  int _secondsRemaining = 120;
+  bool _canResend = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentOTP = widget.targetOTP;
+    _startTimer();
+  }
 
   @override
   void dispose() {
@@ -28,7 +43,59 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     for (var node in _focusNodes) {
       node.dispose();
     }
+    _timer?.cancel();
     super.dispose();
+  }
+
+  void _startTimer() {
+    _canResend = false;
+    _secondsRemaining = 120;
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_secondsRemaining == 0) {
+        setState(() {
+          _canResend = true;
+          timer.cancel();
+        });
+      } else {
+        setState(() {
+          _secondsRemaining--;
+        });
+      }
+    });
+  }
+
+  String _formatTime(int seconds) {
+    final mins = (seconds / 60).floor();
+    final secs = seconds % 60;
+    return '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _resendOtp() async {
+    if (!_canResend) return;
+
+    setState(() => _isLoading = true);
+    
+    final newOtp = EmailService.generateOTP();
+    final success = await EmailService.sendOTP(widget.email, newOtp);
+
+    if (!mounted) return;
+
+    if (success) {
+      setState(() {
+        _currentOTP = newOtp;
+        _isLoading = false;
+        _startTimer();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ส่งรหัส OTP ใหม่เรียบร้อยแล้ว')),
+      );
+    } else {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ไม่สามารถส่งรหัสได้ กรุณาลองใหม่')),
+      );
+    }
   }
 
   void _onChanged(String value, int index) {
@@ -59,7 +126,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     // Simulate network delay for better UX
     await Future.delayed(const Duration(milliseconds: 500));
 
-    if (otp == widget.targetOTP) {
+    if (otp == _currentOTP) {
        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('ยืนยันตัวตนสำเร็จ')),
@@ -198,14 +265,22 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     children: [
                       const Text("Don't have a code? ", style: TextStyle(color: Colors.grey, fontSize: 12)),
                       GestureDetector(
-                        onTap: () {
-                          // Optional: Implement resend logic using widget.emailOTP.sendOTP() again
-                        },
-                        child: const Text('Re-Send', style: TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.bold, fontSize: 12)),
+                        onTap: _canResend && !_isLoading ? _resendOtp : null,
+                        child: Text(
+                          'Re-Send', 
+                          style: TextStyle(
+                            color: _canResend ? const Color(0xFF0D9488) : Colors.grey, 
+                            fontWeight: FontWeight.bold, 
+                            fontSize: 12
+                          )
+                        ),
                       ),
                     ],
                   ),
-                  const Text('01:12', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  Text(
+                    _formatTime(_secondsRemaining), 
+                    style: const TextStyle(color: Colors.grey, fontSize: 12)
+                  ),
                 ],
               ),
 

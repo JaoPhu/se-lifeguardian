@@ -23,20 +23,36 @@ class UserAvatar extends StatelessWidget {
         shape: BoxShape.circle,
         border: Border.all(color: theme.dividerColor, width: 2),
         color: theme.cardColor,
-        image: hasImage
-            ? DecorationImage(
-                image: NetworkImage(avatarUrl!),
-                fit: BoxFit.cover,
-              )
-            : null,
       ),
-      child: !hasImage
-          ? Icon(
+      clipBehavior: Clip.antiAlias,
+      child: hasImage
+          ? Image.network(
+              avatarUrl!,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Icon(
+                  LucideIcons.user,
+                  size: radius,
+                  color: theme.iconTheme.color?.withValues(alpha: 0.5),
+                );
+              },
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                        : null,
+                  ),
+                );
+              },
+            )
+          : Icon(
               LucideIcons.user,
               size: radius,
               color: theme.iconTheme.color?.withValues(alpha: 0.5),
-            )
-          : null,
+            ),
     );
   }
 }

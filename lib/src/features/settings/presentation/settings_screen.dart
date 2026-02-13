@@ -284,8 +284,8 @@ class SettingsScreen extends ConsumerWidget {
                             onTap: () {
                               showDialog(
                                 context: context,
-                                builder: (context) {
-                                  String confirmText = '';
+                                builder: (dialogContext) {
+                                  final passwordController = TextEditingController();
                                   return StatefulBuilder(
                                     builder: (context, setState) {
                                       return AlertDialog(
@@ -299,19 +299,17 @@ class SettingsScreen extends ConsumerWidget {
                                             ),
                                             const SizedBox(height: 16),
                                             const Text(
-                                              'Type "Confirm" to proceed:',
+                                              'Enter your password to confirm:',
                                               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                                             ),
                                             const SizedBox(height: 8),
                                             TextField(
+                                              controller: passwordController,
+                                              obscureText: true,
                                               autofocus: true,
-                                              onChanged: (value) {
-                                                setState(() {
-                                                  confirmText = value;
-                                                });
-                                              },
                                               decoration: InputDecoration(
-                                                hintText: 'Type "Confirm"',
+                                                hintText: 'Password',
+                                                prefixIcon: const Icon(Icons.lock_outline),
                                                 border: OutlineInputBorder(
                                                   borderRadius: BorderRadius.circular(8),
                                                 ),
@@ -322,33 +320,55 @@ class SettingsScreen extends ConsumerWidget {
                                         ),
                                         actions: [
                                           TextButton(
-                                            onPressed: () => Navigator.of(context).pop(),
+                                            onPressed: () {
+                                              passwordController.dispose();
+                                              Navigator.of(dialogContext).pop();
+                                            },
                                             child: const Text('Cancel'),
                                           ),
                                           TextButton(
-                                            onPressed: confirmText.trim().toLowerCase() == 'confirm' ? () async {
-                                              Navigator.of(context).pop(); // Close dialog
+                                            onPressed: () async {
+                                              final password = passwordController.text;
+                                              if (password.isEmpty) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(content: Text('Please enter your password')),
+                                                );
+                                                return;
+                                              }
                                               
-                                              // Show loading indicator if you want, but authController state handles it
-                                              await ref.read(authControllerProvider.notifier).deleteAccount();
+                                              passwordController.dispose();
+                                              Navigator.of(dialogContext).pop(); // Close dialog
                                               
-                                              final authState = ref.read(authControllerProvider);
-                                              if (authState.hasError) {
+                                              try {
+                                                await ref.read(authControllerProvider.notifier).deleteAccount(password: password);
+                                                
+                                                final authState = ref.read(authControllerProvider);
+                                                if (authState.hasError) {
+                                                  if (context.mounted) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      SnackBar(
+                                                        content: Text('Failed to delete: ${authState.error}'),
+                                                        backgroundColor: Colors.red,
+                                                      ),
+                                                    );
+                                                  }
+                                                } else {
+                                                  if (context.mounted) {
+                                                    context.go('/welcome');
+                                                  }
+                                                }
+                                              } catch (e) {
                                                 if (context.mounted) {
                                                   ScaffoldMessenger.of(context).showSnackBar(
                                                     SnackBar(
-                                                      content: Text('Failed to delete: ${authState.error}'),
+                                                      content: Text('Error: $e'),
                                                       backgroundColor: Colors.red,
                                                     ),
                                                   );
                                                 }
-                                              } else {
-                                                if (context.mounted) {
-                                                  context.go('/welcome');
-                                                }
                                               }
-                                            } : null,
-                                            child: Text('Delete', style: TextStyle(color: confirmText.trim().toLowerCase() == 'confirm' ? Colors.red : Colors.grey)),
+                                            },
+                                            child: const Text('Delete', style: TextStyle(color: Colors.red)),
                                           ),
                                         ],
                                       );

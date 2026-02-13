@@ -84,18 +84,55 @@ class AuthRepository {
   // Secure Password Update (Requires Cloud Function)
   Future<void> updateUserPassword(String email, String newPassword) async {
     try {
+      // Use default instance (us-central1) which is standard for most Firebase projects
       final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable('updateUserPassword');
       final result = await callable.call(<String, dynamic>{
         'email': email,
         'newPassword': newPassword,
       });
 
-      if (result.data['success'] != true) {
-        throw Exception(result.data['message'] ?? 'Failed to update password');
+      // Success - function returned normally
+      if (result.data != null && result.data['success'] == true) {
+        debugPrint('Password updated successfully');
+        return;
       }
+      
+      throw Exception(result.data?['message'] ?? 'Failed to update password');
+    } on FirebaseFunctionsException catch (e) {
+      // Handle Cloud Function specific errors
+      debugPrint('Cloud Function error: ${e.code} - ${e.message} - ${e.details}');
+      throw Exception('Failed to update password: ${e.message}');
     } catch (e) {
       debugPrint('Error updating password via Cloud Function: $e');
       throw Exception('Failed to update password. Please try again or use the reset link.');
+    }
+  }
+
+  /// Change password for currently logged-in user
+  Future<void> changePassword(String currentPassword, String newPassword) async {
+    final user = _auth.currentUser;
+    if (user == null || user.email == null) throw Exception('No user logged in');
+
+    try {
+      // Re-authenticate user before allowing password change (Firebase requirement)
+      final credential = EmailAuthProvider.credential(
+        email: user.email!,
+        password: currentPassword,
+      );
+      
+      await user.reauthenticateWithCredential(credential);
+      await user.updatePassword(newPassword);
+      debugPrint('Password changed successfully for logged-in user');
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'wrong-password') {
+        throw Exception('รหัสผ่านเดิมไม่ถูกต้อง');
+      } else if (e.code == 'weak-password') {
+        throw Exception('รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร');
+      }
+      throw Exception('ไม่สามารถเปลี่ยนรหัสผ่านได้: ${e.message}');
+    } catch (e) {
+      debugPrint('Error changing password: $e');
+      throw Exception('เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน');
     }
   }
 
@@ -111,48 +148,70 @@ class AuthRepository {
     await _auth.signOut();
   }
 
-  Future<void> deleteAccount() async {
+  Future<void> deleteAccount({String? password}) async {
     final user = _auth.currentUser;
     if (user == null) return;
 
     final uid = user.uid;
+    final email = user.email;
 
-    // 1. Delete Firestore data
+    try {
+      // 1. Re-authenticate if password provided (for email/password accounts)
+      if (email != null && password != null && password.isNotEmpty) {
+        final credential = EmailAuthProvider.credential(
+          email: email,
+          password: password,
+        );
+        await user.reauthenticateWithCredential(credential);
+        debugPrint('Re-authentication successful');
+      }
+
+      // 2. Delete Firebase Auth account FIRST
+      await user.delete();
+      debugPrint('Firebase Auth account deleted');
+
+      // 3. Delete Firestore data (only after Auth deletion succeeds)
+      await _deleteFirestoreData(uid);
+      debugPrint('Firestore data deleted');
+
+      // 4. Sign out
+      await signOut();
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        throw Exception('Please re-enter your password to delete your account.');
+      } else if (e.code == 'wrong-password') {
+        throw Exception('Incorrect password. Please try again.');
+      }
+      debugPrint('Firebase Auth error: ${e.code} - ${e.message}');
+      rethrow;
+    } catch (e) {
+      debugPrint('Error deleting account: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> _deleteFirestoreData(String uid) async {
     try {
       final firestore = FirebaseFirestore.instance;
+      
       // Delete user document
       await firestore.collection('users').doc(uid).delete();
       
-      // Delete associated events (if any)
+      // Delete associated events
       final events = await firestore.collection('users').doc(uid).collection('events').get();
       for (var doc in events.docs) {
         await doc.reference.delete();
       }
 
-      // Delete associated notifications (if any)
+      // Delete associated notifications
       final notifications = await firestore.collection('users').doc(uid).collection('notifications').get();
       for (var doc in notifications.docs) {
         await doc.reference.delete();
       }
     } catch (e) {
-      debugPrint('Error deleting user data from Firestore: $e');
+      debugPrint('Error deleting Firestore data: $e');
+      // Don't rethrow - Auth is already deleted
     }
-
-    // 2. Delete Auth account
-    try {
-      await user.delete();
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'requires-recent-login') {
-        throw Exception('This action requires a recent login. Please log out and log in again to delete your account.');
-      }
-      rethrow;
-    } catch (e) {
-      debugPrint('Error deleting Auth account: $e');
-      rethrow;
-    }
-
-    // 3. Final Sign Out
-    await signOut();
   }
 
   // ✅ เพิ่มตัวนี้ (ทำให้ controller ไม่แดง)

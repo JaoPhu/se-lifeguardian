@@ -19,6 +19,8 @@ import 'package:lifeguardian/src/features/authentication/presentation/register_s
 import 'package:lifeguardian/src/features/authentication/presentation/forgot_password_screen.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/otp_verification_screen.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/reset_password_screen.dart';
+import 'package:lifeguardian/src/features/authentication/presentation/change_password_screen.dart';
+import 'package:lifeguardian/src/features/authentication/presentation/change_password_screen.dart';
 
 import 'package:lifeguardian/src/features/settings/presentation/settings_screen.dart';
 import 'package:lifeguardian/src/features/status/presentation/status_screen.dart';
@@ -114,6 +116,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           final fromRegistration = extra?['fromRegistration'] as bool? ?? false;
           return EditProfileScreen(fromRegistration: fromRegistration);
         },
+      ),
+      GoRoute(
+        path: '/change-password',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const ChangePasswordScreen(),
       ),
       GoRoute(
         path: '/demo-setup',
@@ -242,16 +249,27 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       }
 
       // 2. Logged in -> Check profile completeness
-      // IMPORTANT: Wait for profile to start/finish loading (user.id becomes non-empty)
+      // IMPORTANT: Only redirect to edit-profile for NEW users who haven't completed registration
+      // Don't redirect if data is just loading (email will be populated from auth even for new users)
       if (user.id.isNotEmpty && user.name.isEmpty && state.matchedLocation != '/splash') {
-        // If logged in but no profile name yet, only allow registration-related routes
-        final isAuthRoute = state.matchedLocation == '/welcome' ||
-                            state.matchedLocation == '/pre-login' ||
-                            state.matchedLocation == '/login' ||
-                            state.matchedLocation == '/register' ||
-                            state.matchedLocation == '/edit-profile';
+        // Check if this is a truly new user vs. existing user whose data is loading
+        // New users will have email from Firebase Auth but no other profile data
+        final hasProfileData = user.birthDate.isNotEmpty || 
+                               user.phoneNumber.isNotEmpty || 
+                               user.gender.isNotEmpty ||
+                               user.bloodType.isNotEmpty;
         
-        return isAuthRoute ? null : '/edit-profile';
+        // Only redirect if NO profile data exists (new user)
+        if (!hasProfileData) {
+          final isAuthRoute = state.matchedLocation == '/welcome' ||
+                              state.matchedLocation == '/pre-login' ||
+                              state.matchedLocation == '/login' ||
+                              state.matchedLocation == '/register' ||
+                              state.matchedLocation == '/edit-profile';
+          
+          return isAuthRoute ? null : '/edit-profile';
+        }
+        // If profile data exists, it's just loading - don't redirect
       }
 
       // 3. Subscription/Trial check

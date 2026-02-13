@@ -211,7 +211,12 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       }
     }
 
-    // 2. Update state to only include non-deleted events
+    // 2. Clear cloud events if cameraId is provided
+    if (cameraId != null) {
+      await _eventRepository.deleteEventsForCamera(cameraId);
+    }
+    
+    // 3. Update state to only include non-deleted events
     if (cameraId == null) {
       state = HealthState.initial();
     } else {
