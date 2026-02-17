@@ -20,7 +20,6 @@ import 'package:lifeguardian/src/features/authentication/presentation/forgot_pas
 import 'package:lifeguardian/src/features/authentication/presentation/otp_verification_screen.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/reset_password_screen.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/change_password_screen.dart';
-import 'package:lifeguardian/src/features/authentication/presentation/change_password_screen.dart';
 
 import 'package:lifeguardian/src/features/settings/presentation/settings_screen.dart';
 import 'package:lifeguardian/src/features/status/presentation/status_screen.dart';
@@ -84,7 +83,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           final extra = state.extra as Map<String, dynamic>;
           return OtpVerificationScreen(
             email: extra['email'] as String,
-            targetOTP: extra['targetOTP'] as String,
           );
         },
       ),
@@ -95,6 +93,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           final extra = state.extra as Map<String, dynamic>;
           return ResetPasswordScreen(
             email: extra['email'] as String,
+            otp: extra['otp'] as String,
           );
         },
       ),
@@ -252,24 +251,26 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // IMPORTANT: Only redirect to edit-profile for NEW users who haven't completed registration
       // Don't redirect if data is just loading (email will be populated from auth even for new users)
       if (user.id.isNotEmpty && user.name.isEmpty && state.matchedLocation != '/splash') {
+        // If they are on edit-profile, stay there.
+        if (state.matchedLocation == '/edit-profile') {
+          return null;
+        }
+
         // Check if this is a truly new user vs. existing user whose data is loading
-        // New users will have email from Firebase Auth but no other profile data
         final hasProfileData = user.birthDate.isNotEmpty || 
                                user.phoneNumber.isNotEmpty || 
                                user.gender.isNotEmpty ||
                                user.bloodType.isNotEmpty;
         
-        // Only redirect if NO profile data exists (new user)
-        if (!hasProfileData) {
-          final isAuthRoute = state.matchedLocation == '/welcome' ||
-                              state.matchedLocation == '/pre-login' ||
-                              state.matchedLocation == '/login' ||
-                              state.matchedLocation == '/register' ||
-                              state.matchedLocation == '/edit-profile';
-          
-          return isAuthRoute ? null : '/edit-profile';
+        // If they are on an auth route (login/register/welcome), they MUST go to edit-profile
+        final onAuthRoute = state.matchedLocation == '/welcome' ||
+                            state.matchedLocation == '/pre-login' ||
+                            state.matchedLocation == '/login' ||
+                            state.matchedLocation == '/register';
+
+        if (!hasProfileData || onAuthRoute) {
+          return '/edit-profile';
         }
-        // If profile data exists, it's just loading - don't redirect
       }
 
       // 3. Subscription/Trial check
@@ -294,9 +295,9 @@ class _AuthRefreshListenable extends ChangeNotifier {
     _subscription = ref.read(firebaseAuthProvider).authStateChanges().listen((_) {
       notifyListeners();
     });
-    // Also listen to user profile changes
+    // Also listen to user profile changes (any change, e.g. ID, name, etc.)
     _userSubscription = ref.listen(userProvider, (prev, next) {
-      if (prev?.name != next.name) {
+      if (prev != next) {
         notifyListeners();
       }
     }, fireImmediately: true);

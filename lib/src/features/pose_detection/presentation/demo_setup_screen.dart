@@ -4,8 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 import 'dart:io';
-import '../../notification/presentation/notification_bell.dart';
-import '../../profile/data/user_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class VideoPreview extends StatefulWidget {
@@ -86,14 +84,14 @@ class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final user = ref.watch(userProvider);
+    // final user = ref.watch(userProvider);
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         children: [
           // Header
          Container(
-            padding: const EdgeInsets.only(top: 56, bottom: 24, left: 24, right: 24),
+            padding: const EdgeInsets.only(top: 56, bottom: 16, left: 16, right: 24),
             decoration: const BoxDecoration(
               color: Color(0xFF0D9488),
               boxShadow: [
@@ -105,41 +103,20 @@ class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
               ],
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Left: Profile Icon (as requested)
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => context.push('/profile'),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: Colors.yellow.shade100,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                          image: DecorationImage(
-                            image: NetworkImage(user.avatarUrl),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Demo Setup',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+                  onPressed: () => context.pop(),
                 ),
-                
-                // Right: Notification Icon
-                const NotificationBell(color: Colors.white, whiteBorder: true),
+                const SizedBox(width: 8),
+                const Text(
+                  'Demo',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
               ],
             ),
           ),
@@ -276,10 +253,15 @@ class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
                              () {
                                // Simple cycle through speeds
                                setState(() {
-                                 if (_speed == 1.0) _speed = 2.0;
-                                 else if (_speed == 2.0) _speed = 4.0;
-                                 else if (_speed == 4.0) _speed = 0.5;
-                                 else _speed = 1.0;
+                                 if (_speed == 1.0) {
+                                   _speed = 2.0;
+                                 } else if (_speed == 2.0) {
+                                   _speed = 4.0;
+                                 } else if (_speed == 4.0) {
+                                   _speed = 0.5;
+                                 } else {
+                                   _speed = 1.0;
+                                 }
                                });
                              }
                            ),

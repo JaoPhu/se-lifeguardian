@@ -71,7 +71,6 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         );
         context.push('/otp-verification', extra: {
           'email': email,
-          'targetOTP': otp, // Pass the generated OTP for verification
         });
       } else {
         // Fallback option

@@ -8,9 +8,11 @@ class ResetPasswordScreen extends ConsumerStatefulWidget {
   const ResetPasswordScreen({
     super.key,
     required this.email,
+    required this.otp,
   });
 
   final String email;
+  final String otp;
 
   @override
   ConsumerState<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
@@ -47,27 +49,31 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await ref.read(authRepositoryProvider).updateUserPassword(widget.email, _passwordController.text);
+      // Secure call with OTP verification on server
+      await ref.read(authRepositoryProvider).resetPasswordWithOTP(
+        email: widget.email,
+        otp: widget.otp,
+        newPassword: _passwordController.text,
+      );
+      
       if (!mounted) return;
       setState(() {
         _isSuccess = true;
       });
     } catch (e) {
       if (!mounted) return;
-      // Show the FULL error message from the server to debug the "internal" issue
+      
       final fullMessage = e.toString();
       String displayMessage = fullMessage;
       
-      // Attempt to clean it up slightly but keep the core reason
       if (fullMessage.contains(']')) {
          displayMessage = fullMessage.split(']').last.trim();
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $displayMessage'),
-          duration: const Duration(seconds: 10), // Longer duration to read
-          action: SnackBarAction(label: 'OK', onPressed: () {}),
+          content: Text(displayMessage), // Show clean error from server (e.g. "OTP Invalid")
+          duration: const Duration(seconds: 4),
         ),
       );
     } finally {

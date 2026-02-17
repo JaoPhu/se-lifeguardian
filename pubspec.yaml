@@ -38,6 +38,7 @@ dependencies:
   rxdart: ^0.28.0
   email_otp: ^3.1.0
   cloud_functions: ^5.6.2
+  flutter_secure_storage: ^10.0.0
 
 
 dev_dependencies:

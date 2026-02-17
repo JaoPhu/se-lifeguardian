@@ -7,11 +7,15 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'dart:math';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuthRepository {
-  AuthRepository(this._auth, this._firestore);
+  AuthRepository(this._auth, this._firestore, this._storage);
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
+  final FlutterSecureStorage _storage;
+
+  static const _passwordKey = 'user_password';
 
   Stream<User?> authStateChanges() => _auth.authStateChanges();
 
@@ -20,6 +24,8 @@ class AuthRepository {
       email: email,
       password: password,
     );
+    // Save password securely for future re-auth (e.g. deletion)
+    await _storage.write(key: _passwordKey, value: password);
   }
 
   Future<void> signInWithEmail(String email, String password) async {
@@ -30,6 +36,9 @@ class AuthRepository {
       email: normalizedEmail,
       password: password,
     );
+
+    // Save password securely for future re-auth (e.g. deletion)
+    await _storage.write(key: _passwordKey, value: password);
 
     final firebaseUser = credential.user;
     if (firebaseUser != null) {
@@ -101,10 +110,40 @@ class AuthRepository {
     } on FirebaseFunctionsException catch (e) {
       // Handle Cloud Function specific errors
       debugPrint('Cloud Function error: ${e.code} - ${e.message} - ${e.details}');
-      throw Exception('Failed to update password: ${e.message}');
+      throw Exception(e.message ?? 'Failed to update password');
     } catch (e) {
       debugPrint('Error updating password via Cloud Function: $e');
       throw Exception('Failed to update password. Please try again or use the reset link.');
+    }
+  }
+
+  /// Reset password using Email OTP (Secure - verification on Server)
+  Future<void> resetPasswordWithOTP({
+    required String email,
+    required String otp,
+    required String newPassword,
+  }) async {
+    try {
+      final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable('resetPasswordWithOTP');
+      final result = await callable.call(<String, dynamic>{
+        'email': email,
+        'otp': otp,
+        'newPassword': newPassword,
+      });
+
+      if (result.data != null && result.data['success'] == true) {
+        debugPrint('Password reset successfully with OTP');
+        return;
+      }
+      
+      throw Exception(result.data?['message'] ?? 'Failed to reset password');
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('Cloud Function error: ${e.code} - ${e.message}');
+      // Return the error message from the server (e.g. "OTP Invalid")
+      throw Exception(e.message ?? 'เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน');
+    } catch (e) {
+      debugPrint('Error resetting password with OTP: $e');
+      throw Exception('ไม่สามารถรีเซ็ตรหัสผ่านได้ กรุณาลองใหม่อีกครั้ง');
     }
   }
 
@@ -145,6 +184,7 @@ class AuthRepository {
     if (!kIsWeb) {
       await GoogleSignIn().signOut();
     }
+    await _storage.delete(key: _passwordKey);
     await _auth.signOut();
   }
 
@@ -155,38 +195,96 @@ class AuthRepository {
     final uid = user.uid;
     final email = user.email;
 
+    String? targetPassword = password;
+    
+    // 💡 Try to retrieve stored password if not provided (Seamless flow)
+    if (targetPassword == null || targetPassword.isEmpty) {
+      targetPassword = await _storage.read(key: _passwordKey);
+    }
+
     try {
-      // 1. Re-authenticate if password provided (for email/password accounts)
-      if (email != null && password != null && password.isNotEmpty) {
+      // 1. Re-authenticate if password available (for email/password accounts)
+      if (email != null && targetPassword != null && targetPassword.isNotEmpty) {
         final credential = EmailAuthProvider.credential(
           email: email,
-          password: password,
+          password: targetPassword,
         );
         await user.reauthenticateWithCredential(credential);
-        debugPrint('Re-authentication successful');
+        debugPrint('Email re-authentication successful');
       }
 
       // 2. Delete Firebase Auth account FIRST
-      await user.delete();
+      try {
+        await user.delete();
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'requires-recent-login') {
+          // 💡 If session is stale even with password (or no password), try social re-auth
+          debugPrint('Session stale, trying social re-authentication...');
+          await _reauthenticateSocial();
+          await user.delete(); // Try again after re-auth
+        } else {
+          rethrow;
+        }
+      }
+      
       debugPrint('Firebase Auth account deleted');
 
       // 3. Delete Firestore data (only after Auth deletion succeeds)
       await _deleteFirestoreData(uid);
       debugPrint('Firestore data deleted');
-
-      // 4. Sign out
-      await signOut();
+      
+      // Clear stored password after successful deletion
+      await _storage.delete(key: _passwordKey);
     } on FirebaseAuthException catch (e) {
       if (e.code == 'requires-recent-login') {
-        throw Exception('Please re-enter your password to delete your account.');
+        throw Exception('เซสชันเน็ตหมดอายุ กรุณายืนยันตัวตนใหม่อีกครั้ง');
       } else if (e.code == 'wrong-password') {
-        throw Exception('Incorrect password. Please try again.');
+        throw Exception('รหัสผ่านไม่ถูกต้อง');
       }
       debugPrint('Firebase Auth error: ${e.code} - ${e.message}');
       rethrow;
     } catch (e) {
       debugPrint('Error deleting account: $e');
       rethrow;
+    }
+  }
+
+  /// Helper to trigger Social Re-authentication "on the fly"
+  Future<void> _reauthenticateSocial() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    final providers = user.providerData.map((p) => p.providerId).toList();
+
+    if (providers.contains('google.com')) {
+      // --- Google Re-auth ---
+      final googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) throw Exception('การยืนยันตัวตนถูกยกเลิก');
+      
+      final googleAuth = await googleUser.authentication;
+      final cred = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      await user.reauthenticateWithCredential(cred);
+    } else if (providers.contains('apple.com')) {
+      // --- Apple Re-auth ---
+      final rawNonce = _generateNonce();
+      final nonce = _sha256ofRawNonce(rawNonce);
+      
+      final appleCredential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: nonce,
+      );
+
+      final cred = OAuthProvider('apple.com').credential(
+        idToken: appleCredential.identityToken,
+        rawNonce: rawNonce,
+      );
+      await user.reauthenticateWithCredential(cred);
     }
   }
 
