@@ -107,7 +107,7 @@ class PosePainter extends CustomPainter {
       final double x = landmark.x;
       final double y = landmark.y;
       
-      double tx = translateX(x, y, rotation);
+      final double tx = translateX(x, y, rotation);
       final double ty = translateY(x, y, rotation);
 
       // Removed mirroring logic for video input

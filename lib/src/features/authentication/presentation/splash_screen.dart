@@ -45,8 +45,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
             if (user.name.isNotEmpty) {
               context.go('/overview');
             } else {
-              // No profile found in Firestore, redirect to welcome
-              context.go('/welcome');
+              // No profile found in Firestore, redirect to fill info
+              context.go('/edit-profile');
             }
           }
         } else {

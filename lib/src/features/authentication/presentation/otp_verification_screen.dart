@@ -7,11 +7,9 @@ class OtpVerificationScreen extends StatefulWidget {
   const OtpVerificationScreen({
     super.key,
     required this.email,
-    required this.targetOTP,
   });
 
   final String email;
-  final String targetOTP;
 
   @override
   State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
@@ -23,7 +21,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   bool _isLoading = false;
   
   // Timer and OTP State
-  late String _currentOTP;
   Timer? _timer;
   int _secondsRemaining = 120;
   bool _canResend = false;
@@ -31,7 +28,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   @override
   void initState() {
     super.initState();
-    _currentOTP = widget.targetOTP;
     _startTimer();
   }
 
@@ -83,7 +79,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
     if (success) {
       setState(() {
-        _currentOTP = newOtp;
         _isLoading = false;
         _startTimer();
       });
@@ -123,25 +118,20 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
     setState(() => _isLoading = true);
 
-    // Simulate network delay for better UX
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    if (otp == _currentOTP) {
-       if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ยืนยันตัวตนสำเร็จ')),
-        );
-        // Navigate to reset password
-        context.push('/reset-password', extra: {
-          'email': widget.email,
-        });
-    } else {
-       if (!mounted) return;
-       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('รหัส OTP ไม่ถูกต้อง')),
-      );
-      setState(() => _isLoading = false);
-    }
+    // No local check here anymore!
+    // We just move to the reset password screen and pass the entered OTP.
+    // The actual verification happens during the final password update call.
+    
+    await Future.delayed(const Duration(milliseconds: 300));
+    
+    if (!mounted) return;
+    
+    context.push('/reset-password', extra: {
+      'email': widget.email,
+      'otp': otp,
+    });
+    
+    setState(() => _isLoading = false);
   }
 
   @override

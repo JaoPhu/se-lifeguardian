@@ -3,6 +3,7 @@ const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
 
 admin.initializeApp();
+const db = admin.firestore();
 
 exports.updateUserPassword = onCall({ cors: true }, async (request) => {
     const { email, newPassword } = request.data;
@@ -37,7 +38,7 @@ exports.updateUserPassword = onCall({ cors: true }, async (request) => {
 });
 
 
-exports.sendOTPEmail = onCall(async (request) => {
+exports.sendOTPEmail = onCall({ cors: true }, async (request) => {
     const { email, otp } = request.data;
 
     // Validate input
@@ -45,7 +46,23 @@ exports.sendOTPEmail = onCall(async (request) => {
         throw new HttpsError('invalid-argument', 'Email and OTP are required');
     }
 
-    // Create transporter with Gmail
+    // --- 1. Store OTP in Firestore ---
+    try {
+        // Store in 'otp_requests' collection, using email as ID
+        // Set expiration to 10 minutes from now
+        const expiresAt = Date.now() + (10 * 60 * 1000);
+        await db.collection('otp_requests').doc(email).set({
+            otp: otp,
+            expiresAt: expiresAt,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        console.log(`OTP stored for ${email}`);
+    } catch (error) {
+        console.error('Error storing OTP:', error);
+        throw new HttpsError('internal', 'Failed to generate OTP system record');
+    }
+
+    // --- 2. Create transporter with Gmail ---
     const transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
@@ -94,5 +111,55 @@ exports.sendOTPEmail = onCall(async (request) => {
     } catch (error) {
         console.error('Error sending OTP email:', error);
         throw new HttpsError('internal', 'Failed to send email');
+    }
+});
+
+exports.resetPasswordWithOTP = onCall({ cors: true }, async (request) => {
+    const { email, otp, newPassword } = request.data;
+
+    // Validate input
+    if (!email || !otp || !newPassword) {
+        throw new HttpsError('invalid-argument', 'Email, OTP, and New Password are required');
+    }
+
+    try {
+        // 1. Verify OTP from Firestore
+        const docRef = db.collection('otp_requests').doc(email);
+        const doc = await docRef.get();
+
+        if (!doc.exists) {
+            throw new HttpsError('not-found', 'ไม่พบรายการคำขอรีเซ็ตรหัสผ่าน (กรุณากดส่งรหัสใหม่)');
+        }
+
+        const data = doc.data();
+        const now = Date.now();
+
+        if (data.otp !== otp) {
+            throw new HttpsError('invalid-argument', 'รหัส OTP ไม่ถูกต้อง');
+        }
+
+        if (data.expiresAt < now) {
+            throw new HttpsError('deadline-exceeded', 'รหัส OTP หมดอายุแล้ว (กรุณากดส่งรหัสใหม่)');
+        }
+
+        // 2. OTP Valid! Update Password via Admin SDK
+        const user = await admin.auth().getUserByEmail(email);
+        await admin.auth().updateUser(user.uid, {
+            password: newPassword,
+        });
+
+        // 3. Delete used OTP (One-time use)
+        await docRef.delete();
+
+        console.log(`Password reset successfully with OTP for: ${email}`);
+        return { success: true, message: 'Password reset successfully' };
+
+    } catch (error) {
+        console.error('Error in resetPasswordWithOTP:', error);
+        if (error instanceof HttpsError) {
+            throw error;
+        }
+        // Handle unexpected errors
+        throw new HttpsError('internal', `Reset failed: ${error.message}`);
     }
 });

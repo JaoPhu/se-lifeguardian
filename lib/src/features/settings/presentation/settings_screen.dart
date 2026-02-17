@@ -5,6 +5,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../../common_widgets/theme_provider.dart';
 import '../../profile/data/user_repository.dart';
 import '../../authentication/controllers/auth_controller.dart';
+import '../../authentication/providers/auth_providers.dart';
 import '../../../common_widgets/user_avatar.dart';
 import '../../notification/presentation/notification_bell.dart';
 
@@ -118,7 +119,7 @@ class SettingsScreen extends ConsumerWidget {
                                     ),
                                   ),
                                   Text(
-                                    'life guardain account',
+                                    'life guardian account',
                                     style: TextStyle(
                                       color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.5),
                                       fontSize: 12,
@@ -264,9 +265,28 @@ class SettingsScreen extends ConsumerWidget {
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
-                            onTap: () {
-                              // Forgot password logic or navigation
-                              // Assuming navigation or dialog
+                            onTap: () async {
+                              final email = ref.read(userProvider).email;
+                              if (email.isNotEmpty) {
+                                try {
+                                  await ref.read(authControllerProvider.notifier).forgot(email);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Password reset email sent!')),
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                                    );
+                                  }
+                                }
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('User email not found')),
+                                );
+                              }
                             },
                           ),
                           Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
@@ -285,95 +305,153 @@ class SettingsScreen extends ConsumerWidget {
                               showDialog(
                                 context: context,
                                 builder: (dialogContext) {
+                                  final confirmController = TextEditingController();
                                   final passwordController = TextEditingController();
-                                  return StatefulBuilder(
-                                    builder: (context, setState) {
-                                      return AlertDialog(
-                                        title: const Text('Delete Account'),
-                                        content: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            const Text(
-                                              'Are you sure you want to delete your account? This action cannot be undone.',
-                                            ),
-                                            const SizedBox(height: 16),
-                                            const Text(
-                                              'Enter your password to confirm:',
-                                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            TextField(
-                                              controller: passwordController,
-                                              obscureText: true,
-                                              autofocus: true,
-                                              decoration: InputDecoration(
-                                                hintText: 'Password',
-                                                prefixIcon: const Icon(Icons.lock_outline),
-                                                border: OutlineInputBorder(
-                                                  borderRadius: BorderRadius.circular(8),
-                                                ),
-                                                contentPadding: const EdgeInsets.all(12),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () {
-                                              passwordController.dispose();
-                                              Navigator.of(dialogContext).pop();
-                                            },
-                                            child: const Text('Cancel'),
-                                          ),
-                                          TextButton(
-                                            onPressed: () async {
-                                              final password = passwordController.text;
-                                              if (password.isEmpty) {
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  const SnackBar(content: Text('Please enter your password')),
-                                                );
-                                                return;
-                                              }
-                                              
-                                              passwordController.dispose();
-                                              Navigator.of(dialogContext).pop(); // Close dialog
-                                              
-                                              try {
-                                                await ref.read(authControllerProvider.notifier).deleteAccount(password: password);
-                                                
-                                                final authState = ref.read(authControllerProvider);
-                                                if (authState.hasError) {
-                                                  if (context.mounted) {
-                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                      SnackBar(
-                                                        content: Text('Failed to delete: ${authState.error}'),
-                                                        backgroundColor: Colors.red,
-                                                      ),
-                                                    );
-                                                  }
-                                                } else {
-                                                  if (context.mounted) {
-                                                    context.go('/welcome');
-                                                  }
-                                                }
-                                              } catch (e) {
-                                                if (context.mounted) {
-                                                  ScaffoldMessenger.of(context).showSnackBar(
-                                                    SnackBar(
-                                                      content: Text('Error: $e'),
-                                                      backgroundColor: Colors.red,
-                                                    ),
-                                                  );
-                                                }
-                                              }
-                                            },
-                                            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                                          ),
-                                        ],
-                                      );
-                                    }
-                                  );
+                                  
+                                  // Check if user is an email/password user
+                                  final firebaseUser = ref.read(firebaseAuthProvider).currentUser;
+                                  final providers = firebaseUser?.providerData.map((p) => p.providerId).toList() ?? [];
+                                  final isEmailUser = providers.contains('password');
+                                  
+                                   bool isLoading = false;
+                                   bool showPasswordField = false;
+                                   
+                                   return StatefulBuilder(
+                                     builder: (context, setState) {
+                                       return AlertDialog(
+                                         title: const Text('Delete Account'),
+                                         content: Column(
+                                           mainAxisSize: MainAxisSize.min,
+                                           crossAxisAlignment: CrossAxisAlignment.start,
+                                           children: [
+                                             const Text(
+                                               'Are you sure you want to delete your account? This action cannot be undone.',
+                                             ),
+                                             const SizedBox(height: 16),
+                                             
+                                             if (showPasswordField) ...[
+                                               const Text(
+                                                 'Security check: Please enter your password:',
+                                                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                               ),
+                                               const SizedBox(height: 8),
+                                               TextField(
+                                                 controller: passwordController,
+                                                 obscureText: true,
+                                                 autofocus: true,
+                                                 enabled: !isLoading,
+                                                 decoration: InputDecoration(
+                                                   hintText: 'Password',
+                                                   prefixIcon: const Icon(Icons.lock_outline),
+                                                   border: OutlineInputBorder(
+                                                     borderRadius: BorderRadius.circular(8),
+                                                   ),
+                                                   contentPadding: const EdgeInsets.all(12),
+                                                 ),
+                                                 onChanged: (value) => setState(() {}),
+                                               ),
+                                             ] else ...[
+                                               const Text(
+                                                 'Type "Confirm" to delete your account:',
+                                                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                               ),
+                                               const SizedBox(height: 8),
+                                               TextField(
+                                                 controller: confirmController,
+                                                 autofocus: true,
+                                                 enabled: !isLoading,
+                                                 decoration: InputDecoration(
+                                                   hintText: 'Confirm',
+                                                   border: OutlineInputBorder(
+                                                     borderRadius: BorderRadius.circular(8),
+                                                   ),
+                                                   contentPadding: const EdgeInsets.all(12),
+                                                 ),
+                                                 onChanged: (value) => setState(() {}),
+                                               ),
+                                             ],
+                                             
+                                             if (isLoading) ...[
+                                               const SizedBox(height: 16),
+                                               const Center(child: CircularProgressIndicator()),
+                                             ],
+                                           ],
+                                         ),
+                                         actions: [
+                                           TextButton(
+                                             onPressed: isLoading ? null : () {
+                                               confirmController.dispose();
+                                               passwordController.dispose();
+                                               Navigator.of(dialogContext).pop();
+                                             },
+                                             child: const Text('Cancel'),
+                                           ),
+                                           TextButton(
+                                             onPressed: (
+                                               (confirmController.text == 'Confirm' && !showPasswordField) ||
+                                               (passwordController.text.isNotEmpty && showPasswordField)
+                                             ) && !isLoading
+                                               ? () async {
+                                                 setState(() => isLoading = true);
+                                                 
+                                                 try {
+                                                   final password = showPasswordField ? passwordController.text : null;
+                                                   await ref.read(authControllerProvider.notifier).deleteAccount(password: password);
+                                                   
+                                                   final authState = ref.read(authControllerProvider);
+                                                   
+                                                   if (context.mounted) {
+                                                     if (authState.hasError) {
+                                                       setState(() => isLoading = false);
+                                                       
+                                                       // 💡 Fallback: If silent deletion failed for email user, show password field
+                                                       final errorMsg = authState.error.toString();
+                                                       if (isEmailUser && (errorMsg.contains('เซสชันเน็ตหมดอายุ') || errorMsg.contains('password'))) {
+                                                         setState(() => showPasswordField = true);
+                                                       } else {
+                                                         ScaffoldMessenger.of(context).showSnackBar(
+                                                           SnackBar(
+                                                             content: Text('Failed to delete: ${authState.error}'),
+                                                             backgroundColor: Colors.red,
+                                                           ),
+                                                         );
+                                                       }
+                                                     } else {
+                                                       // On success, close dialog. Redirection handled by AppRouter.
+                                                       confirmController.dispose();
+                                                       passwordController.dispose();
+                                                       if (Navigator.of(dialogContext).canPop()) {
+                                                         Navigator.of(dialogContext).pop();
+                                                       }
+                                                     }
+                                                   }
+                                                 } catch (e) {
+                                                   if (context.mounted) {
+                                                     setState(() => isLoading = false);
+                                                     ScaffoldMessenger.of(context).showSnackBar(
+                                                       SnackBar(
+                                                         content: Text('Error: $e'),
+                                                         backgroundColor: Colors.red,
+                                                       ),
+                                                     );
+                                                   }
+                                                 }
+                                               }
+                                               : null,
+                                             child: Text(
+                                               'Delete', 
+                                               style: TextStyle(
+                                                 color: (
+                                                   (confirmController.text == 'Confirm' && !showPasswordField) ||
+                                                   (passwordController.text.isNotEmpty && showPasswordField)
+                                                 ) ? Colors.red : Colors.grey
+                                               )
+                                             ),
+                                           ),
+                                         ],
+                                       );
+                                     }
+                                   );
                                 },
                               );
                             },
