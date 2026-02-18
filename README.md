@@ -77,12 +77,28 @@ Then try running the app again.
 
 ---
 
+## 🛡️ Firebase & Admin SDK Setup
+
+For security reasons, sensitive configuration files are excluded from version control (via `.gitignore`). If you are a new collaborator, you must perform the following:
+
+### 1. Project Configuration
+- Place your `GoogleService-Info.plist` (iOS) and `google-services.json` (Android) in their respective platform directories.
+
+### 2. Admin SDK (Backend/Scripts)
+If you need to run local administrative scripts or modify Cloud Functions:
+- Generate a new **Private Key** from the [Firebase Console](https://console.firebase.google.com/) (Project Settings > Service Accounts).
+- Rename the file to `serviceAccountKey.json`.
+- Place it in the `functions/` directory.
+- **NEVER** commit this file. It is already ignored by Git to prevent security leaks.
+
+---
+
 ## 📂 Project Structure
 ```
 lib/
 ├── src/
 │   ├── features/      # Feature-first architecture
-│   │   ├── authentication/ # Login, Register, Forget Password
+│   │   ├── authentication/ # Unified Onboarding, Login, Register
 │   │   ├── dashboard/      # Multi-camera overview & Live monitoring
 │   │   ├── statistics/     # Modern Analytics & Weekly Charts
 │   │   ├── group/          # Consolidated Group Management
@@ -99,18 +115,11 @@ assets/
 ```
 
 ## 💡 Key Features & Recent Improvements
-- **Consolidated Architecture**: Streamlined project by removing redundant folders (`groups`, `NotificationPage`) and standardizing on modern implementations.
-- **CI/CD Ready**: Fixed all 22+ analysis issues including `withOpacity` deprecations and missing `const` constructors. Core passes `flutter analyze` with zero issues.
-- **Premium Shield UI**: Integrated a custom high-profile "Shield with Plus" button in the center navigation for quick access to safety features.
-- **Modern Statistics Engine**: Replaced legacy statistics with a high-performance `StatisticsScreen` featuring real-time activity rings and interactive weekly charts.
-- **Multi-Camera Management**: Ability to register and manage multiple cameras with custom display names.
-- **Advanced Posture Classification**: Granular detection for **Sitting** and **Slouching** states, alongside Fall, Laying, and Walking.
-- **Temporal Analysis Engine**: Enhanced AI stability using Kalman Filters and temporal buffering for more accurate event logging.
-- **Smart Notification System**: A centralized notification hub with categorize alerts (Success, Warning, Danger).
+- **Unified Onboarding Flow**: Streamlined registration process that guides all new users (Email & Social) to a mandatory information-gathering step before accessing the dashboard.
+- **Consolidated Architecture**: Streamlined project by removing redundant folders and standardizing on modern implementations.
+- **CI/CD Ready**: Zero analysis issues, ensuring reliable builds on every commit.
 - **Secure Password Reset (Backend)**: Custom-built 2nd Gen Firebase Cloud Functions for secure server-side password updates via Admin SDK.
-- **Custom OTP Email System**: Direct SMTP integration with custom Thai templates for professional authentication flows.
-- **In-App Reset Flow**: Fully integrated in-app password reset UI, removing the need for external reset links.
-- **Global Theme Support**: Full support for system-aware dark and light modes using a custom `ThemeProvider`.
+- **Stale Session Fix**: Automatic Google/Apple sign-out during account deletion to prevent "Loading Loop" issues for returning users.
 
 ---
 
@@ -119,13 +128,12 @@ assets/
 **LifeGuardian คืออะไร?**
 โปรเจกต์นี้เป็นแอปพลิเคชันระบบตรวจจับท่าทางและอาการออฟฟิศซินโดรมด้วย AI (On-device) พัฒนาด้วย Flutter โดยเน้นที่ความรวดเร็วในการประมวลผลและความสวยงามของ UI ระดับ Premium
 
-**การปรับปรุงล่าสุด:**
-*   **Custom OTP & Secure Reset**: พัฒนาระบบส่งรหัส OTP ผ่านอีเมลด้วย SMTP ของเราเอง พร้อมระบบ Reset Password ที่ทำงานผ่าน Firebase Cloud Functions เพื่อความปลอดภัยสูงสุด
-*   **Code Consolidation**: ยุบรวม Folder ที่ซ้ำซ้อนและลบไฟล์ที่ไม่ได้ใช้งานออก เพื่อโครงสร้างโค้ดที่สะอาดและดูแลง่าย
-*   **CI Improvement**: แก้ไขปัญหา Linting/Analysis ทั้งหมดเพื่อให้สามารถรัน CI/CD บน GitHub ได้อย่างไร้รอยต่อ
-*   **UI Redesign**: อัปเกรดหน้าสถิติและระบบนำทางให้เป็นรูปแบบ Modern พร้อมปุ่ม Shield UI แบบพิเศษ
+**การตั้งค่าสำคัญสำหรับผู้ที่จะทำต่อ:**
+1.  **ไฟล์ความลับ (Secrets)**: ไฟล์ `serviceAccountKey.json` และตัวแปรสภาพแวดล้อมต่างๆ ถูกซ่อนไว้เพื่อความปลอดภัย หากต้องการใช้งาน Admin SDK ในเครื่องตัวเอง ให้เจนกุญแจใหม่จาก Firebase Console และวางไว้ที่โฟลเดอร์ `functions/` ครับ
+2.  **Unified Onboarding**: ระบบจะบังคับให้ผู้ใช้ใหม่ทุกคนเตรียมโปรไฟล์ให้เสร็จในหน้า **"Information"** ก่อนเสมอ หากมีการแก้ไขระบบ Routing ใน `AppRouter.dart` โปรดระวังจุดนี้ด้วยครับ
+3.  **การแก้ไข Region**: ปัจจุบัน Cloud Functions รันอยู่ที่ `us-central1` หากมีการย้าย Server ต้องอัปเดตทั้งในแอป (AuthRepository) และในไฟล์ `index.js` ฝั่ง Functions ให้ตรงกันครับ
 
-> **สถานะปัจจุบัน**: พัฒนาเสร็จสมบูรณ์ทั้งระบบ **Secure Auth**, **AI Stability Engine**, **Multi-Camera Support**, และผ่านการ **Cleanup** โครงสร้างโปรเจกต์ทั้งหมดแล้ว พร้อมสำหรับการต่อยอดในระดับ Production
+> **สถานะปัจจุบัน**: พัฒนาเสร็จสมบูรณ์ทั้งระบบ **Secure Auth**, **Unified Onboarding**, **AI Stability Engine**, และผ่านการ **Clean-up** ให้พร้อมสำหรับการ Deploy ระดับ Production แล้วครับ
 ---
 
 ## 📄 License
