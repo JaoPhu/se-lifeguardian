@@ -22,7 +22,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     super.dispose();
   }
 
-  Future<void> _sendOtp() async {
+  Future<void> _handleResetLink() async {
     final email = _emailController.text.trim();
     if (email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -34,7 +34,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Check if user exists
+      // 1. Check if user exists (Optional but good for UX)
       final authRepo = ref.read(authRepositoryProvider);
       final exists = await authRepo.checkUserExists(email);
 
@@ -58,63 +58,36 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         return;
       }
 
-      // 2. Generate and Send OTP
+      // 2. Send Reset Link via Firebase
+      await authRepo.sendResetLink(email);
+
       if (!mounted) return;
       
-      final otp = EmailService.generateOTP();
-      final success = await EmailService.sendOTP(email, otp);
-
-      if (!mounted) return;
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ส่งรหัสยืนยันไปยังอีเมลของคุณแล้ว')),
-        );
-        context.push('/otp-verification', extra: {
-          'email': email,
-        });
-      } else {
-        // Fallback option
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('ส่งรหัสไม่สำเร็จ'),
-            content: const Text('ไม่สามารถส่งรหัส OTP ได้ คุณต้องการรับลิ้งค์รีเซ็ตรหัสผ่านแทนหรือไม่?'),
-            actions: [
-              TextButton(
-                onPressed: () => context.pop(),
-                child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey)),
-              ),
-              TextButton(
-                onPressed: () {
-                  context.pop();
-                  _sendResetLink(email);
-                },
-                child: const Text('ส่งลิ้งค์', style: TextStyle(color: Color(0xFF0D9488))),
-              ),
+      // 3. Show Success Dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle, color: Color(0xFF0D9488)),
+              SizedBox(width: 8),
+              Text('Check your email'),
             ],
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+          content: Text('We have sent a password reset link to $email. Please follow the instructions in the email to reset your password.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                context.pop(); // Close dialog
+                context.go('/login'); // Return to login
+              },
+              child: const Text('Back to Login', style: TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.bold)),
+            ),
+          ],
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _sendResetLink(String email) async {
-    setState(() => _isLoading = true);
-    try {
-      await ref.read(authRepositoryProvider).sendPasswordReset(email);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password reset link sent to your email')),
-      );
-      context.pop(); // Go back to login
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -176,7 +149,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                   shape: BoxShape.circle,
                 ),
                 child: Center(
-                  child: Icon(Icons.mark_email_read_outlined, size: 60, color: isDark ? Colors.grey.shade300 : const Color(0xFF111827)),
+                  child: Icon(Icons.mail_lock_outlined, size: 60, color: isDark ? Colors.grey.shade300 : const Color(0xFF0D9488)),
                 ),
               ),
 
@@ -191,7 +164,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Enter your email or number then we will send you a code to reset your password',
+                'Enter your email address and we will send you a link to reset your password',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
@@ -214,7 +187,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: _isLoading ? null : _sendOtp,
+                  onPressed: _isLoading ? null : _handleResetLink,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0D9488),
                     foregroundColor: Colors.white,
@@ -231,7 +204,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                         )
                       : const Text(
-                          'Send',
+                          'Send Reset Link',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
