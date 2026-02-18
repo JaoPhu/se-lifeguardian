@@ -16,6 +16,17 @@ Welcome to the LifeGuardian team! Here's how to get started and keep our code cl
     *   **Toolchain Conflicts**: If you have Homebrew GCC installed, you may face toolchain conflicts (e.g., `'cstddef' not found` or declaration conflicts).
         *   **Fix**: Ensure `CPATH` and `LIBRARY_PATH` are NOT set in your shell profile (`.zshrc`, `.bash_profile`).
         *   **Workaround**: Our `ios/Podfile` contains a `post_init` hook that sanitizes search paths and isolates `leveldb-library` from Homebrew headers.
+4.  **Database Setup (For Forking/Self-hosting)**:
+    Since the current database will be closed in the future, you must set up your own Firebase project for sustained development:
+    *   Create a project on [Firebase Console](https://console.firebase.google.com/).
+    *   **Firestore**: Enable and use the rules in `firestore.rules`.
+    *   **Authentication**: Enable Email/Password, Google, and Apple sign-in.
+    *   **Storage**: Enable and use the rules in `storage.rules`.
+    *   **Functions**: 
+        *   `cd functions && npm install`.
+        *   **Email Setup**: Update `functions/index.js`. Locate the `nodemailer.createTransport` section and provide your own SMTP credentials or integrate a service like SendGrid. The current Gmail account is for demo purposes and will be retired.
+        *   Deploy via `firebase deploy --only functions`.
+    *   **Config Files**: Update `lib/src/features/authentication/data/auth_repository.dart` if you change regions, and replace `google-services.json` / `GoogleService-Info.plist`.
 
 ## 🏗 Architecture
 
