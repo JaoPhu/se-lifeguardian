@@ -5,7 +5,7 @@ import 'package:lifeguardian/src/features/authentication/presentation/widgets/so
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// ✅ ใช้ controller แทน AuthService
+// ✅ controller
 import 'package:lifeguardian/src/features/authentication/controllers/auth_controller.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -19,6 +19,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _nameController = TextEditingController();
+  final _birthDateController = TextEditingController();
+  final _ageController = TextEditingController();
+  String? _gender = 'Male';
   bool _agreeTerms = false;
 
   @override
@@ -34,16 +38,85 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     super.dispose();
   }
 
+  void _onBirthDateChanged() {
+    final String text = _birthDateController.text.replaceAll('/', '');
+    if (text.length == 8 && int.tryParse(text) != null) {
+      _formatAndCalculateAge(text);
+    }
+  }
+
+  void _formatAndCalculateAge(String rawDigits) {
+    try {
+      int day, month, year;
+
+      if (rawDigits.length == 8) {
+        // ddMMyyyy
+        day = int.parse(rawDigits.substring(0, 2));
+        month = int.parse(rawDigits.substring(2, 4));
+        year = int.parse(rawDigits.substring(4, 8));
+      } else if (rawDigits.length == 7) {
+        // dMMyyyy or ddMyyyy
+        final d2 = int.parse(rawDigits.substring(0, 2));
+        if (d2 > 31) {
+          day = int.parse(rawDigits.substring(0, 1));
+          month = int.parse(rawDigits.substring(1, 3));
+          year = int.parse(rawDigits.substring(3, 7));
+        } else {
+          final m2 = int.parse(rawDigits.substring(1, 3));
+          if (m2 > 12) {
+            day = int.parse(rawDigits.substring(0, 2));
+            month = int.parse(rawDigits.substring(2, 3));
+            year = int.parse(rawDigits.substring(3, 7));
+          } else {
+            day = int.parse(rawDigits.substring(0, 2));
+            month = int.parse(rawDigits.substring(2, 3));
+            year = int.parse(rawDigits.substring(3, 7));
+          }
+        }
+      } else if (rawDigits.length == 6) {
+        // dMyyyy
+        day = int.parse(rawDigits.substring(0, 1));
+        month = int.parse(rawDigits.substring(1, 2));
+        year = int.parse(rawDigits.substring(2, 6));
+      } else {
+        return;
+      }
+
+      if (month < 1 || month > 12 || day < 1 || day > 31) return;
+
+      final DateTime birthDate = DateTime(year, month, day);
+      final DateTime now = DateTime.now();
+      int age = now.year - birthDate.year;
+      if (now.month < birthDate.month ||
+          (now.month == birthDate.month && now.day < birthDate.day)) {
+        age--;
+      }
+
+      final String formattedDate =
+          '${day.toString().padLeft(2, '0')}/${month.toString().padLeft(2, '0')}/$year';
+
+      if (_birthDateController.text != formattedDate) {
+        _birthDateController.value = TextEditingValue(
+          text: formattedDate,
+          selection: TextSelection.collapsed(offset: formattedDate.length),
+        );
+      }
+      _ageController.text = age.toString();
+    } catch (_) {
+      // ignore
+    }
+  }
 
   void _onAuthError(Object e) {
     final err = e.toString().toLowerCase();
-    if (err.contains('account-already-exists') || 
-        err.contains('email-already-in-use') || 
+    if (err.contains('account-already-exists') ||
+        err.contains('email-already-in-use') ||
         err.contains('email already registered')) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Row(
             children: [
               Icon(Icons.info_outline, color: Color(0xFF0D9488)),
@@ -68,7 +141,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0D9488),
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
               child: const Text('เข้าสู่ระบบ'),
             ),
@@ -85,6 +159,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       SnackBar(content: Text(msg)),
     );
   }
+
+Future<void> _ensureUserDocAfterAuth() async {
+  await ref.read(userRepositoryProvider).ensureUserDoc(
+    displayName: _nameController.text,
+    gender: _gender,
+    birthDate: _birthDateController.text,
+    age: _ageController.text,
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -242,19 +325,36 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             return;
                           }
 
+                          // ✅ 1) Register ก่อน (ให้ได้ uid)
                           await ref
                               .read(authControllerProvider.notifier)
                               .register(email, password);
 
+                          // ✅ 2) เช็ค state หลัง register
                           final s = ref.read(authControllerProvider);
-                          s.whenOrNull(
-                            error: (e, st) => _onAuthError(e),
-                            data: (_) {
-                              // Direct to information page after registration
-                              context.pushReplacement('/edit-profile', extra: {'fromRegistration': true});
-                            },
+                          if (s.hasError) {
+                            _onAuthError(s.error!);
+                            return;
+                          }
+
+                          // ✅ 3) สร้าง/อัปเดต users/{uid} ใน Firestore (แก้ Unknown)
+                          await ref.read(userRepositoryProvider).ensureUserDoc(
+                                displayName: _nameController.text,
+                                gender: _gender,
+                                birthDate: _birthDateController.text,
+                                age: _ageController
+                                    .text, // ✅ ส่งเป็น String ให้ตรงกับ repo
+                              );
+
+                          if (!context.mounted) return;
+
+                          // ✅ 4) ไปหน้า edit-profile
+                          context.pushReplacement(
+                            '/edit-profile',
+                            extra: {'fromRegistration': true},
                           );
                         },
+
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0D9488),
                     foregroundColor: Colors.white,
@@ -268,7 +368,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       ? const SizedBox(
                           width: 22,
                           height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                       : const Text(
                           'Create account',
@@ -312,10 +415,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             .registerWithGoogle();
 
                         final s = ref.read(authControllerProvider);
-                        s.whenOrNull(
-                          error: (e, st) => _onAuthError(e),
-                          data: (_) => context.pushReplacement('/edit-profile', extra: {'fromRegistration': true}),
-                        );
+                        if (s.hasError) {
+                          _onAuthError(s.error!);
+                          return;
+                        }
+
+                        await _ensureUserDocAfterAuth();
+
+                        if (!context.mounted) return;
+                        context.pushReplacement('/edit-profile',
+                            extra: {'fromRegistration': true});
                       },
                     ),
                   ),
@@ -337,10 +446,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                               .registerWithApple();
 
                           final s = ref.read(authControllerProvider);
-                          s.whenOrNull(
-                            error: (e, st) => _onAuthError(e),
-                            data: (_) => context.pushReplacement('/edit-profile', extra: {'fromRegistration': true}),
-                          );
+                          if (s.hasError) {
+                            _onAuthError(s.error!);
+                            return;
+                          }
+
+                          await _ensureUserDocAfterAuth();
+
+                          if (!context.mounted) return;
+                          context.pushReplacement('/edit-profile',
+                              extra: {'fromRegistration': true});
                         },
                       ),
                     ),
