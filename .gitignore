@@ -49,3 +49,10 @@ app.*.map.json
 *_log.txt
 *_verify.txt
 ios_backup/
+
+# Secrets & Firebase
+serviceAccountKey.json
+*.p12
+*.jks
+*.keystore
+.env*
