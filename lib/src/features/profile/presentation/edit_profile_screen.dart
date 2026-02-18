@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:image_picker/image_picker.dart';
 import '../data/user_repository.dart';
+import '../../../features/authentication/providers/auth_providers.dart';
 import '../../../common_widgets/user_avatar.dart';
 
 
@@ -41,9 +42,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   void initState() {
     super.initState();
     final user = ref.read(userProvider);
-    _nameController = TextEditingController(text: user.name);
+    final firebaseUser = ref.read(firebaseAuthProvider).currentUser;
+    
+    // Pre-populate name from Firebase if local profile name is empty (for social sign-in)
+    String initialName = user.name;
+    if (initialName.isEmpty && firebaseUser?.displayName != null) {
+      initialName = firebaseUser!.displayName!;
+    }
+
+    _nameController = TextEditingController(text: initialName);
     _usernameController = TextEditingController(text: user.username);
-    _emailController = TextEditingController(text: user.email);
+    _emailController = TextEditingController(text: user.email.isEmpty ? (firebaseUser?.email ?? '') : user.email);
     _phoneNumberController = TextEditingController(text: user.phoneNumber);
     _birthDateController = TextEditingController(text: user.birthDate);
     _ageController = TextEditingController(text: user.age);
@@ -426,26 +435,28 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       child: const Text('Submit', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
+                  if (!widget.fromRegistration) ...[
+                    const SizedBox(width: 16),
+                    Expanded(
                       child: OutlinedButton(
-                      onPressed: () {
-                        if (context.canPop()) {
-                          context.pop();
-                        } else {
-                          context.go('/overview');
-                        }
-                      },
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF0D9488),
-                        side: BorderSide.none,
-                        backgroundColor: theme.colorScheme.secondaryContainer,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        onPressed: () {
+                          if (context.canPop()) {
+                            context.pop();
+                          } else {
+                            context.go('/overview');
+                          }
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF0D9488),
+                          side: BorderSide.none,
+                          backgroundColor: theme.colorScheme.secondaryContainer,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
-                      child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ],

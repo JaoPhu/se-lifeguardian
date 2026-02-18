@@ -249,28 +249,16 @@ final goRouterProvider = Provider<GoRouter>((ref) {
 
       // 2. Logged in -> Check profile completeness
       // IMPORTANT: Only redirect to edit-profile for NEW users who haven't completed registration
-      // Don't redirect if data is just loading (email will be populated from auth even for new users)
-      if (user.id.isNotEmpty && user.name.isEmpty && state.matchedLocation != '/splash') {
-        // If they are on edit-profile, stay there.
-        if (state.matchedLocation == '/edit-profile') {
+      // user.name is our primary indicator for a "completed" basic profile.
+      if (user.id.isNotEmpty && user.name.isEmpty) {
+        // If they are already on edit-profile, or splash, let them be
+        if (state.matchedLocation == '/edit-profile' || state.matchedLocation == '/splash') {
           return null;
         }
 
-        // Check if this is a truly new user vs. existing user whose data is loading
-        final hasProfileData = user.birthDate.isNotEmpty || 
-                               user.phoneNumber.isNotEmpty || 
-                               user.gender.isNotEmpty ||
-                               user.bloodType.isNotEmpty;
-        
-        // If they are on an auth route (login/register/welcome), they MUST go to edit-profile
-        final onAuthRoute = state.matchedLocation == '/welcome' ||
-                            state.matchedLocation == '/pre-login' ||
-                            state.matchedLocation == '/login' ||
-                            state.matchedLocation == '/register';
-
-        if (!hasProfileData || onAuthRoute) {
-          return '/edit-profile';
-        }
+        // If they are on ANY auth route or the welcome screen, they MUST go to edit-profile
+        // This covers Email registration, Social sign-in, and generic "stuck" states
+        return '/edit-profile';
       }
 
       // 3. Subscription/Trial check
