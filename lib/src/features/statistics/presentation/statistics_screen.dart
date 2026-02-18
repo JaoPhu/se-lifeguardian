@@ -10,7 +10,7 @@ import '../../notification/presentation/notification_bell.dart';
 import '../../../common_widgets/user_avatar.dart';
 
 import '../../history/data/history_repository_provider.dart';
-
+import '../../events/data/event_repository.dart';
 
 class StatisticsScreen extends ConsumerStatefulWidget {
   const StatisticsScreen({super.key});
@@ -186,19 +186,67 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     // .weekday returns 1 for Mon, 7 for Sun
     return date.subtract(Duration(days: date.weekday - 1));
   }
-  
+
   // Hardcoded labels for Mon-Sun
-  final List<String> _weekLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  final List<String> _weekLabels = [
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+    'Sun'
+  ];
 
   @override
   Widget build(BuildContext context) {
+    // 1. Ghost Event (Current, in-memory)
     final healthState = ref.watch(healthStatusProvider);
-    final user = ref.watch(userProvider);
-    final stats = _calculateDurations(healthState.events);
+    final ghostEvent =
+        healthState.events.isNotEmpty ? healthState.events.first : null;
+
+    // 2. Historical Events (From Firestore Stream)
+    final eventsAsync = ref.watch(
+        eventsStreamProvider); // Assumes this provider is available globally or imported
+
+    // Combined Events List
+    List<SimulationEvent> displayedEvents = [];
+
+    eventsAsync.whenData((historyEvents) {
+      displayedEvents.addAll(historyEvents);
+    });
+
+    // Add ghost event if it exists and isn't already in history (check ID)
+    if (ghostEvent != null) {
+      // Avoid duplication if the ghost event hasn't been saved yet (it shouldn't be in DB if it's ghost)
+      // Ghost ID is usually timestamp.
+      if (!displayedEvents.any((e) => e.id == ghostEvent.id)) {
+        displayedEvents.insert(0, ghostEvent);
+      }
+    }
+
+    // Fallback: If stream loading, use healthState.events fully?
+    // Or just wait. Let's use displayedEvents.
+    // Actually, healthState.events *might* have local events not yet in stream?
+    // But per refactor, non-ghost events are saved.
+    // Let's rely on stream for history to be "truth".
+
+    // Filter for TODAY only for the Pie Chart
+    final now = DateTime.now();
+    final today =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+    final todayEvents = displayedEvents.where((e) {
+      // Check date string match
+      return e.date == today;
+    }).toList();
+
+    final stats = _calculateDurations(todayEvents);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Fetch Weekly Stats (Based on current selected date or Today?)
-    // Usually "Weekly" shows the *current* week of the selected date.
+    final user = ref.watch(userProvider);
+
+    // Fetch Weekly Stats (Based on current selected date)
     final startOfWeek = _getStartOfWeek(_selectedDate);
     final weeklyStatsAsync = ref.watch(weeklyStatsProvider(startOfWeek));
 
@@ -225,7 +273,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                 Row(
                   children: [
                     // Replaced NotificationBell with custom Shield button
-                    const NotificationBell(color: Colors.white, whiteBorder: true),
+                    const NotificationBell(
+                        color: Colors.white, whiteBorder: true),
                     const SizedBox(width: 16),
                     GestureDetector(
                       onTap: () => context.push('/profile'),
@@ -340,7 +389,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                             height: 180,
                             child: PieChart(
                               PieChartData(
-                                sections: _getPieSections(healthState.events),
+                                sections: _getPieSections(todayEvents),
                                 sectionsSpace: 0,
                                 centerSpaceRadius: 0,
                                 startDegreeOffset: 270,
@@ -377,7 +426,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                               '12',
                               style: TextStyle(
                                 color: Color(0xFF4A5568),
-                                fontSize: 13, // Slightly smaller for premium feel
+                                fontSize:
+                                    13, // Slightly smaller for premium feel
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -388,7 +438,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                               '6',
                               style: TextStyle(
                                 color: Color(0xFF4A5568),
-                                fontSize: 13, // Slightly smaller for premium feel
+                                fontSize:
+                                    13, // Slightly smaller for premium feel
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -431,29 +482,49 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                               child: _buildSummaryCard(
                                   'Relax\n${stats['relax']!.toStringAsFixed(1)}h',
                                   Icons.weekend,
-                                  isDark ? Colors.blue.shade900.withValues(alpha: 0.6) : const Color(0xFFE3F2FD),
-                                  isDark ? Colors.blue.shade100 : const Color(0xFF1565C0))), // Blue
+                                  isDark
+                                      ? Colors.blue.shade900
+                                          .withValues(alpha: 0.6)
+                                      : const Color(0xFFE3F2FD),
+                                  isDark
+                                      ? Colors.blue.shade100
+                                      : const Color(0xFF1565C0))), // Blue
                           const SizedBox(width: 12),
                           Expanded(
                               child: _buildSummaryCard(
                                   'Work\n${stats['work']!.toStringAsFixed(1)}h',
                                   Icons.work,
-                                  isDark ? Colors.amber.shade900.withValues(alpha: 0.6) : const Color(0xFFFFF8E1),
-                                  isDark ? Colors.amber.shade100 : const Color(0xFFF57F17))), // Amber
+                                  isDark
+                                      ? Colors.amber.shade900
+                                          .withValues(alpha: 0.6)
+                                      : const Color(0xFFFFF8E1),
+                                  isDark
+                                      ? Colors.amber.shade100
+                                      : const Color(0xFFF57F17))), // Amber
                           const SizedBox(width: 12),
                           Expanded(
                               child: _buildSummaryCard(
                                   'Walk\n${stats['walk']!.toStringAsFixed(1)}h',
                                   Icons.directions_walk,
-                                  isDark ? Colors.green.shade900.withValues(alpha: 0.6) : const Color(0xFFECFDF5),
-                                  isDark ? Colors.green.shade100 : const Color(0xFF047857))), // Emerald
+                                  isDark
+                                      ? Colors.green.shade900
+                                          .withValues(alpha: 0.6)
+                                      : const Color(0xFFECFDF5),
+                                  isDark
+                                      ? Colors.green.shade100
+                                      : const Color(0xFF047857))), // Emerald
                           const SizedBox(width: 12),
                           Expanded(
                               child: _buildSummaryCard(
                                   'Falls\n${stats['falls']!.toInt()}',
                                   Icons.warning_amber_rounded,
-                                  isDark ? Colors.red.shade900.withValues(alpha: 0.6) : const Color(0xFFFFEBEE),
-                                  isDark ? Colors.red.shade100 : const Color(0xFFC62828))), // Red
+                                  isDark
+                                      ? Colors.red.shade900
+                                          .withValues(alpha: 0.6)
+                                      : const Color(0xFFFFEBEE),
+                                  isDark
+                                      ? Colors.red.shade100
+                                      : const Color(0xFFC62828))), // Red
                         ],
                       ),
                     ),
@@ -492,12 +563,14 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                             ),
                           ),
                           const SizedBox(height: 20), // Spacing for "!" icon
-                          
+
                           AspectRatio(
                             aspectRatio: 1.5,
                             child: weeklyStatsAsync.when(
-                              loading: () => const Center(child: CircularProgressIndicator()),
-                              error: (err, stack) => Center(child: Text('Error: $err')),
+                              loading: () => const Center(
+                                  child: CircularProgressIndicator()),
+                              error: (err, stack) =>
+                                  Center(child: Text('Error: $err')),
                               data: (weeklyStats) {
                                 return BarChart(
                                   BarChartData(
@@ -506,33 +579,51 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                                     barTouchData: BarTouchData(
                                       enabled: true,
                                       touchTooltipData: BarTouchTooltipData(
-                                        getTooltipColor: (_) => Colors.blueGrey,
-                                        tooltipBorderRadius: BorderRadius.circular(8),
-                                        getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                                          return BarTooltipItem(
-                                            '${_weekLabels[group.x.toInt()]}\n',
-                                            const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                            children: [
-                                              TextSpan(text: (rod.toY - 1).toStringAsFixed(1)) // -1 for base? No, just rod.toY
-                                            ]
-                                          );
-                                        }
-                                      ),
+                                          getTooltipColor: (_) =>
+                                              Colors.blueGrey,
+                                          tooltipBorderRadius:
+                                              BorderRadius.circular(8),
+                                          getTooltipItem: (group, groupIndex,
+                                              rod, rodIndex) {
+                                            return BarTooltipItem(
+                                                '${_weekLabels[group.x.toInt()]}\n',
+                                                const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight:
+                                                        FontWeight.bold),
+                                                children: [
+                                                  TextSpan(
+                                                      text: (rod.toY - 1)
+                                                          .toStringAsFixed(
+                                                              1)) // -1 for base? No, just rod.toY
+                                                ]);
+                                          }),
                                     ),
                                     titlesData: FlTitlesData(
                                       show: true,
-                                      leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                      rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                      leftTitles: const AxisTitles(
+                                          sideTitles:
+                                              SideTitles(showTitles: false)),
+                                      rightTitles: const AxisTitles(
+                                          sideTitles:
+                                              SideTitles(showTitles: false)),
                                       topTitles: AxisTitles(
                                         sideTitles: SideTitles(
                                           showTitles: true,
                                           reservedSize: 20, // Space for "!"
                                           getTitlesWidget: (value, meta) {
                                             final index = value.toInt();
-                                            if (index < 0 || index >= weeklyStats.dailyStats.length) return const SizedBox();
-                                            final dayStat = weeklyStats.dailyStats[index];
+                                            if (index < 0 ||
+                                                index >=
+                                                    weeklyStats
+                                                        .dailyStats.length)
+                                              return const SizedBox();
+                                            final dayStat =
+                                                weeklyStats.dailyStats[index];
                                             if (dayStat.falls > 0) {
-                                              return const Icon(Icons.error, color: Color(0xFFC62828), size: 16); // Red Exclamation
+                                              return const Icon(Icons.error,
+                                                  color: Color(0xFFC62828),
+                                                  size: 16); // Red Exclamation
                                             }
                                             return const SizedBox();
                                           },
@@ -544,14 +635,19 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                                           reservedSize: 30,
                                           getTitlesWidget: (value, meta) {
                                             final index = value.toInt();
-                                            if (index >= 0 && index < _weekLabels.length) {
+                                            if (index >= 0 &&
+                                                index < _weekLabels.length) {
                                               return Padding(
-                                                padding: const EdgeInsets.only(top: 8.0),
+                                                padding: const EdgeInsets.only(
+                                                    top: 8.0),
                                                 child: Text(
                                                   _weekLabels[index],
                                                   style: TextStyle(
-                                                    fontSize: 12, 
-                                                    color: isDark ? Colors.grey.shade400 : const Color(0xFF64748B),
+                                                    fontSize: 12,
+                                                    color: isDark
+                                                        ? Colors.grey.shade400
+                                                        : const Color(
+                                                            0xFF64748B),
                                                     fontWeight: FontWeight.bold,
                                                   ),
                                                 ),
@@ -566,31 +662,57 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                                       show: false,
                                     ),
                                     borderData: FlBorderData(show: false),
-                                    barGroups: weeklyStats.dailyStats.asMap().entries.map((entry) {
+                                    barGroups: weeklyStats.dailyStats
+                                        .asMap()
+                                        .entries
+                                        .map((entry) {
                                       final index = entry.key;
                                       final stat = entry.value;
-                                      final totalHours = stat.relaxHours + stat.workHours + stat.walkHours;
-                                      
+                                      final totalHours = stat.relaxHours +
+                                          stat.workHours +
+                                          stat.walkHours;
+
                                       return BarChartGroupData(
                                         x: index,
                                         barRods: [
                                           BarChartRodData(
                                             toY: totalHours,
                                             width: 16,
-                                            borderRadius: BorderRadius.circular(6),
+                                            borderRadius:
+                                                BorderRadius.circular(6),
                                             // Max capacity background bar (always 24h)
-                                            backDrawRodData: BackgroundBarChartRodData(
+                                            backDrawRodData:
+                                                BackgroundBarChartRodData(
                                               show: true,
                                               toY: 24,
-                                              color: isDark 
-                                                  ? Colors.white.withValues(alpha: 0.1) 
+                                              color: isDark
+                                                  ? Colors.white
+                                                      .withValues(alpha: 0.1)
                                                   : Colors.grey.shade200,
                                             ),
-                                            rodStackItems: totalHours == 0 ? [] : [
-                                              BarChartRodStackItem(0, stat.relaxHours, Colors.blue.shade200), // Relax (Bottom)
-                                              BarChartRodStackItem(stat.relaxHours, stat.relaxHours + stat.workHours, Colors.amber.shade200), // Work (Middle)
-                                              BarChartRodStackItem(stat.relaxHours + stat.workHours, totalHours, const Color(0xFF10B981).withValues(alpha: 0.5)), // Walk (Top)
-                                            ],
+                                            rodStackItems: totalHours == 0
+                                                ? []
+                                                : [
+                                                    BarChartRodStackItem(
+                                                        0,
+                                                        stat.relaxHours,
+                                                        Colors.blue
+                                                            .shade200), // Relax (Bottom)
+                                                    BarChartRodStackItem(
+                                                        stat.relaxHours,
+                                                        stat.relaxHours +
+                                                            stat.workHours,
+                                                        Colors.amber
+                                                            .shade200), // Work (Middle)
+                                                    BarChartRodStackItem(
+                                                        stat.relaxHours +
+                                                            stat.workHours,
+                                                        totalHours,
+                                                        const Color(0xFF10B981)
+                                                            .withValues(
+                                                                alpha:
+                                                                    0.5)), // Walk (Top)
+                                                  ],
                                           ),
                                         ],
                                       );

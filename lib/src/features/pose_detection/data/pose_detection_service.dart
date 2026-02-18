@@ -1,7 +1,8 @@
 import 'dart:math' as math;
 
 import 'dart:typed_data';
-import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart' as ml_kit;
+import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart'
+    as ml_kit;
 
 import 'pose_models.dart';
 import '../logic/kalman_filter.dart';
@@ -10,8 +11,9 @@ import '../logic/physics_engine.dart';
 class TrackedPerson {
   Map<PoseLandmarkType, PoseLandmark> smoothedLandmarks = {};
   math.Point<double> centroid = const math.Point(0, 0);
-  math.Point<double> velocity = const math.Point(0, 0); // Legacy: derived from centroid
-  
+  math.Point<double> velocity =
+      const math.Point(0, 0); // Legacy: derived from centroid
+
   // New AI Components
   final Map<PoseLandmarkType, PointKalmanFilter> _landmarkFilters = {};
   final PhysicsEngine _physicsEngine = PhysicsEngine();
@@ -22,26 +24,27 @@ class TrackedPerson {
   final int id;
 
   TrackedPerson(this.id, Map<PoseLandmarkType, PoseLandmark> initialLandmarks) {
-    smoothedLandmarks = Map<PoseLandmarkType, PoseLandmark>.from(initialLandmarks);
+    smoothedLandmarks =
+        Map<PoseLandmarkType, PoseLandmark>.from(initialLandmarks);
     _updateCentroid();
   }
 
   void update(Map<PoseLandmarkType, PoseLandmark> rawLandmarks, double factor) {
-
     final Map<PoseLandmarkType, PoseLandmark> filteredLandmarks = {};
 
     // 1. Apply Kalman Filter
     rawLandmarks.forEach((PoseLandmarkType type, PoseLandmark landmark) {
-       final filter = _landmarkFilters.putIfAbsent(type, () => PointKalmanFilter());
-       final filtered = filter.filter(landmark.x, landmark.y);
-       
-       filteredLandmarks[type] = PoseLandmark(
-         type: type,
-         x: filtered[0],
-         y: filtered[1],
-         z: landmark.z,
-         likelihood: landmark.likelihood,
-       );
+      final filter =
+          _landmarkFilters.putIfAbsent(type, () => PointKalmanFilter());
+      final filtered = filter.filter(landmark.x, landmark.y);
+
+      filteredLandmarks[type] = PoseLandmark(
+        type: type,
+        x: filtered[0],
+        y: filtered[1],
+        z: landmark.z,
+        likelihood: landmark.likelihood,
+      );
     });
 
     // Update smoothed landmarks with the result
@@ -55,18 +58,22 @@ class TrackedPerson {
   /// Predict next position based on velocity (Dead Reckoning)
   void predict() {
     centroid = math.Point(centroid.x + velocity.x, centroid.y + velocity.y);
-    
+
     // Shift all landmarks by velocity to keep skeleton consistent during occlusion
-    smoothedLandmarks = smoothedLandmarks.map((PoseLandmarkType type, PoseLandmark landmark) {
-      return MapEntry(type, PoseLandmark(
-        type: type,
-        x: landmark.x + velocity.x,
-        y: landmark.y + velocity.y,
-        z: landmark.z,
-        likelihood: landmark.likelihood * 0.9, // Diminish likelihood while occluded
-      ));
+    smoothedLandmarks =
+        smoothedLandmarks.map((PoseLandmarkType type, PoseLandmark landmark) {
+      return MapEntry(
+          type,
+          PoseLandmark(
+            type: type,
+            x: landmark.x + velocity.x,
+            y: landmark.y + velocity.y,
+            z: landmark.z,
+            likelihood:
+                landmark.likelihood * 0.9, // Diminish likelihood while occluded
+          ));
     });
-    
+
     missedCount++;
   }
 
@@ -75,7 +82,7 @@ class TrackedPerson {
     final rightHip = smoothedLandmarks[PoseLandmarkType.rightHip];
     final leftShoulder = smoothedLandmarks[PoseLandmarkType.leftShoulder];
     final rightShoulder = smoothedLandmarks[PoseLandmarkType.rightShoulder];
-    
+
     double sumX = 0;
     double sumY = 0;
     int count = 0;
@@ -94,41 +101,41 @@ class TrackedPerson {
   }
 
   double distanceTo(math.Point<double> other) {
-    return math.sqrt(math.pow(centroid.x - other.x, 2) + math.pow(centroid.y - other.y, 2));
+    return math.sqrt(
+        math.pow(centroid.x - other.x, 2) + math.pow(centroid.y - other.y, 2));
   }
 }
 
 class PoseDetectionService {
-  final ml_kit.PoseDetector _poseDetector = ml_kit.PoseDetector(options: ml_kit.PoseDetectorOptions());
-  
+  final ml_kit.PoseDetector _poseDetector =
+      ml_kit.PoseDetector(options: ml_kit.PoseDetectorOptions());
+
   final List<TrackedPerson> _activeTracks = [];
 
   // Scene Analysis State
 
-  
   // Stability thresholds
-  static const int _maxMissedFrames = 60; 
+  static const int _maxMissedFrames = 60;
 
   Future<void> close() async {
     await _poseDetector.close();
   }
 
-
-
-  Future<List<TrackedPerson>> detect(ml_kit.InputImage inputImage, Uint8List originalBytes) async {
+  Future<List<TrackedPerson>> detect(
+      ml_kit.InputImage inputImage, Uint8List originalBytes) async {
     // 1. Run Standard ML Kit Pose Detector
     // This returns the most prominent person in the frame (single-person model behavior)
-    final List<ml_kit.Pose> poses = await _poseDetector.processImage(inputImage);
-    
+    final List<ml_kit.Pose> poses =
+        await _poseDetector.processImage(inputImage);
+
     // 2. Prediction Step (Physics)
     if (_activeTracks.isNotEmpty) {
       _activeTracks.first.predict();
     }
 
     if (poses.isEmpty) {
-
-       // Cleanup if lost for too long
-       _activeTracks.removeWhere((t) => t.missedCount > _maxMissedFrames);
+      // Cleanup if lost for too long
+      _activeTracks.removeWhere((t) => t.missedCount > _maxMissedFrames);
       return List.from(_activeTracks);
     }
 
@@ -147,33 +154,31 @@ class PoseDetectionService {
 
     // 4. Post-Process Analysis
 
-
     return List.from(_activeTracks);
   }
 
-  Map<PoseLandmarkType, PoseLandmark> _mapLandmarks(Map<ml_kit.PoseLandmarkType, ml_kit.PoseLandmark> raw) {
+  Map<PoseLandmarkType, PoseLandmark> _mapLandmarks(
+      Map<ml_kit.PoseLandmarkType, ml_kit.PoseLandmark> raw) {
     // Map SDK types to our domain types manually to resolve type mismatch
     final Map<PoseLandmarkType, PoseLandmark> result = {};
-    
+
     raw.forEach((ml_kit.PoseLandmarkType type, ml_kit.PoseLandmark landmark) {
-       // Convert SDK type to our Domain type via name matching
-       for (var ourType in PoseLandmarkType.values) {
-         if (ourType.name == type.name) {
-           result[ourType] = PoseLandmark(
-             type: ourType,
-             x: landmark.x,
-             y: landmark.y,
-             z: landmark.z,
-             likelihood: landmark.likelihood,
-           );
-           break;
-         }
-       }
+      // Convert SDK type to our Domain type via name matching
+      for (var ourType in PoseLandmarkType.values) {
+        if (ourType.name == type.name) {
+          result[ourType] = PoseLandmark(
+            type: ourType,
+            x: landmark.x,
+            y: landmark.y,
+            z: landmark.z,
+            likelihood: landmark.likelihood,
+          );
+          break;
+        }
+      }
     });
     return result;
   }
-
-
 
   /// Calculates the angle of the torso relative to the vertical axis.
   /// Ported from Prototype: 90 = Upright, 0 = Flat.
@@ -183,7 +188,10 @@ class PoseDetectionService {
     final leftHip = landmarks[PoseLandmarkType.leftHip];
     final rightHip = landmarks[PoseLandmarkType.rightHip];
 
-    if (leftShoulder == null || rightShoulder == null || leftHip == null || rightHip == null) {
+    if (leftShoulder == null ||
+        rightShoulder == null ||
+        leftHip == null ||
+        rightHip == null) {
       return 0;
     }
 
@@ -193,7 +201,7 @@ class PoseDetectionService {
     final midHipY = (leftHip.y + rightHip.y) / 2;
 
     final dx = midShoulderX - midHipX;
-    final dy = midShoulderY - midHipY; 
+    final dy = midShoulderY - midHipY;
 
     // atan2(abs(dy), abs(dx)) gives angle with horizontal
     // verticality where 90 is Upright, 0 is Flat.
@@ -202,17 +210,18 @@ class PoseDetectionService {
   }
 
   double getLegStraightness(Map<PoseLandmarkType, PoseLandmark> landmarks) {
-  /// Calculates the angle between three landmarks using atan2 (Anatomical Standard).
-  double getAngle(PoseLandmark? first, PoseLandmark? mid, PoseLandmark? last) {
-    if (first == null || mid == null || last == null) return 0;
-    
-    final double result = (
-      math.atan2(last.y - mid.y, last.x - mid.x) -
-      math.atan2(first.y - mid.y, first.x - mid.x)
-    ).abs() * (180 / math.pi);
-    
-    return result > 180 ? 360 - result : result;
-  }
+    /// Calculates the angle between three landmarks using atan2 (Anatomical Standard).
+    double getAngle(
+        PoseLandmark? first, PoseLandmark? mid, PoseLandmark? last) {
+      if (first == null || mid == null || last == null) return 0;
+
+      final double result = (math.atan2(last.y - mid.y, last.x - mid.x) -
+                  math.atan2(first.y - mid.y, first.x - mid.x))
+              .abs() *
+          (180 / math.pi);
+
+      return result > 180 ? 360 - result : result;
+    }
 
     final leftBend = getAngle(
       landmarks[PoseLandmarkType.leftHip],
@@ -232,14 +241,14 @@ class PoseDetectionService {
   bool isLaying(Map<PoseLandmarkType, PoseLandmark> landmarks) {
     if (landmarks.isEmpty) return false;
     final torsoAngle = getTorsoAngle(landmarks);
-    
+
     final xValues = landmarks.values.map((l) => l.x).toList();
     final yValues = landmarks.values.map((l) => l.y).toList();
     if (xValues.isEmpty || yValues.isEmpty) return false;
-    
+
     final width = xValues.reduce(math.max) - xValues.reduce(math.min);
     final height = yValues.reduce(math.max) - yValues.reduce(math.min);
-    
+
     // Prototype check: torso < 25 or isFlat (horizontal aspect ratio)
     final isFlat = width > height * 1.4;
 
@@ -257,40 +266,82 @@ class PoseDetectionService {
     if (landmarks.isEmpty) return false;
     final torsoAngle = getTorsoAngle(landmarks);
     if (torsoAngle < 60) return false;
-    
-    final legBend = getLegStraightness(landmarks);
-    // Knees bent significantly (> 70 degrees typically)
-    return legBend > 65;
+
+    final legBend = getLegStraightness(landmarks); // Returns min(left, right)
+
+    // Knees bent significantly.
+    // Increased threshold to 70 to avoid false positives during deep squats/transitions
+    return legBend > 70;
   }
 
   bool isStanding(Map<PoseLandmarkType, PoseLandmark> landmarks) {
-     if (landmarks.isEmpty) return false;
-     final torsoAngle = getTorsoAngle(landmarks);
-     if (torsoAngle < 60) return false;
-     
-     final legBend = getLegStraightness(landmarks);
-     return legBend < 25; // Very straight legs
+    if (landmarks.isEmpty) return false;
+    final torsoAngle = getTorsoAngle(landmarks);
+    if (torsoAngle < 60) return false;
+
+    // For standing, BOTH legs should be relatively straight.
+    // getLegStraightness returns MIN bend. We need MAX bend to be low to ensure BOTH are straight.
+    final leftBend = _limitAngle(
+        landmarks[PoseLandmarkType.leftHip],
+        landmarks[PoseLandmarkType.leftKnee],
+        landmarks[PoseLandmarkType.leftAnkle]);
+    final rightBend = _limitAngle(
+        landmarks[PoseLandmarkType.rightHip],
+        landmarks[PoseLandmarkType.rightKnee],
+        landmarks[PoseLandmarkType.rightAnkle]);
+
+    return (leftBend < 25 && rightBend < 25);
   }
 
   bool isWalking(Map<PoseLandmarkType, PoseLandmark> landmarks) {
     if (landmarks.isEmpty) return false;
     final torsoAngle = getTorsoAngle(landmarks);
     if (torsoAngle < 60) return false;
-    
-    final legBend = getLegStraightness(landmarks);
-    // Leg is partially bent (walking motion)
+
+    // Walking is characterized by ASYMMETRY (one leg straight, one bent)
+    final leftBend = _limitAngle(
+        landmarks[PoseLandmarkType.leftHip],
+        landmarks[PoseLandmarkType.leftKnee],
+        landmarks[PoseLandmarkType.leftAnkle]);
+    final rightBend = _limitAngle(
+        landmarks[PoseLandmarkType.rightHip],
+        landmarks[PoseLandmarkType.rightKnee],
+        landmarks[PoseLandmarkType.rightAnkle]);
+
+    final difference = (leftBend - rightBend).abs();
+
+    // Sign of walking:
+    // 1. Significant difference between legs (> 15 degrees)
+    // 2. Or if both are bent slightly (mid-stride), but not enough to be sitting.
+
+    if (difference > 15) return true;
+
+    // Fallback: If both legs are somewhat bent (e.g. 30-60), but not sitting (>70).
+    final legBend = math.min(leftBend, rightBend);
     return legBend >= 25 && legBend <= 65;
+  }
+
+  double _limitAngle(
+      PoseLandmark? first, PoseLandmark? mid, PoseLandmark? last) {
+    if (first == null || mid == null || last == null) return 0;
+
+    final double result = (math.atan2(last.y - mid.y, last.x - mid.x) -
+                math.atan2(first.y - mid.y, first.x - mid.x))
+            .abs() *
+        (180 / math.pi);
+
+    return result > 180 ? 360 - result : result;
   }
 
   bool isFalling(TrackedPerson person) {
     if (person.landmarkPhysics.isEmpty) return false;
-    
+
     final height = _getBodyHeight(person.smoothedLandmarks);
     if (height < 50) return false; // Too small / far away
 
     double maxAcc = 0;
     double maxDownVel = 0;
-    
+
     // Check hips for fall dynamics
     for (var type in [PoseLandmarkType.leftHip, PoseLandmarkType.rightHip]) {
       if (person.landmarkPhysics.containsKey(type)) {
@@ -299,31 +350,31 @@ class PoseDetectionService {
         if (physics.acceleration > maxAcc) maxAcc = physics.acceleration;
       }
     }
-    
+
     // Fall: Downward speed > 1.5 body heights/sec OR Impact > 6 body heights/sec^2
     // Reduced impact threshold slightly to be more sensitive to sudden stops
     return maxDownVel > (height * 1.5) || maxAcc > (height * 6.0);
   }
 
   double _getBodyHeight(Map<PoseLandmarkType, PoseLandmark> landmarks) {
-      final nose = landmarks[PoseLandmarkType.nose];
-      final leftAnkle = landmarks[PoseLandmarkType.leftAnkle]; 
-      final rightAnkle = landmarks[PoseLandmarkType.rightAnkle];
-      
-      final double? y1 = nose?.y;
-      double? y2;
-      
-      if (leftAnkle != null && rightAnkle != null) {
-          y2 = (leftAnkle.y + rightAnkle.y) / 2;
-      } else if (leftAnkle != null) {
-          y2 = leftAnkle.y;
-      } else if (rightAnkle != null) {
-          y2 = rightAnkle.y;
-      }
-      
-      if (y1 != null && y2 != null) {
-          return (y1 - y2).abs();
-      }
-      return 100.0;
+    final nose = landmarks[PoseLandmarkType.nose];
+    final leftAnkle = landmarks[PoseLandmarkType.leftAnkle];
+    final rightAnkle = landmarks[PoseLandmarkType.rightAnkle];
+
+    final double? y1 = nose?.y;
+    double? y2;
+
+    if (leftAnkle != null && rightAnkle != null) {
+      y2 = (leftAnkle.y + rightAnkle.y) / 2;
+    } else if (leftAnkle != null) {
+      y2 = leftAnkle.y;
+    } else if (rightAnkle != null) {
+      y2 = rightAnkle.y;
+    }
+
+    if (y1 != null && y2 != null) {
+      return (y1 - y2).abs();
+    }
+    return 100.0;
   }
 }

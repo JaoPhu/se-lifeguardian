@@ -9,7 +9,8 @@ class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
 
   @override
-  ConsumerState<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+  ConsumerState<ForgotPasswordScreen> createState() =>
+      _ForgotPasswordScreenState();
 }
 
 class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
@@ -44,14 +45,17 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Account Not Found'),
-            content: const Text('There is no account associated with this email address. Please check your email or register a new account.'),
+            content: const Text(
+                'There is no account associated with this email address. Please check your email or register a new account.'),
             actions: [
               TextButton(
                 onPressed: () => context.pop(),
-                child: const Text('OK', style: TextStyle(color: Color(0xFF0D9488))),
+                child: const Text('OK',
+                    style: TextStyle(color: Color(0xFF0D9488))),
               ),
             ],
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
         setState(() => _isLoading = false);
@@ -59,10 +63,10 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       }
 
       // 2. Send Reset Link via Firebase
-      await authRepo.sendResetLink(email);
+      await authRepo.sendPasswordReset(email);
 
       if (!mounted) return;
-      
+
       // 3. Show Success Dialog
       showDialog(
         context: context,
@@ -75,17 +79,21 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
               Text('Check your email'),
             ],
           ),
-          content: Text('We have sent a password reset link to $email. Please follow the instructions in the email to reset your password.'),
+          content: Text(
+              'We have sent a password reset link to $email. Please follow the instructions in the email to reset your password.'),
           actions: [
             TextButton(
               onPressed: () {
                 context.pop(); // Close dialog
                 context.go('/login'); // Return to login
               },
-              child: const Text('Back to Login', style: TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.bold)),
+              child: const Text('Back to Login',
+                  style: TextStyle(
+                      color: Color(0xFF0D9488), fontWeight: FontWeight.bold)),
             ),
           ],
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
     } catch (e) {
@@ -109,12 +117,14 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         leading: Padding(
           padding: const EdgeInsets.only(left: 16.0),
           child: IconButton(
-            icon: Icon(Icons.arrow_back_ios_new, color: isDark ? Colors.white : Colors.black, size: 20),
+            icon: Icon(Icons.arrow_back_ios_new,
+                color: isDark ? Colors.white : Colors.black, size: 20),
             onPressed: () => context.pop(),
             style: IconButton.styleFrom(
               backgroundColor: isDark ? Colors.grey.shade800 : Colors.white,
               shape: const CircleBorder(),
-              side: BorderSide(color: isDark ? Colors.grey.shade700 : Colors.grey.shade200),
+              side: BorderSide(
+                  color: isDark ? Colors.grey.shade700 : Colors.grey.shade200),
             ),
           ),
         ),
@@ -149,7 +159,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                   shape: BoxShape.circle,
                 ),
                 child: Center(
-                  child: Icon(Icons.mail_lock_outlined, size: 60, color: isDark ? Colors.grey.shade300 : const Color(0xFF0D9488)),
+                  child: Icon(Icons.mail_lock_outlined,
+                      size: 60,
+                      color: isDark
+                          ? Colors.grey.shade300
+                          : const Color(0xFF0D9488)),
                 ),
               ),
 
@@ -201,7 +215,8 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                       ? const SizedBox(
                           height: 24,
                           width: 24,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2),
                         )
                       : const Text(
                           'Send Reset Link',

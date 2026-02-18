@@ -30,7 +30,7 @@ class AuthRepository {
 
   Future<void> signInWithEmail(String email, String password) async {
     final normalizedEmail = email.trim().toLowerCase();
-    
+
     // 1. Authenticate first so we have the UID and permissions
     final credential = await _auth.signInWithEmailAndPassword(
       email: normalizedEmail,
@@ -43,23 +43,26 @@ class AuthRepository {
     final firebaseUser = credential.user;
     if (firebaseUser != null) {
       // email variable is unused, removed
-      
+
       bool profileExists = false;
       try {
-        debugPrint('AuthRepository: Checking Firestore profile for email: $normalizedEmail');
+        debugPrint(
+            'AuthRepository: Checking Firestore profile for email: $normalizedEmail');
         final query = await _firestore
             .collection('users')
             .where('email', isEqualTo: normalizedEmail)
             .limit(1)
             .get();
         profileExists = query.docs.isNotEmpty;
-        
+
         if (!profileExists) {
-          debugPrint('AuthRepository: No profile found by email, checking by UID: ${firebaseUser.uid}');
-          final userDoc = await _firestore.collection('users').doc(firebaseUser.uid).get();
+          debugPrint(
+              'AuthRepository: No profile found by email, checking by UID: ${firebaseUser.uid}');
+          final userDoc =
+              await _firestore.collection('users').doc(firebaseUser.uid).get();
           profileExists = userDoc.exists;
         }
-        
+
         debugPrint('AuthRepository: Profile exists: $profileExists');
       } catch (e) {
         debugPrint('AuthRepository: Firestore profile check error: $e');
@@ -69,7 +72,10 @@ class AuthRepository {
       // 3. Update Session ID for single-session enforcement
       // Use set(merge: true) in case the document doesn't exist yet
       final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
-      await FirebaseFirestore.instance.collection('users').doc(firebaseUser.uid).set({
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(firebaseUser.uid)
+          .set({
         'sessionId': sessionId,
       }, SetOptions(merge: true));
     }
@@ -95,7 +101,9 @@ class AuthRepository {
     try {
       // Use default instance (us-central1) which is standard for most Firebase projects
       // Use asia-southeast1 region
-      final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'asia-southeast1').httpsCallable('updateUserPassword');
+      final HttpsCallable callable =
+          FirebaseFunctions.instanceFor(region: 'asia-southeast1')
+              .httpsCallable('updateUserPassword');
       final result = await callable.call(<String, dynamic>{
         'email': email,
         'newPassword': newPassword,
@@ -106,15 +114,17 @@ class AuthRepository {
         debugPrint('Password updated successfully');
         return;
       }
-      
+
       throw Exception(result.data?['message'] ?? 'Failed to update password');
     } on FirebaseFunctionsException catch (e) {
       // Handle Cloud Function specific errors
-      debugPrint('Cloud Function error: ${e.code} - ${e.message} - ${e.details}');
+      debugPrint(
+          'Cloud Function error: ${e.code} - ${e.message} - ${e.details}');
       throw Exception(e.message ?? 'Failed to update password');
     } catch (e) {
       debugPrint('Error updating password via Cloud Function: $e');
-      throw Exception('Failed to update password. Please try again or use the reset link.');
+      throw Exception(
+          'Failed to update password. Please try again or use the reset link.');
     }
   }
 
@@ -125,7 +135,9 @@ class AuthRepository {
     required String newPassword,
   }) async {
     try {
-      final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'asia-southeast1').httpsCallable('resetPasswordWithOTP');
+      final HttpsCallable callable =
+          FirebaseFunctions.instanceFor(region: 'asia-southeast1')
+              .httpsCallable('resetPasswordWithOTP');
       final result = await callable.call(<String, dynamic>{
         'email': email,
         'otp': otp,
@@ -136,7 +148,7 @@ class AuthRepository {
         debugPrint('Password reset successfully with OTP');
         return;
       }
-      
+
       throw Exception(result.data?['message'] ?? 'Failed to reset password');
     } on FirebaseFunctionsException catch (e) {
       debugPrint('Cloud Function error: ${e.code} - ${e.message}');
@@ -149,9 +161,11 @@ class AuthRepository {
   }
 
   /// Change password for currently logged-in user
-  Future<void> changePassword(String currentPassword, String newPassword) async {
+  Future<void> changePassword(
+      String currentPassword, String newPassword) async {
     final user = _auth.currentUser;
-    if (user == null || user.email == null) throw Exception('No user logged in');
+    if (user == null || user.email == null)
+      throw Exception('No user logged in');
 
     try {
       // Re-authenticate user before allowing password change (Firebase requirement)
@@ -159,7 +173,7 @@ class AuthRepository {
         email: user.email!,
         password: currentPassword,
       );
-      
+
       await user.reauthenticateWithCredential(credential);
       await user.updatePassword(newPassword);
       debugPrint('Password changed successfully for logged-in user');
@@ -176,7 +190,7 @@ class AuthRepository {
     }
   }
 
-  Future<void> sendResetLink(String email) async {
+  Future<void> sendPasswordReset(String email) async {
     await _auth.sendPasswordResetEmail(email: email.trim().toLowerCase());
   }
 
@@ -197,7 +211,7 @@ class AuthRepository {
     final email = user.email;
 
     String? targetPassword = password;
-    
+
     // 💡 Try to retrieve stored password if not provided (Seamless flow)
     if (targetPassword == null || targetPassword.isEmpty) {
       targetPassword = await _storage.read(key: _passwordKey);
@@ -205,7 +219,9 @@ class AuthRepository {
 
     try {
       // 1. Re-authenticate if password available (for email/password accounts)
-      if (email != null && targetPassword != null && targetPassword.isNotEmpty) {
+      if (email != null &&
+          targetPassword != null &&
+          targetPassword.isNotEmpty) {
         final credential = EmailAuthProvider.credential(
           email: email,
           password: targetPassword,
@@ -227,13 +243,13 @@ class AuthRepository {
           rethrow;
         }
       }
-      
+
       debugPrint('Firebase Auth account deleted');
 
       // 3. Delete Firestore data (only after Auth deletion succeeds)
       await _deleteFirestoreData(uid);
       debugPrint('Firestore data deleted');
-      
+
       // Clear stored password after successful deletion
       await _storage.delete(key: _passwordKey);
     } on FirebaseAuthException catch (e) {
@@ -261,7 +277,7 @@ class AuthRepository {
       // --- Google Re-auth ---
       final googleUser = await GoogleSignIn().signIn();
       if (googleUser == null) throw Exception('การยืนยันตัวตนถูกยกเลิก');
-      
+
       final googleAuth = await googleUser.authentication;
       final cred = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
@@ -272,7 +288,7 @@ class AuthRepository {
       // --- Apple Re-auth ---
       final rawNonce = _generateNonce();
       final nonce = _sha256ofRawNonce(rawNonce);
-      
+
       final appleCredential = await SignInWithApple.getAppleIDCredential(
         scopes: [
           AppleIDAuthorizationScopes.email,
@@ -292,18 +308,26 @@ class AuthRepository {
   Future<void> _deleteFirestoreData(String uid) async {
     try {
       final firestore = FirebaseFirestore.instance;
-      
+
       // Delete user document
       await firestore.collection('users').doc(uid).delete();
-      
+
       // Delete associated events
-      final events = await firestore.collection('users').doc(uid).collection('events').get();
+      final events = await firestore
+          .collection('users')
+          .doc(uid)
+          .collection('events')
+          .get();
       for (var doc in events.docs) {
         await doc.reference.delete();
       }
 
       // Delete associated notifications
-      final notifications = await firestore.collection('users').doc(uid).collection('notifications').get();
+      final notifications = await firestore
+          .collection('users')
+          .doc(uid)
+          .collection('notifications')
+          .get();
       for (var doc in notifications.docs) {
         await doc.reference.delete();
       }
@@ -340,11 +364,12 @@ class AuthRepository {
     final user = credential.user;
     if (user != null) {
       final email = user.email?.trim().toLowerCase();
-      
+
       bool profileExists = false;
       try {
         if (email != null) {
-          debugPrint('AuthRepository: Checking Firestore profile (Google) for email: $email');
+          debugPrint(
+              'AuthRepository: Checking Firestore profile (Google) for email: $email');
           final query = await _firestore
               .collection('users')
               .where('email', isEqualTo: email)
@@ -352,20 +377,22 @@ class AuthRepository {
               .get();
           profileExists = query.docs.isNotEmpty;
         }
-        
+
         if (!profileExists) {
           debugPrint('AuthRepository: Checking by UID: ${user.uid}');
-          final userDoc = await _firestore.collection('users').doc(user.uid).get();
+          final userDoc =
+              await _firestore.collection('users').doc(user.uid).get();
           profileExists = userDoc.exists;
         }
         debugPrint('AuthRepository: Profile exists: $profileExists');
       } catch (e) {
-        debugPrint('AuthRepository: Firestore profile check error (Google): $e');
+        debugPrint(
+            'AuthRepository: Firestore profile check error (Google): $e');
         profileExists = false;
       }
-      
+
       if (isLogin) {
-        // Login Flow: Even if profile missing, we let them in. 
+        // Login Flow: Even if profile missing, we let them in.
         // Redirection logic in router will guide them to complete profile.
 
         // Update Session ID
@@ -400,16 +427,17 @@ class AuthRepository {
     );
 
     final authCredential = await _auth.signInWithCredential(credential);
-    
+
     // --- Strict Check ---
     final user = authCredential.user;
     if (user != null) {
       final email = user.email?.trim().toLowerCase();
-      
+
       bool profileExists = false;
       try {
         if (email != null) {
-          debugPrint('AuthRepository: Checking Firestore profile (Apple) for email: $email');
+          debugPrint(
+              'AuthRepository: Checking Firestore profile (Apple) for email: $email');
           final query = await _firestore
               .collection('users')
               .where('email', isEqualTo: email)
@@ -417,10 +445,11 @@ class AuthRepository {
               .get();
           profileExists = query.docs.isNotEmpty;
         }
-        
+
         if (!profileExists) {
           debugPrint('AuthRepository: Checking by UID: ${user.uid}');
-          final userDoc = await _firestore.collection('users').doc(user.uid).get();
+          final userDoc =
+              await _firestore.collection('users').doc(user.uid).get();
           profileExists = userDoc.exists;
         }
         debugPrint('AuthRepository: Profile exists: $profileExists');
@@ -428,10 +457,10 @@ class AuthRepository {
         debugPrint('AuthRepository: Firestore profile check error (Apple): $e');
         profileExists = false;
       }
-      
+
       if (isLogin) {
         // Login Flow: Let them in even if profile missing.
-        
+
         // Update Session ID
         final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
         await _firestore.collection('users').doc(user.uid).set({
@@ -446,9 +475,11 @@ class AuthRepository {
   }
 
   String _generateNonce([int length = 32]) {
-    const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    const charset =
+        '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
     final random = Random.secure();
-    return List.generate(length, (_) => charset[random.nextInt(charset.length)]).join();
+    return List.generate(length, (_) => charset[random.nextInt(charset.length)])
+        .join();
   }
 
   String _sha256ofRawNonce(String rawNonce) {

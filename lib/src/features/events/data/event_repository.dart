@@ -21,13 +21,14 @@ class EventRepository {
       if (!await file.exists()) return null;
 
       final extension = filePath.split('.').last;
-      final ref = _storage.ref().child('users/${user.uid}/events/$eventId.$extension');
-      
+      final ref =
+          _storage.ref().child('users/${user.uid}/events/$eventId.$extension');
+
       final uploadTask = await ref.putFile(
         file,
         SettableMetadata(contentType: 'image/$extension'),
       );
-      
+
       return await uploadTask.ref.getDownloadURL();
     } catch (e) {
       print('Error uploading snapshot: $e');
@@ -37,9 +38,14 @@ class EventRepository {
 
   Future<void> syncEvent(SimulationEvent event) async {
     final user = _auth.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      print('EventRepository: Cannot sync event, user is null.');
+      return;
+    }
 
     try {
+      print(
+          'EventRepository: Syncing event ${event.id} (${event.type}) to Firestore...');
       await _firestore
           .collection('users')
           .doc(user.uid)
@@ -53,8 +59,12 @@ class EventRepository {
 
   Stream<List<SimulationEvent>> getEventsStream() {
     final user = _auth.currentUser;
-    if (user == null) return Stream.value([]);
+    if (user == null) {
+      print('EventRepository: User is null, returning empty stream.');
+      return Stream.value([]);
+    }
 
+    print('EventRepository: Listening to events for user ${user.uid}');
     return _firestore
         .collection('users')
         .doc(user.uid)
@@ -91,7 +101,8 @@ class EventRepository {
   }
 }
 
-final eventRepositoryProvider = Provider<EventRepository>((ref) => EventRepository());
+final eventRepositoryProvider =
+    Provider<EventRepository>((ref) => EventRepository());
 
 final eventsStreamProvider = StreamProvider<List<SimulationEvent>>((ref) {
   return ref.watch(eventRepositoryProvider).getEventsStream();
