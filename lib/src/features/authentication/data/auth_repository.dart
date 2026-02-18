@@ -94,8 +94,7 @@ class AuthRepository {
   Future<void> updateUserPassword(String email, String newPassword) async {
     try {
       // Use default instance (us-central1) which is standard for most Firebase projects
-      // Use asia-southeast1 region
-      final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'asia-southeast1').httpsCallable('updateUserPassword');
+      final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'us-central1').httpsCallable('updateUserPassword');
       final result = await callable.call(<String, dynamic>{
         'email': email,
         'newPassword': newPassword,
@@ -125,7 +124,7 @@ class AuthRepository {
     required String newPassword,
   }) async {
     try {
-      final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'asia-southeast1').httpsCallable('resetPasswordWithOTP');
+      final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'us-central1').httpsCallable('resetPasswordWithOTP');
       final result = await callable.call(<String, dynamic>{
         'email': email,
         'otp': otp,
@@ -176,7 +175,7 @@ class AuthRepository {
     }
   }
 
-  Future<void> sendResetLink(String email) async {
+  Future<void> sendPasswordReset(String email) async {
     await _auth.sendPasswordResetEmail(email: email.trim().toLowerCase());
   }
 

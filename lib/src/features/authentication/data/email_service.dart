@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 class EmailService {
-  static final _functions = FirebaseFunctions.instanceFor(region: 'asia-southeast1');
+  static final _functions = FirebaseFunctions.instanceFor(region: 'us-central1');
 
   // Generate 4-digit OTP
   static String generateOTP() {

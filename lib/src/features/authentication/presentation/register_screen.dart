@@ -252,72 +252,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 isPassword: true,
                 controller: _confirmPasswordController,
               ),
-              const SizedBox(height: 20),
-              AuthTextField(
-                label: 'Full Name',
-                hintText: 'John Doe',
-                prefixIcon: Icons.person_outline,
-                controller: _nameController,
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: AuthTextField(
-                      label: 'Birth Date',
-                      hintText: 'DD/MM/YYYY',
-                      prefixIcon: Icons.calendar_today_outlined,
-                      controller: _birthDateController,
-                      focusNode: _birthDateFocusNode,
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: AuthTextField(
-                      label: 'Age',
-                      hintText: 'Auto',
-                      prefixIcon: Icons.history,
-                      controller: _ageController,
-                      readOnly: true,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Gender',
-                style: TextStyle(
-                  color: Color(0xFF0D9488),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                initialValue: _gender,
-                items: ['Male', 'Female', 'Other'].map((String val) {
-                  return DropdownMenuItem<String>(
-                    value: val,
-                    child: Text(val),
-                  );
-                }).toList(),
-                onChanged: (String? newValue) {
-                  setState(() {
-                    _gender = newValue!;
-                  });
-                },
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: isDark ? Colors.grey.shade900 : Colors.grey.shade50,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: isDark ? Colors.grey.shade700 : Colors.grey.shade200),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                ),
-              ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
               Row(
                 children: [
                   SizedBox(
@@ -379,14 +314,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           final password = _passwordController.text.trim();
                           final confirm =
                               _confirmPasswordController.text.trim();
-                          final name = _nameController.text.trim();
-                          final birthDate = _birthDateController.text.trim();
 
                           if (email.isEmpty ||
                               password.isEmpty ||
-                              confirm.isEmpty ||
-                              name.isEmpty ||
-                              birthDate.isEmpty) {
+                              confirm.isEmpty) {
                             _showSnack('กรอกข้อมูลให้ครบทุกช่องก่อนนะ');
                             return;
                           }
@@ -407,17 +338,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           s.whenOrNull(
                             error: (e, st) => _onAuthError(e),
                             data: (_) {
-                              // Initialize Profile
-                              final currentUser = ref.read(userProvider);
-                              final updatedUser = currentUser.copyWith(
-                                name: name,
-                                birthDate: birthDate,
-                                age: _ageController.text,
-                                gender: _gender,
-                                email: email,
-                              );
-                              ref.read(userProvider.notifier).updateUser(updatedUser);
-                              context.go('/overview');
+                              // Direct to information page after registration
+                              context.pushReplacement('/edit-profile', extra: {'fromRegistration': true});
                             },
                           );
                         },
@@ -434,7 +356,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       ? const SizedBox(
                           width: 22,
                           height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
                       : const Text(
                           'Create account',
@@ -481,7 +403,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           final s = ref.read(authControllerProvider);
                           s.whenOrNull(
                             error: (e, st) => _onAuthError(e),
-                            data: (_) => context.push('/edit-profile', extra: {'fromRegistration': true}),
+                            data: (_) => context.pushReplacement('/edit-profile', extra: {'fromRegistration': true}),
                           );
                         });
                       },
@@ -508,7 +430,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             final s = ref.read(authControllerProvider);
                             s.whenOrNull(
                               error: (e, st) => _onAuthError(e),
-                              data: (_) => context.push('/edit-profile', extra: {'fromRegistration': true}),
+                              data: (_) => context.pushReplacement('/edit-profile', extra: {'fromRegistration': true}),
                             );
                           });
                         },
