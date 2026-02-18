@@ -3,3 +3,7 @@ node_modules/
 lib/
 firebase-debug.log
 functions-debug.log
+
+# Secrets
+serviceAccountKey.json
+.env

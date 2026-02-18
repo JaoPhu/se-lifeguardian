@@ -233,8 +233,11 @@ class AuthRepository {
       await _deleteFirestoreData(uid);
       debugPrint('Firestore data deleted');
       
-      // Clear stored password after successful deletion
+      // Clear stored password and Google session after successful deletion
       await _storage.delete(key: _passwordKey);
+      if (!kIsWeb) {
+        await GoogleSignIn().signOut();
+      }
     } on FirebaseAuthException catch (e) {
       if (e.code == 'requires-recent-login') {
         throw Exception('เซสชันเน็ตหมดอายุ กรุณายืนยันตัวตนใหม่อีกครั้ง');
