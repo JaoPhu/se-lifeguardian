@@ -5,9 +5,9 @@ import 'package:lifeguardian/src/features/authentication/presentation/widgets/so
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// ✅ ใช้ controller
+// ✅ controller
 import 'package:lifeguardian/src/features/authentication/controllers/auth_controller.dart';
-// import 'package:lifeguardian/src/features/profile/data/user_repository.dart'; // Unused
+import 'package:lifeguardian/src/features/profile/data/user_repository.dart'; // ✅ ใช้ ensureUserDoc()
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -30,8 +30,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   void _onAuthError(Object e) {
     final err = e.toString().toLowerCase();
-    if (err.contains('user-not-found') || 
-        err.contains('no user record') || 
+    if (err.contains('user-not-found') ||
+        err.contains('no user record') ||
         err.contains('user not found')) {
       showDialog(
         context: context,
@@ -79,6 +79,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg)),
     );
+  }
+
+  Future<void> _afterLoginEnsureUserDoc() async {
+    // ✅ หลัง login สำเร็จ ให้สร้าง/อัปเดต users/{uid} เสมอ (กัน Unknown)
+    await ref.read(userRepositoryProvider).ensureUserDoc();
   }
 
   @override
@@ -136,6 +141,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 32),
+
               AuthTextField(
                 label: 'Email',
                 hintText: 'example@gmail.com',
@@ -144,6 +150,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 20),
+
               AuthTextField(
                 label: 'Password',
                 hintText: 'Enter password',
@@ -152,6 +159,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 controller: _passwordController,
               ),
               const SizedBox(height: 16),
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -186,13 +194,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ],
                   ),
                   TextButton(
-                    onPressed: isLoading
-                        ? null
-                        : () => context.push('/forgot-password'),
+                    onPressed: isLoading ? null : () => context.push('/forgot-password'),
                     style: TextButton.styleFrom(
-                      foregroundColor: isDark
-                          ? Colors.grey.shade400
-                          : const Color(0xFF374151),
+                      foregroundColor: isDark ? Colors.grey.shade400 : const Color(0xFF374151),
                     ),
                     child: const Text(
                       'Forgot password?',
@@ -201,7 +205,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ],
               ),
+
               const SizedBox(height: 24),
+
               SizedBox(
                 width: double.infinity,
                 height: 56,
@@ -217,17 +223,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             return;
                           }
 
-                          await ref
-                              .read(authControllerProvider.notifier)
-                              .login(email, password);
+                          // ✅ 1) Login
+                          await ref.read(authControllerProvider.notifier).login(email, password);
 
+                          // ✅ 2) เช็ค state หลัง login
                           final s = ref.read(authControllerProvider);
-                          s.whenOrNull(
-                            error: (e, st) => _onAuthError(e),
-                            data: (_) {
-                              if (mounted) context.go('/overview');
-                            },
-                          );
+                          if (s.hasError) {
+                            _onAuthError(s.error!);
+                            return;
+                          }
+
+                          // ✅ 3) สร้าง users/{uid} (กรณี login ด้วย Google/Apple/เก่าๆแล้วไม่มี doc)
+                          await _afterLoginEnsureUserDoc();
+
+                          if (!context.mounted) return;
+                          context.go('/overview');
                         },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0D9488),
@@ -253,7 +263,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                 ),
               ),
+
               const SizedBox(height: 32),
+
               const Row(
                 children: [
                   Expanded(child: Divider(color: Colors.grey)),
@@ -267,7 +279,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   Expanded(child: Divider(color: Colors.grey)),
                 ],
               ),
+
               const SizedBox(height: 24),
+
               Row(
                 children: [
                   Expanded(
@@ -278,22 +292,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         height: 24,
                         width: 24,
                       ),
-                      onPressed: () {
+                      onPressed: () async {
                         if (isLoading) return;
 
-                        Future(() async {
-                          await ref
-                              .read(authControllerProvider.notifier)
-                              .loginWithGoogle();
+                        await ref.read(authControllerProvider.notifier).loginWithGoogle();
 
-                          final s = ref.read(authControllerProvider);
-                          s.whenOrNull(
-                            error: (e, st) => _onAuthError(e),
-                             data: (_) {
-                               if (mounted) context.go('/overview');
-                             },
-                          );
-                        });
+                        final s = ref.read(authControllerProvider);
+                        if (s.hasError) {
+                          _onAuthError(s.error!);
+                          return;
+                        }
+
+                        await _afterLoginEnsureUserDoc();
+
+                        if (!context.mounted) return;
+                        context.go('/overview');
                       },
                     ),
                   ),
@@ -307,28 +320,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           color: isDark ? Colors.white : Colors.black,
                           size: 24,
                         ),
-                        // เดี๋ยวค่อยทำจริงทีหลัง
-                        onPressed: () {
+                        onPressed: () async {
                           if (isLoading) return;
 
-                          Future(() async {
-                            await ref
-                                .read(authControllerProvider.notifier)
-                                .loginWithApple();
+                          await ref.read(authControllerProvider.notifier).loginWithApple();
 
-                            final s = ref.read(authControllerProvider);
-                            s.whenOrNull(
-                              error: (e, st) => _onAuthError(e),
-                              data: (_) => context.go('/overview'),
-                            );
-                          });
+                          final s = ref.read(authControllerProvider);
+                          if (s.hasError) {
+                            _onAuthError(s.error!);
+                            return;
+                          }
+
+                          await _afterLoginEnsureUserDoc();
+
+                          if (!context.mounted) return;
+                          context.go('/overview');
                         },
                       ),
                     ),
                   ],
                 ],
               ),
+
               const SizedBox(height: 24),
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -337,9 +352,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     style: TextStyle(color: Colors.grey),
                   ),
                   GestureDetector(
-                    onTap: isLoading
-                        ? null
-                        : () => context.pushReplacement('/register'),
+                    onTap: isLoading ? null : () => context.pushReplacement('/register'),
                     child: Text(
                       'Sign up',
                       style: TextStyle(
@@ -350,6 +363,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ],
               ),
+
               const SizedBox(height: 16),
             ],
           ),

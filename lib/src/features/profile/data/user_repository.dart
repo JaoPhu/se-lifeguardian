@@ -160,6 +160,46 @@ class UserRepository {
     // If found, check if it belongs to someone else
     return query.docs.any((doc) => doc.id != currentUid);
   }
+
+    // ✅ สร้าง/อัปเดต users/{uid} หลังสมัคร/ล็อกอิน
+  Future<void> ensureUserDoc({
+    String? displayName,
+    String? gender,
+    String? birthDate,
+    String? age,
+  }) async {
+    final u = auth.FirebaseAuth.instance.currentUser;
+    if (u == null) return;
+
+    final docRef = _firestore.collection('users').doc(u.uid);
+
+    await docRef.set({
+      // ใช้ field ชื่อ "name" ให้ตรงกับ fetchUser()/saveUser() ของเธอ
+      'name': (displayName != null && displayName.trim().isNotEmpty)
+          ? displayName.trim()
+          : (u.displayName ?? (u.email?.split('@').first ?? 'Unknown')),
+      'email': (u.email ?? '').trim().toLowerCase(),
+      'phoneNumber': u.phoneNumber ?? '',
+      'avatarUrl': u.photoURL ?? '',
+      'gender': gender,
+      'birthDate': birthDate,
+      'age': age,
+      // เผื่อใช้กับ group
+      'ownerGroupId': null,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    // ✅ ถ้า inviteCode ยังไม่มี -> สร้างให้
+    final snap = await docRef.get();
+    final data = snap.data() ?? {};
+    final invite = (data['inviteCode'] as String?) ?? '';
+    if (invite.isEmpty) {
+      final code = await generateUniqueInviteCode(u.uid); // Fixed: Added u.uid
+      await docRef.set({'inviteCode': code}, SetOptions(merge: true));
+    }
+  }
+  }
 }
 
 final userRepositoryProvider = Provider<UserRepository>((ref) {
