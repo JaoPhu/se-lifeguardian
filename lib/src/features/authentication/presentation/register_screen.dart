@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // ✅ ใช้ controller แทน AuthService
 import 'package:lifeguardian/src/features/authentication/controllers/auth_controller.dart';
-import 'package:lifeguardian/src/features/profile/data/user_repository.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
