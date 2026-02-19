@@ -20,7 +20,7 @@ class PreLoginScreen extends StatelessWidget {
           padding: const EdgeInsets.only(left: 16.0),
           child: IconButton(
             icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.black),
-            onPressed: () => context.pop(),
+            onPressed: () => context.go('/welcome'),
             style: IconButton.styleFrom(
               backgroundColor: Theme.of(context).cardColor,
               shape: const CircleBorder(),

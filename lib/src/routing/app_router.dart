@@ -31,6 +31,7 @@ import 'package:lifeguardian/src/features/history/domain/history_model.dart';
 import 'package:lifeguardian/src/features/profile/presentation/profile_screen.dart';
 import 'package:lifeguardian/src/features/profile/presentation/edit_profile_screen.dart';
 import 'package:lifeguardian/src/features/pose_detection/presentation/demo_setup_screen.dart';
+import 'package:lifeguardian/src/features/pose_detection/presentation/analysis_loading_screen.dart';
 import 'package:lifeguardian/src/features/notification/presentation/notification_screen.dart';
 import 'package:lifeguardian/src/features/events/presentation/events_screen.dart';
 import 'package:lifeguardian/src/features/pose_detection/presentation/pose_detector_view.dart';
@@ -38,6 +39,9 @@ import 'package:lifeguardian/src/features/subscription/data/trial_provider.dart'
 import 'package:lifeguardian/src/features/subscription/presentation/expired_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
+
+// Global flag to track first launch/restart
+bool _isFirstLaunch = true;
 
 final goRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -74,7 +78,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/forgot-password',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const ForgotPasswordScreen(),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return ForgotPasswordScreen(email: extra?['email'] as String?);
+        },
       ),
       GoRoute(
         path: '/otp-verification',
@@ -112,8 +119,18 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
-          final fromRegistration = extra?['fromRegistration'] as bool? ?? false;
+          // If profile is incomplete, force fromRegistration to true
+          final user = ref.read(userProvider);
+          final fromRegistration = extra?['fromRegistration'] as bool? ?? !user.isProfileComplete;
           return EditProfileScreen(fromRegistration: fromRegistration);
+        },
+      ),
+      GoRoute(
+        path: '/settings-forgot-password',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return ForgotPasswordScreen(email: extra?['email'] as String?);
         },
       ),
       GoRoute(
@@ -130,18 +147,22 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/analysis',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>; // We expect map now
+          return AnalysisLoadingScreen(extras: extra);
+        },
+      ),
+      GoRoute(
+        path: '/simulation-view',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
           final extra = state.extra;
           if (extra is Map<String, dynamic>) {
             return PoseDetectorView(
               videoPath: extra['videoPath'] as String?,
               displayCameraName: extra['cameraName'] as String?,
+              startTime: extra['startTime'] as TimeOfDay?,
+              date: extra['date'] as DateTime?,
             );
-          } else if (extra is Map) {
-             // Handle _Map<String, String?> or other Map variants
-             return PoseDetectorView(
-               videoPath: extra['videoPath']?.toString(),
-               displayCameraName: extra['cameraName']?.toString(),
-             );
           }
           return const PoseDetectorView();
         },
@@ -231,33 +252,40 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
     ],
     redirect: (context, state) {
-      final firebaseUser = ref.read(firebaseAuthProvider).currentUser;
-      final user = ref.read(userProvider);
-      final loggingIn = state.matchedLocation == '/login' || 
-                        state.matchedLocation == '/register' || 
-                        state.matchedLocation == '/welcome' ||
-                        state.matchedLocation == '/splash' ||
-                        state.matchedLocation == '/pre-login' ||
-                        state.matchedLocation == '/forgot-password' ||
-                        state.matchedLocation == '/otp-verification' ||
-                        state.matchedLocation == '/reset-password';
-
-      // 1. Not logged in -> Must go to /welcome or auth pages
-      if (firebaseUser == null) {
-        return loggingIn ? null : '/welcome';
+      // Force Splash Screen on First Launch / Hot Restart
+      if (_isFirstLaunch) {
+        _isFirstLaunch = false;
+        // If we are already at splash, allow it. If not, redirect to splash.
+        if (state.matchedLocation != '/splash') {
+          return '/splash';
+        }
       }
 
-      // 2. Logged in -> Check profile completeness
-      // IMPORTANT: Only redirect to edit-profile for NEW users who haven't completed registration
-      // user.name is our primary indicator for a "completed" basic profile.
-      if (user.id.isNotEmpty && user.name.isEmpty) {
-        // If they are already on edit-profile, or splash, let them be
+      final firebaseUser = ref.read(firebaseAuthProvider).currentUser;
+      final user = ref.read(userProvider);
+      
+      final isGuestRoute = state.matchedLocation == '/login' || 
+                        state.matchedLocation == '/register' || 
+                        state.matchedLocation == '/welcome' ||
+                        state.matchedLocation == '/pre-login';
+
+      final isPublicRoute = state.matchedLocation == '/forgot-password' ||
+                        state.matchedLocation == '/otp-verification' ||
+                        state.matchedLocation == '/reset-password' ||
+                        state.matchedLocation == '/splash';
+
+      // 1. Not logged in -> Must go to /welcome or auth pages (or public pages)
+      if (firebaseUser == null) {
+        return (isGuestRoute || isPublicRoute) ? null : '/welcome';
+      }
+
+      // Check profile completeness (Force onboarding)
+      if (user.id.isNotEmpty && !user.isProfileComplete) {
+        // If they are on edit-profile, or splash, let them be
         if (state.matchedLocation == '/edit-profile' || state.matchedLocation == '/splash') {
           return null;
         }
-
-        // If they are on ANY auth route or the welcome screen, they MUST go to edit-profile
-        // This covers Email registration, Social sign-in, and generic "stuck" states
+        // Redirect to edit-profile for any other route
         return '/edit-profile';
       }
 
@@ -267,11 +295,19 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         return '/expired';
       }
 
-      // 4. Logged in and has profile -> Don't show login pages
-      if (loggingIn && user.name.isNotEmpty) {
-        return '/overview';
+      // 4. Logged in and has profile
+      
+      // If user tries to access Guest-Only routes, redirect to Overview
+      // We exclude '/login' from this forced redirect to avoid conflict with LoginScreen's manual navigation
+      // or race conditions during the login process.
+      if (isGuestRoute && state.matchedLocation != '/login') {
+         return '/overview';
       }
 
+      // If specifically on /login and logged in, we let the LoginScreen handle the push to /overview
+      // or let the user manually navigate if they somehow got here.
+      // But typically, LoginScreen will push /overview upon success.
+      
       return null;
     },
   );
@@ -283,11 +319,30 @@ class _AuthRefreshListenable extends ChangeNotifier {
     _subscription = ref.read(firebaseAuthProvider).authStateChanges().listen((_) {
       notifyListeners();
     });
-    // Also listen to user profile changes (any change, e.g. ID, name, etc.)
+    // Also listen to user profile changes
+    // Optimization: Only notify if routing-critical fields change to avoid "Router working too hard"
     _userSubscription = ref.listen(userProvider, (prev, next) {
-      if (prev != next) {
+      if (prev == null) return;
+      
+      // Critical Check 1: ID changed (Login/Logout)
+      if (prev.id != next.id) {
         notifyListeners();
+        return;
       }
+
+      // Critical Check 2: Profile Completeness Status changed
+      if (prev.isProfileComplete != next.isProfileComplete) {
+        notifyListeners();
+        return;
+      }
+      
+      // Critical Check 3: Name changed from empty to non-empty (or vice-versa) - affects redirect
+      if ((prev.name.isEmpty && next.name.isNotEmpty) || (prev.name.isNotEmpty && next.name.isEmpty)) {
+        notifyListeners();
+        return;
+      }
+
+      // Ignore other changes (weight, height, etc.) to keep Router lightweight
     }, fireImmediately: true);
   }
 

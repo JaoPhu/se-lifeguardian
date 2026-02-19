@@ -106,7 +106,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               color: isDark ? Colors.white : Colors.black,
               size: 20,
             ),
-            onPressed: () => context.pop(),
+            onPressed: () => context.go('/pre-login'),
             style: IconButton.styleFrom(
               backgroundColor: Theme.of(context).cardColor,
               shape: const CircleBorder(),

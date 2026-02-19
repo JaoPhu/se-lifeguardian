@@ -142,25 +142,8 @@ class EventsScreen extends ConsumerWidget {
                               Row(
                                 children: [
                                   if (events.isNotEmpty)
-                                    TextButton(
-                                      onPressed: () async {
-                                        final confirm = await showDialog<bool>(
-                                          context: context,
-                                          builder: (context) => AlertDialog(
-                                            title: const Text('Clear History?'),
-                                            content: const Text('This will permanently delete all event logs and images from your device.'),
-                                            actions: [
-                                              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                                              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Clear All', style: TextStyle(color: Colors.red))),
-                                            ],
-                                          ),
-                                        );
-                                        if (confirm == true) {
-                                          ref.read(healthStatusProvider.notifier).clearAllData(cameraId: cameraId);
-                                        }
-                                      },
-                                      child: const Text('Clear History', style: TextStyle(fontSize: 12, color: Colors.blue)),
-                                    ),
+                                    // Hidden as requested
+                                    const SizedBox.shrink(),
                                   const SizedBox(width: 8),
                                   Text(
                                     'Total: ${events.length}',

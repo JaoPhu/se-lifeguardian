@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'dart:typed_data';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart' as ml_kit;
+import 'pose_data_logger.dart';
 
 import 'pose_models.dart';
 import '../logic/kalman_filter.dart';
@@ -100,6 +101,7 @@ class TrackedPerson {
 
 class PoseDetectionService {
   final ml_kit.PoseDetector _poseDetector = ml_kit.PoseDetector(options: ml_kit.PoseDetectorOptions());
+  PoseDataLogger? logger;
   
   final List<TrackedPerson> _activeTracks = [];
 
@@ -143,6 +145,11 @@ class PoseDetectionService {
       // Update existing track (always ID 0)
       _activeTracks.first.update(landmarks, 0.6); // 0.6 smoothing factor
       _activeTracks.first.missedCount = 0;
+    }
+
+    // Capture frame for AI Training if logger is active
+    if (logger != null && logger!.isRecording) {
+      logger!.addFrame(_activeTracks.first.smoothedLandmarks);
     }
 
     // 4. Post-Process Analysis

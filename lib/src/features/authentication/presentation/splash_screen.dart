@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:async';
 import 'dart:math' as math;
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../profile/data/user_repository.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -33,24 +31,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         _progress = 1.0;
         timer.cancel();
         
-        // Check Auth
-        final firebaseUser = FirebaseAuth.instance.currentUser;
-        if (firebaseUser != null) {
-          // Verify user data exists in Firestore & Load
-          await ref.read(userProvider.notifier).loadUser();
-          final user = ref.read(userProvider);
-          
-          if (mounted) {
-            // Only go to overview if the profile exists (has a name)
-            if (user.name.isNotEmpty) {
-              context.go('/overview');
-            } else {
-              // No profile found in Firestore, redirect to fill info
-              context.go('/edit-profile');
-            }
-          }
-        } else {
-          if (mounted) context.go('/welcome');
+        if (mounted) {
+          // Navigate to overview and let GoRouter's redirect logic handle the rest
+          // (Welcome if not logged in, EditProfile if name is missing, etc.)
+          context.go('/overview');
         }
       }
     });

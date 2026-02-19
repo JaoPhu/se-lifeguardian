@@ -8,6 +8,8 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'dart:math';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthRepository {
   AuthRepository(this._auth, this._firestore, this._storage);
@@ -20,8 +22,17 @@ class AuthRepository {
   Stream<User?> authStateChanges() => _auth.authStateChanges();
 
   Future<void> registerWithEmail(String email, String password) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    
+    // 1. Check Firestore first to prevent duplicates
+    final exists = await checkUserExists(normalizedEmail);
+    if (exists) {
+      throw Exception('account-already-exists');
+    }
+
+    // 2. Proceed with Auth creation
     await _auth.createUserWithEmailAndPassword(
-      email: email,
+      email: normalizedEmail,
       password: password,
     );
     // Save password securely for future re-auth (e.g. deletion)
@@ -66,12 +77,18 @@ class AuthRepository {
         profileExists = false;
       }
 
-      // 3. Update Session ID for single-session enforcement
-      // Use set(merge: true) in case the document doesn't exist yet
-      final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
-      await FirebaseFirestore.instance.collection('users').doc(firebaseUser.uid).set({
-        'sessionId': sessionId,
-      }, SetOptions(merge: true));
+      // 3. Update Session ID for single-session enforcement (ONLY if profile exists)
+      if (profileExists) {
+        final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
+        await _firestore.collection('users').doc(firebaseUser.uid).update({
+          'sessionId': sessionId,
+        });
+        debugPrint('AuthRepository: Session ID updated');
+      } else {
+        // If profile doesn't exist but isLogin is true, throw error to prevent ghost login
+        debugPrint('AuthRepository: Profile missing, blocking login');
+        throw Exception('user-not-found');
+      }
     }
   }
 
@@ -203,51 +220,59 @@ class AuthRepository {
     }
 
     try {
-      // 1. Re-authenticate if password available (for email/password accounts)
+      // 1. Re-authenticate FIRST (Mandatory)
+      // We must ensure we have a fresh, valid session BEFORE touching any data.
       if (email != null && targetPassword != null && targetPassword.isNotEmpty) {
         final credential = EmailAuthProvider.credential(
           email: email,
           password: targetPassword,
         );
         await user.reauthenticateWithCredential(credential);
-        debugPrint('Email re-authentication successful');
+        debugPrint('AuthRepository: Email re-authentication successful');
+      } else {
+        // For social accounts, re-authenticate proactively. 
+        // We do NOT swallow errors here - if user cancels or re-auth fails, deletion STOPS.
+        debugPrint('AuthRepository: Requesting fresh social re-authentication...');
+        await _reauthenticateSocial();
       }
 
-      // 2. Delete Firebase Auth account FIRST
-      try {
-        await user.delete();
-      } on FirebaseAuthException catch (e) {
-        if (e.code == 'requires-recent-login') {
-          // 💡 If session is stale even with password (or no password), try social re-auth
-          debugPrint('Session stale, trying social re-authentication...');
-          await _reauthenticateSocial();
-          await user.delete(); // Try again after re-auth
-        } else {
-          rethrow;
-        }
-      }
-      
-      debugPrint('Firebase Auth account deleted');
-
-      // 3. Delete Firestore data (only after Auth deletion succeeds)
+      // 2. Delete Firestore data (Bottom-Up)
+      // This happens while user is still fully authenticated.
       await _deleteFirestoreData(uid);
-      debugPrint('Firestore data deleted');
-      
-      // Clear stored password and Google session after successful deletion
+      debugPrint('AuthRepository: Firestore data deleted');
+
+      // 3. Delete Storage data
+      await _deleteStorageData(uid);
+      debugPrint('AuthRepository: Storage data deleted');
+
+      // 4. Delete Firebase Auth account (The final step)
+      // If we reach here, we've cleaned up all user-controlled data.
+      await user.delete();
+      debugPrint('AuthRepository: Firebase Auth account deleted');
+
+      // 5. Cleanup Local State
+      await _clearLocalCache();
       await _storage.delete(key: _passwordKey);
-      if (!kIsWeb) {
+      
+      // Revoke social tokens to force account picker next time
+      try {
+        await GoogleSignIn().disconnect();
+      } catch (_) {
         await GoogleSignIn().signOut();
       }
+      
+      debugPrint('AuthRepository: Account deletion complete');
     } on FirebaseAuthException catch (e) {
       if (e.code == 'requires-recent-login') {
-        throw Exception('เซสชันเน็ตหมดอายุ กรุณายืนยันตัวตนใหม่อีกครั้ง');
+        throw Exception('เซสชันหมดอายุ กรุณายืนยันตัวตนใหม่อีกครั้งเพื่อความปลอดภัยครับ');
       } else if (e.code == 'wrong-password') {
         throw Exception('รหัสผ่านไม่ถูกต้อง');
       }
-      debugPrint('Firebase Auth error: ${e.code} - ${e.message}');
+      debugPrint('AuthRepository: Firebase Auth error: ${e.code}');
       rethrow;
     } catch (e) {
-      debugPrint('Error deleting account: $e');
+      debugPrint('AuthRepository: Deletion failed: $e');
+      // Rethrow to let UI handle the error (don't leave user in "limbo")
       rethrow;
     }
   }
@@ -292,26 +317,70 @@ class AuthRepository {
   }
 
   Future<void> _deleteFirestoreData(String uid) async {
+    final firestore = FirebaseFirestore.instance;
+    final userRef = firestore.collection('users').doc(uid);
+
+    // 1. Delete associated subcollections FIRST
+    // (Events)
     try {
-      final firestore = FirebaseFirestore.instance;
-      
-      // Delete user document
-      await firestore.collection('users').doc(uid).delete();
-      
-      // Delete associated events
-      final events = await firestore.collection('users').doc(uid).collection('events').get();
+      final events = await userRef.collection('events').get();
       for (var doc in events.docs) {
         await doc.reference.delete();
       }
+      debugPrint('AuthRepository: Subcollection "events" deleted');
+    } catch (e) {
+      debugPrint('AuthRepository: Error deleting events: $e');
+    }
 
-      // Delete associated notifications
-      final notifications = await firestore.collection('users').doc(uid).collection('notifications').get();
+    // (Notifications)
+    try {
+      final notifications = await userRef.collection('notifications').get();
       for (var doc in notifications.docs) {
         await doc.reference.delete();
       }
+      debugPrint('AuthRepository: Subcollection "notifications" deleted');
     } catch (e) {
-      debugPrint('Error deleting Firestore data: $e');
-      // Don't rethrow - Auth is already deleted
+      debugPrint('AuthRepository: Error deleting notifications: $e');
+    }
+
+    // 2. Delete main user document LAST
+    await userRef.delete();
+    debugPrint('AuthRepository: Main user document deleted');
+  }
+
+  Future<void> _deleteStorageData(String uid) async {
+    try {
+      final storage = FirebaseStorage.instance;
+      final userRef = storage.ref().child('users').child(uid);
+      
+      // We need to delete files recursively. Firebase Storage doesn't support folder deletion directly.
+      // 1. Profile pic
+      try {
+        await userRef.child('profile_pic.jpg').delete();
+      } catch (_) {}
+
+      // 2. Event snapshots
+      try {
+        final eventsRef = userRef.child('events');
+        final listResult = await eventsRef.listAll();
+        for (var item in listResult.items) {
+          await item.delete();
+        }
+      } catch (_) {}
+
+    } catch (e) {
+      debugPrint('Error deleting Storage data: $e');
+    }
+  }
+
+  Future<void> _clearLocalCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Reset trial date - matches TrialNotifier._installDateKey
+      await prefs.remove('app_install_date_v1');
+      debugPrint('AuthRepository: Local trial reset successful');
+    } catch (e) {
+      debugPrint('Error clearing local cache: $e');
     }
   }
 
@@ -370,11 +439,17 @@ class AuthRepository {
         // Login Flow: Even if profile missing, we let them in. 
         // Redirection logic in router will guide them to complete profile.
 
-        // Update Session ID
-        final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
-        await _firestore.collection('users').doc(user.uid).set({
-          'sessionId': sessionId,
-        }, SetOptions(merge: true));
+        // Update Session ID (ONLY if profile exists)
+        if (profileExists) {
+          final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
+          await _firestore.collection('users').doc(user.uid).update({
+            'sessionId': sessionId,
+          });
+          debugPrint('AuthRepository: Session ID updated (Google)');
+        } else {
+          debugPrint('AuthRepository: Profile missing (Google), blocking login');
+          throw Exception('user-not-found');
+        }
       } else {
         // Register Flow: Must NOT have data already
         if (profileExists) {
@@ -434,11 +509,17 @@ class AuthRepository {
       if (isLogin) {
         // Login Flow: Let them in even if profile missing.
         
-        // Update Session ID
-        final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
-        await _firestore.collection('users').doc(user.uid).set({
-          'sessionId': sessionId,
-        }, SetOptions(merge: true));
+        // Update Session ID (ONLY if profile exists)
+        if (profileExists) {
+          final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
+          await _firestore.collection('users').doc(user.uid).update({
+            'sessionId': sessionId,
+          });
+          debugPrint('AuthRepository: Session ID updated (Apple)');
+        } else {
+          debugPrint('AuthRepository: Profile missing (Apple), blocking login');
+          throw Exception('user-not-found');
+        }
       } else {
         if (profileExists) {
           throw Exception('account-already-exists');

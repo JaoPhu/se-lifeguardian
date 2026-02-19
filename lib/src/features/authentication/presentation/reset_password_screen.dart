@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lifeguardian/src/features/authentication/presentation/widgets/auth_text_field.dart';
 import 'package:lifeguardian/src/features/authentication/providers/auth_providers.dart';
+import 'package:lifeguardian/src/features/authentication/controllers/auth_controller.dart';
 
 class ResetPasswordScreen extends ConsumerStatefulWidget {
   const ResetPasswordScreen({
@@ -130,9 +131,13 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                 SizedBox(
                   width: double.infinity,
                   height: 56,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      context.go('/login');
+                    child: ElevatedButton(
+                    onPressed: () async {
+                      // Logout user to force re-login with new password
+                      await ref.read(authControllerProvider.notifier).logout();
+                      if (context.mounted) {
+                        context.go('/login');
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF0D9488),

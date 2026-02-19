@@ -4,6 +4,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../statistics/domain/simulation_event.dart';
+import '../../authentication/providers/auth_providers.dart';
 
 class EventRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -51,13 +52,12 @@ class EventRepository {
     }
   }
 
-  Stream<List<SimulationEvent>> getEventsStream() {
-    final user = _auth.currentUser;
-    if (user == null) return Stream.value([]);
+  Stream<List<SimulationEvent>> getEventsStream(String uid) {
+    if (uid.isEmpty) return Stream.value([]);
 
     return _firestore
         .collection('users')
-        .doc(user.uid)
+        .doc(uid)
         .collection('events')
         .orderBy('startTimeMs', descending: true)
         .snapshots()
@@ -94,5 +94,11 @@ class EventRepository {
 final eventRepositoryProvider = Provider<EventRepository>((ref) => EventRepository());
 
 final eventsStreamProvider = StreamProvider<List<SimulationEvent>>((ref) {
-  return ref.watch(eventRepositoryProvider).getEventsStream();
+  // Watch auth state to ensure stream is recreated for the correct user
+  final authState = ref.watch(authStateProvider);
+  final user = authState.value;
+  
+  if (user == null) return Stream.value([]);
+  
+  return ref.watch(eventRepositoryProvider).getEventsStream(user.uid);
 });

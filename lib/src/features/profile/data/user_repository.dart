@@ -74,7 +74,7 @@ class UserRepository {
         data['inviteCode'] = user.inviteCode;
       } else {
         // Generate code if missing
-        final code = await generateUniqueInviteCode();
+        final code = await generateUniqueInviteCode(uid);
         data['inviteCode'] = code;
       }
 
@@ -85,26 +85,37 @@ class UserRepository {
     }
   }
 
-  Future<String> generateUniqueInviteCode() async {
+  Future<String> generateUniqueInviteCode(String uid) async {
     final random = Random();
     String code = '';
     bool isUnique = false;
+    int attempts = 0;
 
-    // We use 4 digits (10,000 possibilities) as requested
-    while (!isUnique) {
+    while (!isUnique && attempts < 10) {
+      attempts++;
       final num = random.nextInt(10000).toString().padLeft(4, '0');
       code = 'LG-$num';
 
-      // Check uniqueness in Firestore
-      final query = await _firestore
-          .collection('users')
-          .where('inviteCode', isEqualTo: code)
-          .get();
-      
-      if (query.docs.isEmpty) {
-        isUnique = true;
+      try {
+        // Check uniqueness in 'users' collection only (bypassing restricted 'invite_codes')
+        final query = await _firestore
+            .collection('users')
+            .where('inviteCode', isEqualTo: code)
+            .limit(1)
+            .get();
+        
+        if (query.docs.isEmpty) {
+          isUnique = true;
+        }
+      } catch (e) {
+        print('Error checking code $code: $e');
       }
     }
+    
+    if (!isUnique) {
+      throw Exception('Failed to generate unique code after $attempts attempts');
+    }
+    
     return code;
   }
 
@@ -113,6 +124,41 @@ class UserRepository {
     // Use set with merge: true instead of update() to support new users
     await _firestore.collection('users').doc(uid).set({'avatarUrl': downloadUrl}, SetOptions(merge: true));
     return downloadUrl;
+  }
+
+  Future<String?> getUidByInviteCode(String code) async {
+    try {
+      // Lookup in 'users' collection directly
+      final query = await _firestore
+          .collection('users')
+          .where('inviteCode', isEqualTo: code)
+          .limit(1)
+          .get();
+      
+      if (query.docs.isNotEmpty) {
+        return query.docs.first.id;
+      }
+    } catch (e) {
+      print('Error getting UID by invite code: $e');
+    }
+    return null;
+  }
+
+  Future<bool> isUsernameTaken(String username, String currentUid) async {
+    final normalized = username.trim().toLowerCase();
+    if (normalized.isEmpty) return false;
+
+    // Check if any user other than the current user has this username
+    final query = await _firestore
+        .collection('users')
+        .where('username', isEqualTo: normalized)
+        .limit(1)
+        .get();
+    
+    if (query.docs.isEmpty) return false;
+
+    // If found, check if it belongs to someone else
+    return query.docs.any((doc) => doc.id != currentUid);
   }
 }
 
@@ -129,6 +175,7 @@ class UserNotifier extends StateNotifier<User> {
   final FirebaseFirestore _firestore;
   String? _currentSessionId;
   StreamSubscription? _sessionSubscription;
+  DateTime _gracePeriodEnd = DateTime.fromMillisecondsSinceEpoch(0);
   
   UserNotifier(this._repo, this._auth, this._firestore) : super(const User(
       id: '', name: '', username: '', email: '', phoneNumber: '', avatarUrl: '',
@@ -169,6 +216,8 @@ class UserNotifier extends StateNotifier<User> {
 
         state = finalUser;
         _currentSessionId = finalUser.sessionId;
+        // set grace period for 5 seconds to allow AuthRepository to update session ID
+        _gracePeriodEnd = DateTime.now().add(const Duration(seconds: 5));
         
         // Setup session listener
         _listenToSessionChanges(uid);
@@ -176,7 +225,7 @@ class UserNotifier extends StateNotifier<User> {
         // Auto-generate invite code if missing
         if (finalUser.inviteCode == null || finalUser.inviteCode!.isEmpty) {
           try {
-            final code = await _repo.generateUniqueInviteCode();
+            final code = await _repo.generateUniqueInviteCode(uid);
             final updatedUserWithCode = finalUser.copyWith(inviteCode: code);
             await _repo.saveUser(updatedUserWithCode);
             state = updatedUserWithCode;
@@ -231,16 +280,23 @@ class UserNotifier extends StateNotifier<User> {
             // Initial load from stream
             _currentSessionId = serverSessionId;
           } else if (serverSessionId != _currentSessionId) {
-            // Mismatch! Someone else logged in.
-            print('Session mismatch! Logging out. Local: $_currentSessionId, Server: $serverSessionId');
-            await _auth.signOut();
-            _sessionSubscription?.cancel();
-            _sessionSubscription = null;
-            _currentSessionId = null;
-            state = const User(
-              id: '', name: '', username: '', email: '', phoneNumber: '', avatarUrl: '', 
-              birthDate: '', age: '', gender: '', bloodType: '', height: '', weight: '', 
-              medicalCondition: '', currentMedications: '', drugAllergies: '', foodAllergies: '');
+            // Check for grace period (Race condition fix for Login)
+            if (DateTime.now().isBefore(_gracePeriodEnd)) {
+               // Accept the new session ID as ours (upgrade)
+               print('UserNotifier: Combining session mismatch due to grace period. Upgrading $_currentSessionId -> $serverSessionId');
+               _currentSessionId = serverSessionId;
+            } else {
+              // Mismatch! Someone else logged in.
+              print('Session mismatch! Logging out. Local: $_currentSessionId, Server: $serverSessionId');
+              await _auth.signOut();
+              _sessionSubscription?.cancel();
+              _sessionSubscription = null;
+              _currentSessionId = null;
+              state = const User(
+                id: '', name: '', username: '', email: '', phoneNumber: '', avatarUrl: '', 
+                birthDate: '', age: '', gender: '', bloodType: '', height: '', weight: '', 
+                medicalCondition: '', currentMedications: '', drugAllergies: '', foodAllergies: '');
+            }
           }
         }
       }
@@ -250,7 +306,6 @@ class UserNotifier extends StateNotifier<User> {
   Future<void> updateUser(User user) async {
     state = user; 
     await _repo.saveUser(user);
-    await loadUser();
   }
   
   void setUser(User user) {
@@ -268,5 +323,15 @@ final userProvider = StateNotifierProvider<UserNotifier, User>((ref) {
   final repo = ref.watch(userRepositoryProvider);
   final firebaseAuth = ref.watch(firebaseAuthProvider);
   final firestore = FirebaseFirestore.instance;
-  return UserNotifier(repo, firebaseAuth, firestore);
+  final notifier = UserNotifier(repo, firebaseAuth, firestore);
+  
+  // Watch auth state and trigger loadUser when it changes
+  ref.listen(authStateProvider, (previous, next) {
+    notifier.loadUser();
+  });
+
+  // Initial load
+  Future.microtask(() => notifier.loadUser());
+  
+  return notifier;
 });
