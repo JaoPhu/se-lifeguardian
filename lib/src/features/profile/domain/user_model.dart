@@ -80,4 +80,58 @@ class User {
       sessionId: sessionId ?? this.sessionId,
     );
   }
+
+  bool get isProfileComplete {
+    return name.isNotEmpty &&
+        username.isNotEmpty &&
+        phoneNumber.isNotEmpty &&
+        birthDate.isNotEmpty &&
+        bloodType.isNotEmpty;
+  }
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+  
+    return other is User &&
+      other.id == id &&
+      other.name == name &&
+      other.username == username &&
+      other.email == email &&
+      other.phoneNumber == phoneNumber &&
+      other.avatarUrl == avatarUrl &&
+      other.birthDate == birthDate &&
+      other.age == age &&
+      other.gender == gender &&
+      other.bloodType == bloodType &&
+      other.height == height &&
+      other.weight == weight &&
+      other.medicalCondition == medicalCondition &&
+      other.currentMedications == currentMedications &&
+      other.drugAllergies == drugAllergies &&
+      other.foodAllergies == foodAllergies &&
+      other.inviteCode == inviteCode &&
+      other.sessionId == sessionId;
+  }
+
+  @override
+  int get hashCode {
+    return id.hashCode ^
+      name.hashCode ^
+      username.hashCode ^
+      email.hashCode ^
+      phoneNumber.hashCode ^
+      avatarUrl.hashCode ^
+      birthDate.hashCode ^
+      age.hashCode ^
+      gender.hashCode ^
+      bloodType.hashCode ^
+      height.hashCode ^
+      weight.hashCode ^
+      medicalCondition.hashCode ^
+      currentMedications.hashCode ^
+      drugAllergies.hashCode ^
+      foodAllergies.hashCode ^
+      inviteCode.hashCode ^
+      sessionId.hashCode;
+  }
 }

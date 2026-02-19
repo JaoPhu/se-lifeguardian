@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:image_picker/image_picker.dart';
 import '../data/user_repository.dart';
@@ -167,27 +168,111 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(
       source: ImageSource.gallery,
-      imageQuality: 70,
+      imageQuality: 80,
     );
 
     if (pickedFile != null) {
-      setState(() {
-        if (kIsWeb) {
-          _imageFile = pickedFile; // Store XFile directly on web
-        } else {
-          _imageFile = File(pickedFile.path); // Convert to File on mobile
-        }
-      });
+      if (kIsWeb) {
+        setState(() {
+          _imageFile = pickedFile;
+        });
+        return;
+      }
+
+      // Crop Image
+      // Crop Image
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: pickedFile.path,
+        compressQuality: 80,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1), // Force 1:1 output
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Move & Scale',
+            toolbarColor: const Color(0xFF0D9488),
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+            hideBottomControls: true, 
+            cropStyle: CropStyle.circle,
+            aspectRatioPresets: [
+              CropAspectRatioPreset.square,
+            ],
+          ),
+          IOSUiSettings(
+            title: 'Move & Scale',
+            aspectRatioLockEnabled: true,
+            resetAspectRatioEnabled: false,
+            aspectRatioPickerButtonHidden: true,
+            rotateButtonsHidden: true, // Hide per user request
+            resetButtonHidden: true, // Hide per user request
+            rotateClockwiseButtonHidden: true, // Hide per user request
+            cancelButtonTitle: '   Cancel   ',
+            doneButtonTitle: '   Done   ',
+            cropStyle: CropStyle.circle,
+            aspectRatioPresets: [
+              CropAspectRatioPreset.square,
+            ],
+          ),
+        ],
+      );
+
+      if (croppedFile != null) {
+        setState(() {
+           _imageFile = File(croppedFile.path); 
+        });
+      }
     }
   }
 
   Future<void> _save() async {
+    final name = _nameController.text.trim();
+    final phone = _phoneNumberController.text.trim();
+    final birthDate = _birthDateController.text.trim();
+    final bloodType = _bloodTypeController.text.trim();
+    String usernameText = _usernameController.text.trim();
+    if (usernameText.startsWith('@')) {
+      usernameText = usernameText.substring(1);
+    }
+
+    // Mandatory validation for BOTH onboarding and regular editing
+    if (name.isEmpty || usernameText.isEmpty || phone.isEmpty || birthDate.isEmpty || bloodType.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน (ชื่อจริง, Username, เบอร์โทร, วันเกิด, กรุ๊ปเลือด) เพื่อบันทึกข้อมูลครับ'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    // Phone number length validation (Exactly 10 digits)
+    if (phone.length != 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('กรุณากรอกเบอร์โทรศัพท์ให้ครบ 10 หลักครับ'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isUploading = true);
     try {
       final currentUser = ref.read(userProvider);
-      String usernameText = _usernameController.text.trim();
-      if (usernameText.startsWith('@')) {
-        usernameText = usernameText.substring(1);
+      
+      // Check if username is taken
+      final isTaken = await ref.read(userRepositoryProvider).isUsernameTaken(usernameText, currentUser.id);
+      if (isTaken) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Username นี้มีผู้ใช้งานแล้ว กรุณาใช้ชื่ออื่นครับ'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        setState(() => _isUploading = false);
+        return;
       }
 
       String avatarUrl = currentUser.avatarUrl;
@@ -206,15 +291,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       }
 
       final updatedUser = currentUser.copyWith(
-        name: _nameController.text,
+        name: name,
         username: usernameText,
-        email: _emailController.text,
-        phoneNumber: _phoneNumberController.text,
+        email: _emailController.text.trim(),
+        phoneNumber: phone,
         avatarUrl: avatarUrl,
-        birthDate: _birthDateController.text,
+        birthDate: birthDate,
         age: _ageController.text,
         gender: _genderController.text,
-        bloodType: _bloodTypeController.text,
+        bloodType: bloodType,
         height: _heightController.text,
         weight: _weightController.text,
         medicalCondition: _medicalController.text,
@@ -252,12 +337,18 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        leading: IconButton(
-          icon: Icon(LucideIcons.chevronLeft, color: theme.iconTheme.color),
-          onPressed: () => context.pop(),
-        ),
+        leading: widget.fromRegistration
+            ? null // No back button during mandatory onboarding
+            : IconButton(
+                icon: Icon(LucideIcons.chevronLeft, color: theme.iconTheme.color),
+                onPressed: () => context.pop(),
+              ),
         // Use "Information" if it's a new user (empty name) or from registration flow
-        title: Text(widget.fromRegistration ? 'Information' : 'Edit Profile', style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontWeight: FontWeight.bold)),
+        title: Text(
+          widget.fromRegistration ? 'Information' : 'Edit Profile',
+          style: TextStyle(color: theme.textTheme.bodyLarge?.color, fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
         backgroundColor: theme.appBarTheme.backgroundColor,
         elevation: 0,
       ),
@@ -350,15 +441,42 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               ),
               const SizedBox(height: 24),
 
+              if (widget.fromRegistration)
+              Container(
+                margin: const EdgeInsets.only(bottom: 24),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(LucideIcons.info, color: Colors.orange, size: 20),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'กรุณากรอกข้อมูลสำคัญให้ครบถ้วนก่อนเริ่มต้นใช้งาน เพื่อความปลอดภัยและประสิทธิภาพสูงสุดของระบบครับ',
+                        style: TextStyle(
+                          color: Colors.orange,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
               // Form
-              _buildInputField('Name', _nameController, theme, hintText: 'Somchai Jaidee'),
-              _buildInputField('Username', _usernameController, theme, hintText: 'somchai.j'),
-              _buildInputField('Email', _emailController, theme, hintText: 'somchai@example.com'),
-              _buildInputField('Phone Number', _phoneNumberController, theme, isNumeric: true, hintText: '0812345678'),
+              _buildInputField('Name', _nameController, theme, hintText: 'Somchai Jaidee', isRequired: true),
+              _buildInputField('Username', _usernameController, theme, hintText: 'somchai.j', isRequired: true),
+              _buildInputField('Email', _emailController, theme, hintText: 'somchai@example.com', readOnly: true),
+              _buildInputField('Phone Number', _phoneNumberController, theme, isNumeric: true, hintText: '0812345678', isRequired: true),
               
               Row(
                 children: [
-                  Expanded(child: _buildInputField('Birth Date', _birthDateController, theme, hintText: '01/01/1980', focusNode: _birthDateFocusNode)),
+                   Expanded(child: _buildInputField('Birth Date', _birthDateController, theme, hintText: '01/01/1980', focusNode: _birthDateFocusNode, isRequired: true)),
                   const SizedBox(width: 16),
                   Expanded(child: _buildInputField('Age', _ageController, theme, isNumeric: true, hintText: 'Auto-calculated', readOnly: true)),
                 ],
@@ -385,6 +503,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       (value) => setState(() => _bloodTypeController.text = value!),
                       theme,
                       hintText: 'Select Type',
+                      isRequired: true,
                     ),
                   ),
                 ],
@@ -401,24 +520,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               _buildInputField('Current Medications', _medicationsController, theme, hintText: 'Amlodipine 5mg'),
               _buildInputField('Drug Allergies', _drugAllergiesController, theme, hintText: 'None'),
               _buildInputField('Food Allergies', _foodAllergiesController, theme, hintText: 'Peanuts'),
-
-              const SizedBox(height: 8),
-              if (!widget.fromRegistration)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () => context.push('/change-password'),
-                  icon: const Icon(LucideIcons.lock, size: 16, color: Color(0xFF0D9488)),
-                  label: const Text(
-                    'Change Password',
-                    style: TextStyle(
-                      color: Color(0xFF0D9488),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-              ),
 
               const SizedBox(height: 24),
               Row(
@@ -466,19 +567,25 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     );
   }
 
-  Widget _buildInputField(String label, TextEditingController controller, ThemeData theme, {bool isNumeric = false, String? hintText, bool readOnly = false, FocusNode? focusNode}) {
+  Widget _buildInputField(String label, TextEditingController controller, ThemeData theme, {bool isNumeric = false, String? hintText, bool readOnly = false, FocusNode? focusNode, bool isRequired = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFF0D9488),
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
+          Row(
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFF0D9488),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              if (isRequired)
+                const Text(' *', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+            ],
           ),
           const SizedBox(height: 6),
           TextField(
@@ -486,7 +593,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             focusNode: focusNode,
             readOnly: readOnly,
             keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
-            inputFormatters: isNumeric ? [FilteringTextInputFormatter.digitsOnly] : [],
+            inputFormatters: const [], // Removed all restrictive formatters
             decoration: InputDecoration(
               filled: true,
               fillColor: theme.inputDecorationTheme.fillColor,
@@ -497,7 +604,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 borderSide: BorderSide.none,
               ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              suffixIcon: Icon(LucideIcons.pencil, size: 16, color: theme.iconTheme.color?.withValues(alpha: 0.5)),
+              suffixIcon: readOnly ? null : Icon(LucideIcons.pencil, size: 16, color: theme.iconTheme.color?.withValues(alpha: 0.5)),
             ),
             style: TextStyle(fontSize: 14, color: theme.textTheme.bodyMedium?.color),
           ),
@@ -506,7 +613,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     );
   }
 
-  Widget _buildDropdownField(String label, String value, List<String> items, void Function(String?) onChanged, ThemeData theme, {String? hintText}) {
+  Widget _buildDropdownField(String label, String value, List<String> items, void Function(String?) onChanged, ThemeData theme, {String? hintText, bool isRequired = false}) {
     // Ensure value is present in items or use null
     final String? selectedValue = items.contains(value) ? value : null;
 
@@ -515,13 +622,19 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFF0D9488),
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
+          Row(
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFF0D9488),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              if (isRequired)
+                const Text(' *', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+            ],
           ),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(

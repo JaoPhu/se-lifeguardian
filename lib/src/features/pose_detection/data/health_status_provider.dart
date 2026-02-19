@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../statistics/domain/simulation_event.dart';
 import '../../events/data/event_repository.dart';
 import '../../events/data/cloud_verification_service.dart';
+import '../../authentication/providers/auth_providers.dart';
 
 enum HealthStatus { normal, warning, emergency, none }
 
@@ -92,13 +93,13 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
   Timer? _timer;
 
   HealthStatusNotifier(this._eventRepository) : super(HealthState.initial()) {
-    _loadState();
+    loadState();
     _startTimer();
   }
 
   static const _storageKey = 'health_state_v2';
 
-  Future<void> _loadState() async {
+  Future<void> loadState() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final jsonStr = prefs.getString(_storageKey);
@@ -134,9 +135,11 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
             state = state.copyWith(
               score: (data['health_score'] as num?)?.toInt() ?? state.score,
               status: HealthStatus.values[(data['health_status'] as int?) ?? state.status.index],
+              // Always prefer remote events if available to ensure sync across devices/restarts
               events: remoteEvents.isNotEmpty ? remoteEvents : state.events,
             );
           } else if (remoteEvents.isNotEmpty) {
+            // If status doc doesn't exist but events do, load them
             state = state.copyWith(events: remoteEvents);
           }
         } catch (e) {
@@ -168,10 +171,26 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
     }
   }
 
+  // Internal clock for simulation support
+  DateTime _currentTime = DateTime.now();
+  bool _isSimulation = false;
+
+  void updateSimulationClock(DateTime time) {
+    _isSimulation = true;
+    _currentTime = time;
+    _updateScoreBasedOnActivity(); // Trigger regular updates based on new time
+  }
+
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (state.status == HealthStatus.none) return; // Only score if active
-      _updateScoreBasedOnActivity();
+      if (state.status == HealthStatus.none) return; 
+      
+      // If NOT in simulation mode, drive the clock with real time
+      if (!_isSimulation) {
+         _currentTime = DateTime.now();
+         _updateScoreBasedOnActivity();
+      }
+      // If in simulation mode, updateSimulationClock drives the updates
     });
   }
 
@@ -185,7 +204,12 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
   }
 
   void reset() {
-    state = HealthState.initial();
+    // Reset status/score but KEEP events history
+    state = HealthState.initial().copyWith(
+      events: state.events, 
+    );
+    _isSimulation = false;
+    _currentTime = DateTime.now();
     _saveState();
   }
 
@@ -225,74 +249,64 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
     await _saveState();
   }
 
-  // Activity Buffering State
-  String? _pendingActivity;
-  int _bufferCount = 0;
-  static const int _requiredFrames = 45; // ~1.5 seconds at 30fps
-
-  void updateActivity(String activity, {String? snapshotPath, String? cameraId}) {
-    // Immediate Critical Events Check
-    if (activity == 'falling' || activity == 'near_fall') {
-      _processActivityChange(activity, snapshotPath, cameraId: cameraId);
-      return;
+  void updateActivity(String activity, {String? snapshotPath, String? cameraId, DateTime? customTime, bool forceSync = false}) {
+    // If customTime is provided, sync our internal clock
+    if (customTime != null) {
+      _currentTime = customTime;
     }
-
-    // Debounce Logic for Non-Critical Activities
-    if (_pendingActivity == activity) {
-      _bufferCount++;
-    } else {
-      _pendingActivity = activity;
-      _bufferCount = 0;
-    }
-
-    // Only update if activity persists for 1.5s
-    if (_bufferCount >= _requiredFrames) {
-      if (state.currentActivity != activity) {
-        _processActivityChange(activity, snapshotPath, cameraId: cameraId);
-      }
+    
+    // Process the activity change immediately.
+    // forceSync allows updating the current event's duration even if activity name hasn't changed.
+    if (state.currentActivity != activity || snapshotPath != null || forceSync) {
+      _processActivityChange(activity, snapshotPath, cameraId: cameraId, customTime: customTime, forceSync: forceSync);
     }
   }
 
-  void _processActivityChange(String activity, String? snapshotPath, {String? cameraId}) {
-    if (state.currentActivity == activity && snapshotPath == null) return;
+  void _processActivityChange(String activity, String? snapshotPath, {String? cameraId, DateTime? customTime, bool forceSync = false}) {
+    // If we're just forcing a sync of the current activity duration, don't return early
+    if (state.currentActivity == activity && snapshotPath == null && !forceSync) return;
 
-    final now = DateTime.now();
+    final now = customTime ?? _currentTime;
     final timestamp = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
     final dateStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
 
-    // 1. Close the previous event if it exists
+    // 1. Close the previous event (or current if forceSync)
     final List<SimulationEvent> updatedEvents = List.from(state.events);
     
-    // Find the most recent event (which should be the one we are transitioning FROM)
-    // We assume the first event in the list is the most recent one.
     if (updatedEvents.isNotEmpty) {
       final lastEvent = updatedEvents.first;
       
-      // If the last event is "open" (no duration or we just want to update it based on time elapsed)
-      // Actually, we should check if it corresponds to `state.currentActivity`.
-      // But since we just want to "close" the timeline segment for the previous activity:
-      
       if (lastEvent.startTimeMs != null) {
         final durationSec = (now.millisecondsSinceEpoch - lastEvent.startTimeMs!) ~/ 1000;
-        final durationHrs = (durationSec / 3600).toStringAsFixed(2); // precise string for UI match
+        final durationHrs = (durationSec / 3600).toStringAsFixed(2);
         
         updatedEvents[0] = lastEvent.copyWith(
           durationSeconds: durationSec,
-          duration: "$durationHrs hr", // Update legacy string for compatibility
+          duration: "$durationHrs hr",
         );
+        
+        // Sync the updated event to cloud so the Events list reflects the final duration
+        _eventRepository.syncEvent(updatedEvents[0]);
       }
     }
 
-    // 2. Create new event
+    // If we were just forcing a sync of the current event, we stop here
+    if (forceSync && state.currentActivity == activity) {
+      state = state.copyWith(events: updatedEvents);
+      _saveState();
+      return;
+    }
+
+    // 2. Create new event (only if activity changed)
     final newEvent = SimulationEvent(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: _currentTime.millisecondsSinceEpoch.toString(),
       cameraId: cameraId,
       type: activity,
       timestamp: timestamp,
       date: dateStr,
       isCritical: activity == 'falling' || activity == 'near_fall',
       snapshotUrl: snapshotPath,
-      startTimeMs: now.millisecondsSinceEpoch, // Start tracking time
+      startTimeMs: _currentTime.millisecondsSinceEpoch, // Start tracking time
       durationSeconds: 0, // Initial duration
       duration: "0.00 hr", 
       description: _getActivityDescription(activity),
@@ -433,7 +447,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
     if (updatedEvents.isNotEmpty) {
       final activeEvent = updatedEvents.first;
       if (activeEvent.startTimeMs != null && activeEvent.type == state.currentActivity) {
-        final durationSec = (DateTime.now().millisecondsSinceEpoch - activeEvent.startTimeMs!) ~/ 1000;
+        final durationSec = (_currentTime.millisecondsSinceEpoch - activeEvent.startTimeMs!) ~/ 1000;
         // Only update if changes to avoid rebuild spam if not needed? 
         // Actually we need rebuilds for UI counters if displayed.
         final durationHrs = (durationSec / 3600).toStringAsFixed(2);
@@ -449,7 +463,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
     final bool durationChanged = hasEvents && updatedEvents.first.durationSeconds != state.events.first.durationSeconds;
 
     if (newScore != state.score || durationChanged) {
-      final now = DateTime.now();
+      final now = _currentTime;
       final dateStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
       final updatedDailyScores = Map<String, double>.from(state.dailyScores);
       updatedDailyScores[dateStr] = newScore.toDouble();
@@ -460,9 +474,13 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         dailyScores: updatedDailyScores,
         events: updatedEvents,
       );
-      // We might not want to save to disk EVERY second for duration updates to avoid IO thrashing?
-      // But for prototype/demo it's fine.
-      if (newScore != state.score) { // Only save if score changed or periodically?
+
+      // Periodically sync active event to Firestore (every 5 simulation minutes = approx 5 seconds)
+      if (durationChanged && updatedEvents.first.durationSeconds != null && updatedEvents.first.durationSeconds! % 300 == 0) {
+        _eventRepository.syncEvent(updatedEvents.first);
+      }
+
+      if (newScore != state.score) {
          _saveState();
       }
     }
@@ -483,5 +501,12 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
 final healthStatusProvider = StateNotifierProvider<HealthStatusNotifier, HealthState>((ref) {
   final eventRepo = ref.watch(eventRepositoryProvider);
-  return HealthStatusNotifier(eventRepo);
+  final notifier = HealthStatusNotifier(eventRepo);
+
+  // Watch auth state and trigger loadState when it changes
+  ref.listen(authStateProvider, (previous, next) {
+    notifier.loadState();
+  });
+
+  return notifier;
 });

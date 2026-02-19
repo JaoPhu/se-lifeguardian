@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart' hide PoseLandmark, PoseLandmarkType;
+import 'package:flutter/foundation.dart';
 
 
 
@@ -19,12 +20,25 @@ import 'dart:async';
 import '../../dashboard/data/camera_provider.dart' as cam_provider;
 import '../../dashboard/domain/camera.dart' as cam_domain;
 import '../../statistics/domain/simulation_event.dart';
+import '../pose_providers.dart';
 
 
 class PoseDetectorView extends ConsumerStatefulWidget {
   final String? videoPath;
+  // If true, we show some debugging info or simulate events
+  final bool isSimulation;
   final String? displayCameraName;
-  const PoseDetectorView({super.key, this.videoPath, this.displayCameraName});
+  final TimeOfDay? startTime;
+  final DateTime? date;
+
+  const PoseDetectorView({
+    super.key, 
+    this.videoPath, 
+    this.isSimulation = false,
+    this.displayCameraName,
+    this.startTime,
+    this.date,
+  });
  
   @override
   ConsumerState<PoseDetectorView> createState() => _PoseDetectorViewState();
@@ -62,7 +76,9 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   bool _isCapturing = false;
   DateTime? _lastCaptureTime;
   String? _registeredCameraId;
+  String? _registeredCameraName;
   String? _firstFramePath;
+  Uint8List? _lastCapturedFrameBytes;
 
   // Animation for loading
   late AnimationController _loadingController;
@@ -75,10 +91,26 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
       duration: const Duration(seconds: 2),
     )..repeat();
 
+    // Initialize simulation time based on user input or default
+    final baseDate = widget.date ?? DateTime(2025, 1, 1);
+    final baseTime = widget.startTime ?? const TimeOfDay(hour: 10, minute: 0);
+    _simTime = DateTime(
+      baseDate.year, baseDate.month, baseDate.day, 
+      baseTime.hour, baseTime.minute
+    );
+
+    // Initial sync of simulation clock to notifier
+    // This is crucial so the very first event gets the correct start time!
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(healthStatusProvider.notifier).updateSimulationClock(_simTime);
+    });
+
     if (widget.videoPath != null) {
       _initializeVideo();
     }
     
+    _poseService.logger = ref.read(poseDataLoggerProvider);
+
     // Reset health monitoring state for new analysis session
     Future.microtask(() {
       ref.read(healthStatusProvider.notifier).reset();
@@ -91,6 +123,13 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     _loadingController.dispose();
     _videoController?.dispose();
     _simTimer?.cancel();
+    
+    // Stop AI Data Collection if running
+    if (ref.read(isRecordingPoseProvider)) {
+      ref.read(poseDataLoggerProvider).stopRecording();
+      ref.read(isRecordingPoseProvider.notifier).state = false;
+    }
+    
     _poseService.close();
     super.dispose();
   }
@@ -121,28 +160,36 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
       }
 
       // Register camera with name and thumbnail
-      Future.microtask(() {
+      Future.microtask(() async {
           final notifier = ref.read(cam_provider.cameraProvider.notifier);
           // Removed notifier.clearCameras() to preserve existing boxes
           
+          
+          
           final camName = widget.displayCameraName ?? 'Demo Camera';
-          final id = notifier.addCameraSafely(camName, config: cam_domain.CameraConfig(
+          final camera = await notifier.addCameraSafely(camName, config: cam_domain.CameraConfig(
              startTime: "08:00", 
              date: "2025-06-15",
              thumbnailUrl: _firstFramePath,
           ));
-          setState(() {
-             _registeredCameraId = id;
-          });
+          if (mounted) {
+            setState(() {
+              _registeredCameraId = camera.id;
+              _registeredCameraName = camera.name;
+            });
+          }
       });
 
       // Start pre-analysis
       _runPreAnalysis();
 
       _videoController!.addListener(() {
+        if (!mounted) return;
         if (_videoController!.value.position >= _videoController!.value.duration) {
           _onAnalysisComplete();
         }
+        // Sync UI (Slider progress) with video playback
+        setState(() {});
       });
 
     } catch (e) {
@@ -151,7 +198,6 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   }
 
   void _startSimulation() {
-    _simTime = DateTime.now();
     _simTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
       if (_isPaused) return;
@@ -160,6 +206,10 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
         // One second equals 1 minute simulation
         _simTime = _simTime.add(const Duration(minutes: 1));
       });
+      
+      // Update the HealthStatusNotifier with the new simulation time
+      // This drives the duration calculation for active events
+      ref.read(healthStatusProvider.notifier).updateSimulationClock(_simTime);
     });
   }
 
@@ -170,11 +220,29 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     _videoController?.pause();
     _isAnalysisLoopRunning = false;
 
+    // Stop AI Data Collection if running
+    if (ref.read(isRecordingPoseProvider)) {
+      ref.read(poseDataLoggerProvider).stopRecording();
+      ref.read(isRecordingPoseProvider.notifier).state = false;
+      debugPrint("Auto-stopped AI Data Collection on Analysis Complete");
+    }
+
     if (_persons.length > 1 && _selectedPersonIndex == null) {
       setState(() {
          _isIdentificationMode = true;
       });
     } else {
+      // Force a final update to close the duration of the last activity
+      // using the final simulation time
+      if (_lastProcessedActivity != null) {
+        ref.read(healthStatusProvider.notifier).updateActivity(
+          _lastProcessedActivity!, // Re-confirm last activity
+          cameraId: _registeredCameraId,
+          customTime: _simTime, // Final time
+          forceSync: true, // Force the last activity duration to be closed and synced
+        );
+      }
+
       setState(() {
         _selectedPersonIndex ??= (_persons.isNotEmpty ? 0 : null);
         _isAnalysisComplete = true;
@@ -302,6 +370,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
           await Future.delayed(const Duration(milliseconds: 5));
           continue;
         }
+        _lastCapturedFrameBytes = uint8list; // Cache for event snapshots
 
         final tempDir = await getTemporaryDirectory();
         final file = File('${tempDir.path}/frame.png');
@@ -401,18 +470,8 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
             }
 
             // State Transition & Snapshot Logic
-            final healthState = ref.read(healthStatusProvider);
-            if (healthState.currentActivity != detectedActivity) {
-               // Capture snapshot asynchronously to not block UI
-               // FORCE capture on activity change to ensure gallery has images
-               _captureSnapshot(force: true).then((path) {
-                 ref.read(healthStatusProvider.notifier).updateActivity(
-                   detectedActivity, 
-                   snapshotPath: path,
-                   cameraId: _registeredCameraId,
-                 );
-               });
-            }
+            // Use buffered handler instead of direct check to prevent snapshot spam
+            _handleActivityChange(detectedActivity);
           }
         });
         }
@@ -429,36 +488,114 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     _isAnalysisLoopRunning = false;
   }
 
+  // UI Buffering State
+  String? _lastDetectedActivity;
+  int _consecutiveFrameCount = 0;
+  // Require ~60 frames (approx 2 sec) of consistency to trigger UI update/snapshot
+  // Falling is critical, requires less buffering (e.g. 5 frames just to filter noise)
+  static const int _bufferThresholdNormal = 60; 
+  static const int _bufferThresholdCritical = 5;
+  
+  // Track the last activity we successfully sent to the notifier to prevent loop
+  String? _lastProcessedActivity;
+
+  void _handleActivityChange(String detectedActivity) {
+    if (_lastDetectedActivity == detectedActivity) {
+      _consecutiveFrameCount++;
+    } else {
+      _lastDetectedActivity = detectedActivity;
+      _consecutiveFrameCount = 0;
+    }
+
+    final isCritical = detectedActivity == 'falling' || detectedActivity == 'near_fall';
+    final threshold = isCritical ? _bufferThresholdCritical : _bufferThresholdNormal;
+
+    if (_consecutiveFrameCount >= threshold) {
+      // Activity confirmed stable in UI
+      final healthState = ref.read(healthStatusProvider);
+      
+      // Only trigger update if it's DIFFERENT from what we last processed locally
+      // AND different from current global state (double check)
+      if (_lastProcessedActivity != detectedActivity && healthState.currentActivity != detectedActivity) {
+         
+          // Mark as processed immediately to stop subsequent frames from triggering
+          _lastProcessedActivity = detectedActivity;
+
+          // We capture snapshot NOW.
+          _captureSnapshot(force: true, isCritical: isCritical).then((path) {
+            if (mounted) {
+              ref.read(healthStatusProvider.notifier).updateActivity(
+                detectedActivity, 
+                snapshotPath: path,
+                cameraId: _registeredCameraId,
+                customTime: _simTime, // Use simulation time for duration calc
+              );
+            }
+          });
+          
+          // Reset count
+          _consecutiveFrameCount = 0; 
+      }
+    }
+  }
 
 
-  Future<String?> _captureSnapshot({bool force = false}) async {
+
+  // Track type of last capture to allow 'Normal -> Critical' transitions quickly
+  bool _lastCaptureWasCritical = false;
+
+  Future<String?> _captureSnapshot({bool force = false, bool isCritical = false}) async {
     // Prevent multiple captures for the same fall (debounce 30 seconds)
     if (_isCapturing) {
       return null;
     }
     
-    // Only check debounce if NOT forced
-    if (!force && widget.videoPath != null && 
-        _lastCaptureTime != null && 
-        DateTime.now().difference(_lastCaptureTime!).inSeconds < 5) { // Reduced to 5s to ensure we get more event photos
-      return null;
+    if (_lastCaptureTime != null) {
+      final diffMs = DateTime.now().difference(_lastCaptureTime!).inMilliseconds;
+      int cooldownMs = 2000; // Default 2s for normal events
+
+      if (isCritical) {
+        if (!_lastCaptureWasCritical) {
+           // Normal -> Critical: Allow QUICK capture (e.g. Walking -> Falling)
+           // Just enough to ensure file IO is clear (500ms)
+           cooldownMs = 500; 
+        } else {
+           // Critical -> Critical: Prevent spamming the SAME fall (5s)
+           cooldownMs = 5000;
+        }
+      } else {
+         // Normal -> Normal: Keep standard 2s to avoid fidgeting spam
+         cooldownMs = 2000;
+      }
+
+      if (diffMs < cooldownMs) return null;
     }
 
     _isCapturing = true;
     _lastCaptureTime = DateTime.now();
+    _lastCaptureWasCritical = isCritical;
 
     try {
-      // Capture with higher quality for gallery
-      final image = await _screenshotController.capture(pixelRatio: 1.5);
+      // Use cached frame if available to avoid concurrency issues with ScreenshotController
+      // and to ensure we capture exactly what the AI saw.
+      final image = _lastCapturedFrameBytes ?? await _screenshotController.capture(pixelRatio: 1.5);
+      
       if (image != null) {
-        final directory = await getTemporaryDirectory();
+        // Use ApplicationDocumentsDirectory so images persist across restarts
+        final directory = await getApplicationDocumentsDirectory();
         final fileName = 'event_${DateTime.now().millisecondsSinceEpoch}.png';
         final imagePath = '${directory.path}/$fileName';
         final imageFile = File(imagePath);
         await imageFile.writeAsBytes(image);
         
-        // Save to gallery for user visibility if requested, but we need the path
-        await Gal.putImage(imagePath);
+        // Save to gallery for user visibility if requested
+        // Note: Gal might need external storage permission, handled by the plugin/OS
+        try {
+          await Gal.putImage(imagePath);
+        } catch (e) {
+          debugPrint("Gallery save failed (harmless): $e");
+        }
+        
         debugPrint("Snapshot saved: $imagePath");
         return imagePath;
       }
@@ -563,6 +700,11 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                       ),
                     ),
                   ),
+                  const SizedBox(height: 16),
+
+                  // AI Data Collection Section (Only visible in Debug Mode)
+                  if (kDebugMode) _buildAIRecordingUI(),
+
                   const SizedBox(height: 32),
                 ],
               ),
@@ -749,9 +891,9 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
               value: _videoController!.value.position.inMilliseconds.toDouble(),
               min: 0,
               max: _videoController!.value.duration.inMilliseconds.toDouble(),
-              onChanged: (val) {
+              onChanged: kDebugMode ? (val) {
                 _videoController!.seekTo(Duration(milliseconds: val.toInt()));
-              },
+              } : null,
             ),
           ),
           
@@ -1002,7 +1144,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
 
                     final demoCamera = cam_domain.Camera(
                       id: _registeredCameraId ?? 'demo-camera-${DateTime.now().millisecondsSinceEpoch}',
-                      name: widget.displayCameraName ?? 'Demo Camera', 
+                      name: _registeredCameraName ?? widget.displayCameraName ?? 'Demo Camera', 
                       status: cam_domain.CameraStatus.online,
                       source: cam_domain.CameraSource.demo,
                       events: events,
@@ -1322,6 +1464,124 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     );
   }
 
+  final TextEditingController _labelController = TextEditingController(text: 'sitting_upright');
+
+  Widget _buildAIRecordingUI() {
+    final isRecording = ref.watch(isRecordingPoseProvider);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isRecording ? Colors.red.withValues(alpha: 0.5) : Colors.transparent,
+          width: 2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.psychology, 
+                color: isRecording ? Colors.red : const Color(0xFF0D9492),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'AI Data Collection (Phase 1)',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const Spacer(),
+              if (isRecording)
+                const _PulseIcon(),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Label the current posture to train the AI model.',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _labelController,
+            enabled: !isRecording,
+            decoration: InputDecoration(
+              labelText: 'Pose Label',
+              hintText: 'e.g. sitting_slouching',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              prefixIcon: const Icon(Icons.label_outline),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                final logger = ref.read(poseDataLoggerProvider);
+                if (isRecording) {
+                  logger.stopRecording();
+                  ref.read(isRecordingPoseProvider.notifier).state = false;
+                } else {
+                  if (_labelController.text.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please enter a label first')),
+                    );
+                    return;
+                  }
+                  logger.startRecording(_labelController.text);
+                  ref.read(isRecordingPoseProvider.notifier).state = true;
+                }
+              },
+              icon: Icon(isRecording ? Icons.stop : Icons.fiber_manual_record),
+              label: Text(isRecording ? 'Stop Recording' : 'Start Recording Frames'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: isRecording ? Colors.red : const Color(0xFF0D9492),
+                side: BorderSide(color: isRecording ? Colors.red : const Color(0xFF0D9492)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PulseIcon extends StatefulWidget {
+  const _PulseIcon();
+
+  @override
+  State<_PulseIcon> createState() => _PulseIconState();
+}
+
+class _PulseIconState extends State<_PulseIcon> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _controller,
+      child: const Icon(Icons.circle, color: Colors.red, size: 12),
+    );
+  }
 }
 
 class PulsePainter extends CustomPainter {

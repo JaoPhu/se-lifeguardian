@@ -101,7 +101,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               color: isDark ? Colors.white : Colors.black,
               size: 20,
             ),
-            onPressed: () => context.pop(),
+            onPressed: () => context.go('/pre-login'),
             style: IconButton.styleFrom(
               backgroundColor: isDark ? Colors.grey.shade800 : Colors.white,
               shape: const CircleBorder(),

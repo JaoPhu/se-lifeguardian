@@ -6,15 +6,23 @@ import 'package:lifeguardian/src/features/authentication/presentation/widgets/au
 import 'package:lifeguardian/src/features/authentication/providers/auth_providers.dart';
 
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
-  const ForgotPasswordScreen({super.key});
+  const ForgotPasswordScreen({super.key, this.email});
+
+  final String? email;
 
   @override
   ConsumerState<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
 class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
-  final _emailController = TextEditingController();
+  late final TextEditingController _emailController;
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController(text: widget.email ?? '');
+  }
 
   @override
   void dispose() {

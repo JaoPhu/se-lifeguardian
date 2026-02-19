@@ -202,7 +202,7 @@ class OverviewScreen extends ConsumerWidget {
                           // 1. Clear History for this camera first
                           await ref.read(healthStatusProvider.notifier).clearAllData(cameraId: camera.id);
                           // 2. Remove the camera
-                          ref.read(cameraProvider.notifier).removeCamera(camera.id);
+                          ref.read(cameraProvider.notifier).deleteCamera(camera.id);
                         }
                       }
                     },
@@ -265,13 +265,15 @@ class OverviewScreen extends ConsumerWidget {
                       final latestEvent = cameraEvents.isNotEmpty ? cameraEvents.first : null;
 
                       if (configThumbnail != null) {
-                        return _buildImageWrapper(File(configThumbnail).existsSync() ? Image.file(File(configThumbnail)) : null);
+                        return _buildImageWrapper(File(configThumbnail).existsSync() 
+                            ? Image.file(File(configThumbnail), fit: BoxFit.fitHeight) 
+                            : null);
                       } else if (latestEvent != null) {
                         if (latestEvent.remoteImageUrl != null) {
                           return _buildImageWrapper(
                             Image.network(
                               latestEvent.remoteImageUrl!,
-                              fit: BoxFit.contain,
+                              fit: BoxFit.fitHeight,
                               errorBuilder: (context, error, stackTrace) => _buildLocalFallback(latestEvent),
                             ),
                           );
@@ -385,7 +387,7 @@ class OverviewScreen extends ConsumerWidget {
     if (event.snapshotUrl != null && File(event.snapshotUrl!).existsSync()) {
       return Image.file(
         File(event.snapshotUrl!),
-        fit: BoxFit.contain,
+        fit: BoxFit.fitHeight,
       );
     }
     return Container(color: Colors.grey[900]);

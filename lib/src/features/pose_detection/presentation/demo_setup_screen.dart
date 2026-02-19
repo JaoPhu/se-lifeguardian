@@ -307,6 +307,8 @@ class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
                       context.push('/analysis', extra: {
                         'videoPath': _videoPath,
                         'cameraName': _cameraNameController.text,
+                        'startTime': _startTime, // Pass TimeOfDay
+                        'date': _date, // Pass DateTime
                       });
                     } : null, // Disabled if no video
                     style: ElevatedButton.styleFrom(

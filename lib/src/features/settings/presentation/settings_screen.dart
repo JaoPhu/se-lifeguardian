@@ -8,6 +8,7 @@ import '../../authentication/controllers/auth_controller.dart';
 import '../../authentication/providers/auth_providers.dart';
 import '../../../common_widgets/user_avatar.dart';
 import '../../notification/presentation/notification_bell.dart';
+import 'change_password_dialog.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -248,48 +249,53 @@ class SettingsScreen extends ConsumerWidget {
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
+                            trailing: const Icon(LucideIcons.chevronRight, size: 20, color: Colors.grey),
                             onTap: () {
                               ref.read(authControllerProvider.notifier).logout();
                               context.go('/welcome');
                             },
                           ),
                           Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
-                          // Reset Password
-                          ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
-                            title: const Text(
-                              'Reset Password',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Color(0xFFEF4444), // Kept red as requested? Or should it be normal? Previous code had it red.
-                                fontWeight: FontWeight.w500,
+                          if (ref.watch(firebaseAuthProvider).currentUser?.providerData.any((p) => p.providerId == 'password') ?? false) ...[
+                            // Change Password
+                            ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
+                              title: const Text(
+                                'Change Password',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Color(0xFFEF4444),
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ),
-                            onTap: () async {
-                              final email = ref.read(userProvider).email;
-                              if (email.isNotEmpty) {
-                                try {
-                                  await ref.read(authControllerProvider.notifier).forgot(email);
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Password reset email sent!')),
-                                    );
-                                  }
-                                } catch (e) {
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-                                    );
-                                  }
-                                }
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('User email not found')),
+                              trailing: const Icon(LucideIcons.chevronRight, size: 20, color: Colors.grey),
+                              onTap: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => const ChangePasswordDialog(),
                                 );
-                              }
-                            },
-                          ),
-                          Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
+                              },
+                            ),
+                            Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
+
+                            // Forgot Password
+                            ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
+                              title: const Text(
+                                'Forgot Password',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Color(0xFFEF4444),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              trailing: const Icon(LucideIcons.chevronRight, size: 20, color: Colors.grey),
+                              onTap: () {
+                                context.push('/settings-forgot-password');
+                              },
+                            ),
+                            Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
+                          ],
                           // Delete Account
                           ListTile(
                             contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
@@ -301,6 +307,7 @@ class SettingsScreen extends ConsumerWidget {
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
+                            trailing: const Icon(LucideIcons.chevronRight, size: 20, color: Colors.grey),
                             onTap: () {
                               showDialog(
                                 context: context,
@@ -310,13 +317,12 @@ class SettingsScreen extends ConsumerWidget {
                                   
                                   // Check if user is an email/password user
                                   final firebaseUser = ref.read(firebaseAuthProvider).currentUser;
-                                  final providers = firebaseUser?.providerData.map((p) => p.providerId).toList() ?? [];
-                                  final isEmailUser = providers.contains('password');
-                                  
-                                   bool isLoading = false;
-                                   bool showPasswordField = false;
+                                   final providers = firebaseUser?.providerData.map((p) => p.providerId).toList() ?? [];
+                                   final isEmailUser = providers.contains('password');
                                    
-                                   return StatefulBuilder(
+                                    bool isLoading = false;
+                                    
+                                    return StatefulBuilder(
                                      builder: (context, setState) {
                                        return AlertDialog(
                                          title: const Text('Delete Account'),
@@ -325,14 +331,36 @@ class SettingsScreen extends ConsumerWidget {
                                            crossAxisAlignment: CrossAxisAlignment.start,
                                            children: [
                                              const Text(
-                                               'Are you sure you want to delete your account? This action cannot be undone.',
+                                               'ยืนยันการลบบัญชี? การดำเนินการนี้ไม่สามารถย้อนกลับได้และข้อมูลทั้งหมดจะถูกลบถาวร',
+                                               style: TextStyle(fontWeight: FontWeight.bold),
                                              ),
+                                             const SizedBox(height: 12),
+                                             Container(
+                                               padding: const EdgeInsets.all(12),
+                                               decoration: BoxDecoration(
+                                                 color: Colors.amber.withValues(alpha: 0.1),
+                                                 borderRadius: BorderRadius.circular(12),
+                                                 border: Border.all(color: Colors.amber.withValues(alpha: 0.5)),
+                                               ),
+                                               child: const Row(
+                                                 children: [
+                                                   Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                                                   SizedBox(width: 8),
+                                                   Expanded(
+                                                     child: Text(
+                                                       'เพื่อความปลอดภัย หากคุณไม่ได้เข้าสู่ระบบนานเกินไป ระบบอาจขอให้คุณยืนยันตัวตนใหม่ก่อนทำการลบครับ',
+                                                       style: TextStyle(fontSize: 12, color: Colors.orange),
+                                                     ),
+                                                   ),
+                                                 ],
+                                                ),
+                                              ),
                                              const SizedBox(height: 16),
                                              
-                                             if (showPasswordField) ...[
+                                             if (isEmailUser) ...[
                                                const Text(
-                                                 'Security check: Please enter your password:',
-                                                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                                 'ยืนยันตัวตน: กรุณากรอกรหัสผ่านของคุณ',
+                                                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                                                ),
                                                const SizedBox(height: 8),
                                                TextField(
@@ -341,35 +369,36 @@ class SettingsScreen extends ConsumerWidget {
                                                  autofocus: true,
                                                  enabled: !isLoading,
                                                  decoration: InputDecoration(
-                                                   hintText: 'Password',
+                                                   hintText: 'รหัสผ่าน (Password)',
                                                    prefixIcon: const Icon(Icons.lock_outline),
                                                    border: OutlineInputBorder(
-                                                     borderRadius: BorderRadius.circular(8),
+                                                     borderRadius: BorderRadius.circular(12),
                                                    ),
                                                    contentPadding: const EdgeInsets.all(12),
                                                  ),
                                                  onChanged: (value) => setState(() {}),
                                                ),
-                                             ] else ...[
-                                               const Text(
-                                                 'Type "Confirm" to delete your account:',
-                                                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                               ),
-                                               const SizedBox(height: 8),
-                                               TextField(
-                                                 controller: confirmController,
-                                                 autofocus: true,
-                                                 enabled: !isLoading,
-                                                 decoration: InputDecoration(
-                                                   hintText: 'Confirm',
-                                                   border: OutlineInputBorder(
-                                                     borderRadius: BorderRadius.circular(8),
-                                                   ),
-                                                   contentPadding: const EdgeInsets.all(12),
-                                                 ),
-                                                 onChanged: (value) => setState(() {}),
-                                               ),
+                                               const SizedBox(height: 16),
                                              ],
+
+                                             const Text(
+                                               'พิมพ์คำว่า "Confirm" เพื่อยืนยันการลบ',
+                                               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                             ),
+                                             const SizedBox(height: 8),
+                                             TextField(
+                                               controller: confirmController,
+                                               autofocus: !isEmailUser,
+                                               enabled: !isLoading,
+                                               decoration: InputDecoration(
+                                                 hintText: 'Confirm',
+                                                 border: OutlineInputBorder(
+                                                   borderRadius: BorderRadius.circular(12),
+                                                 ),
+                                                 contentPadding: const EdgeInsets.all(12),
+                                               ),
+                                               onChanged: (value) => setState(() {}),
+                                             ),
                                              
                                              if (isLoading) ...[
                                                const SizedBox(height: 16),
@@ -384,18 +413,18 @@ class SettingsScreen extends ConsumerWidget {
                                                passwordController.dispose();
                                                Navigator.of(dialogContext).pop();
                                              },
-                                             child: const Text('Cancel'),
+                                             child: const Text('ยกเลิก'),
                                            ),
                                            TextButton(
                                              onPressed: (
-                                               (confirmController.text == 'Confirm' && !showPasswordField) ||
-                                               (passwordController.text.isNotEmpty && showPasswordField)
+                                               confirmController.text == 'Confirm' && 
+                                               (!isEmailUser || passwordController.text.isNotEmpty)
                                              ) && !isLoading
                                                ? () async {
                                                  setState(() => isLoading = true);
                                                  
                                                  try {
-                                                   final password = showPasswordField ? passwordController.text : null;
+                                                   final password = isEmailUser ? passwordController.text : null;
                                                    await ref.read(authControllerProvider.notifier).deleteAccount(password: password);
                                                    
                                                    final authState = ref.read(authControllerProvider);
@@ -404,20 +433,13 @@ class SettingsScreen extends ConsumerWidget {
                                                      if (authState.hasError) {
                                                        setState(() => isLoading = false);
                                                        
-                                                       // 💡 Fallback: If silent deletion failed for email user, show password field
-                                                       final errorMsg = authState.error.toString();
-                                                       if (isEmailUser && (errorMsg.contains('เซสชันเน็ตหมดอายุ') || errorMsg.contains('password'))) {
-                                                         setState(() => showPasswordField = true);
-                                                       } else {
-                                                         ScaffoldMessenger.of(context).showSnackBar(
-                                                           SnackBar(
-                                                             content: Text('Failed to delete: ${authState.error}'),
-                                                             backgroundColor: Colors.red,
-                                                           ),
-                                                         );
-                                                       }
+                                                       ScaffoldMessenger.of(context).showSnackBar(
+                                                         SnackBar(
+                                                           content: Text('ล้มเหลว: ${authState.error}'),
+                                                           backgroundColor: Colors.red,
+                                                         ),
+                                                       );
                                                      } else {
-                                                       // On success, close dialog. Redirection handled by AppRouter.
                                                        confirmController.dispose();
                                                        passwordController.dispose();
                                                        if (Navigator.of(dialogContext).canPop()) {
@@ -430,7 +452,7 @@ class SettingsScreen extends ConsumerWidget {
                                                      setState(() => isLoading = false);
                                                      ScaffoldMessenger.of(context).showSnackBar(
                                                        SnackBar(
-                                                         content: Text('Error: $e'),
+                                                         content: Text('เกิดข้อผิดพลาด: $e'),
                                                          backgroundColor: Colors.red,
                                                        ),
                                                      );
@@ -439,11 +461,11 @@ class SettingsScreen extends ConsumerWidget {
                                                }
                                                : null,
                                              child: Text(
-                                               'Delete', 
+                                               'ลบบัญชี', 
                                                style: TextStyle(
                                                  color: (
-                                                   (confirmController.text == 'Confirm' && !showPasswordField) ||
-                                                   (passwordController.text.isNotEmpty && showPasswordField)
+                                                   confirmController.text == 'Confirm' && 
+                                                   (!isEmailUser || passwordController.text.isNotEmpty)
                                                  ) ? Colors.red : Colors.grey
                                                )
                                              ),
