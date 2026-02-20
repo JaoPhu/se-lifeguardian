@@ -83,7 +83,7 @@ class WelcomeScreen extends StatelessWidget {
                 height: 56,
                 child: ElevatedButton(
                   onPressed: () {
-                    context.push('/pre-login');
+                    context.go('/pre-login');
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0D9488), // Teal

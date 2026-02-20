@@ -2,9 +2,11 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../statistics/domain/simulation_event.dart';
 import '../../authentication/providers/auth_providers.dart';
+import '../../group/providers/group_providers.dart';
 
 class EventRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -14,36 +16,46 @@ class EventRepository {
   String? get currentUserId => _auth.currentUser?.uid;
 
   Future<String?> uploadSnapshot(String filePath, String eventId) async {
-    final user = _auth.currentUser;
-    if (user == null) return null;
+    final uid = currentUserId;
+    if (uid == null) return null;
 
     try {
       final file = File(filePath);
       if (!await file.exists()) return null;
 
       final extension = filePath.split('.').last;
-      final ref = _storage.ref().child('users/${user.uid}/events/$eventId.$extension');
+      final ref = _storage.ref().child('users/$uid/events/$eventId.$extension');
       
       final uploadTask = await ref.putFile(
         file,
         SettableMetadata(contentType: 'image/$extension'),
       );
       
-      return await uploadTask.ref.getDownloadURL();
+      final downloadUrl = await uploadTask.ref.getDownloadURL();
+      
+      // ✅ [Cloud Only] Delete local file after successful upload
+      try {
+        await file.delete();
+        debugPrint('EventRepository: Deleted local snapshot after cloud sync: $filePath');
+      } catch (e) {
+        debugPrint('EventRepository: Failed to delete local file: $e');
+      }
+      
+      return downloadUrl;
     } catch (e) {
-      print('Error uploading snapshot: $e');
+      debugPrint('Error uploading snapshot: $e');
       return null;
     }
   }
 
   Future<void> syncEvent(SimulationEvent event) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
+    final uid = currentUserId;
+    if (uid == null) return;
 
     try {
       await _firestore
           .collection('users')
-          .doc(user.uid)
+          .doc(uid)
           .collection('events')
           .doc(event.id)
           .set(event.toJson(), SetOptions(merge: true));
@@ -69,13 +81,13 @@ class EventRepository {
   }
 
   Future<void> deleteEventsForCamera(String cameraId) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
+    final uid = currentUserId;
+    if (uid == null) return;
 
     try {
       final events = await _firestore
           .collection('users')
-          .doc(user.uid)
+          .doc(uid)
           .collection('events')
           .where('cameraId', isEqualTo: cameraId)
           .get();
@@ -94,11 +106,10 @@ class EventRepository {
 final eventRepositoryProvider = Provider<EventRepository>((ref) => EventRepository());
 
 final eventsStreamProvider = StreamProvider<List<SimulationEvent>>((ref) {
-  // Watch auth state to ensure stream is recreated for the correct user
-  final authState = ref.watch(authStateProvider);
-  final user = authState.value;
+  // Watch active targetUid to ensure stream is recreated for the active patient
+  final targetUid = ref.watch(resolvedTargetUidProvider);
   
-  if (user == null) return Stream.value([]);
+  if (targetUid.isEmpty) return Stream.value([]);
   
-  return ref.watch(eventRepositoryProvider).getEventsStream(user.uid);
+  return ref.watch(eventRepositoryProvider).getEventsStream(targetUid);
 });

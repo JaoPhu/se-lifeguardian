@@ -35,8 +35,7 @@ import 'package:lifeguardian/src/features/pose_detection/presentation/analysis_l
 import 'package:lifeguardian/src/features/notification/presentation/notification_screen.dart';
 import 'package:lifeguardian/src/features/events/presentation/events_screen.dart';
 import 'package:lifeguardian/src/features/pose_detection/presentation/pose_detector_view.dart';
-import 'package:lifeguardian/src/features/subscription/data/trial_provider.dart';
-import 'package:lifeguardian/src/features/subscription/presentation/expired_screen.dart';
+
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -122,7 +121,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           // If profile is incomplete, force fromRegistration to true
           final user = ref.read(userProvider);
           final fromRegistration = extra?['fromRegistration'] as bool? ?? !user.isProfileComplete;
-          return EditProfileScreen(fromRegistration: fromRegistration);
+          final editableUid = extra?['editableUid'] as String?;
+          final medicalOnly = extra?['medicalOnly'] as bool? ?? false;
+          return EditProfileScreen(
+            fromRegistration: fromRegistration,
+            editableUid: editableUid,
+            medicalOnly: medicalOnly,
+          );
         },
       ),
       GoRoute(
@@ -180,11 +185,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           return EventsScreen(cameraId: cameraId);
         },
       ),
-      GoRoute(
-        path: '/expired',
-        parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const ExpiredScreen(),
-      ),
+
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
           return ScaffoldWithNavBar(navigationShell: navigationShell);
@@ -252,55 +253,89 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
     ],
     redirect: (context, state) {
+      final firebaseUser = auth.FirebaseAuth.instance.currentUser;
+      final user = ref.read(userProvider);
+      
+      final currentPath = state.uri.path;
+      debugPrint('Router Redirect - Path: $currentPath, firebaseUser: ${firebaseUser?.uid}, profileId: ${user.id}');
+
+      final isGuestRoute = currentPath == '/login' || 
+                        currentPath == '/register' || 
+                        currentPath == '/welcome' ||
+                        currentPath == '/pre-login';
+
+      final isPublicRoute = currentPath == '/forgot-password' ||
+                        currentPath == '/otp-verification' ||
+                        currentPath == '/reset-password' ||
+                        currentPath == '/splash';
+
       // Force Splash Screen on First Launch / Hot Restart
       if (_isFirstLaunch) {
         _isFirstLaunch = false;
         // If we are already at splash, allow it. If not, redirect to splash.
-        if (state.matchedLocation != '/splash') {
+        if (currentPath != '/splash') {
+          debugPrint('Router: Redirecting to /splash for first launch');
           return '/splash';
         }
       }
 
-      final firebaseUser = ref.read(firebaseAuthProvider).currentUser;
-      final user = ref.read(userProvider);
-      
-      final isGuestRoute = state.matchedLocation == '/login' || 
-                        state.matchedLocation == '/register' || 
-                        state.matchedLocation == '/welcome' ||
-                        state.matchedLocation == '/pre-login';
+      // 0. Wait for profile to load if logged in (Avoid race conditions on Hot Restart)
+      // If we have a Firebase user but our profile provider hasn't synced yet (ID is empty),
+      // we allow authenticated routes to "wait in place" to avoid visual jumps to Splash.
+      if (firebaseUser != null && user.id.isEmpty) {
+        final isAuthRoute = !isGuestRoute && !isPublicRoute;
+        if (isAuthRoute) {
+          return null; // Stay on the current auth route while loading in background
+        }
+        
+        // Let them stay on Login/Register during transition to avoid hiding error dialogs
+        if (currentPath == '/login' || currentPath == '/register' || currentPath == '/pre-login' || currentPath == '/welcome') {
+          return null;
+        }
 
-      final isPublicRoute = state.matchedLocation == '/forgot-password' ||
-                        state.matchedLocation == '/otp-verification' ||
-                        state.matchedLocation == '/reset-password' ||
-                        state.matchedLocation == '/splash';
+        if (currentPath != '/splash') {
+          debugPrint('Router: Redirecting to /splash because firebaseUser != null but profile is empty');
+          return '/splash';
+        }
+        return null; // Stay at splash
+      }
 
       // 1. Not logged in -> Must go to /welcome or auth pages (or public pages)
       if (firebaseUser == null) {
-        return (isGuestRoute || isPublicRoute) ? null : '/welcome';
+        // If we're already on an auth screen like /login or /register, let us stay there.
+        if (currentPath == '/login' || currentPath == '/register') {
+          return null; 
+        }
+        if (!(isGuestRoute || isPublicRoute)) {
+          debugPrint('Router: Redirecting to /welcome because firebaseUser == null on non-guest route');
+          return '/welcome';
+        }
+        return null; // Allow staying on guest/public route
       }
 
-      // Check profile completeness (Force onboarding)
-      if (user.id.isNotEmpty && !user.isProfileComplete) {
+      // 2. Check profile completeness (Force onboarding)
+      // ✅ [Soft Check] Only redirect if Identity (Name/Nickname) is missing.
+      // This prevents existing users from being blocked on Hot Restart if they haven't filled
+      // the new mandatory fields like Blood Type yet.
+      if (user.id.isNotEmpty && !user.isIdentityComplete) {
         // If they are on edit-profile, or splash, let them be
-        if (state.matchedLocation == '/edit-profile' || state.matchedLocation == '/splash') {
+        if (currentPath == '/edit-profile' || currentPath == '/splash') {
           return null;
         }
         // Redirect to edit-profile for any other route
+        debugPrint('Router: Redirecting to /edit-profile because identity incomplete');
         return '/edit-profile';
       }
 
-      // 3. Subscription/Trial check
-      final trialState = ref.read(trialProvider);
-      if (trialState.isExpired && state.matchedLocation != '/expired') {
-        return '/expired';
-      }
+
 
       // 4. Logged in and has profile
       
       // If user tries to access Guest-Only routes, redirect to Overview
       // We exclude '/login' from this forced redirect to avoid conflict with LoginScreen's manual navigation
       // or race conditions during the login process.
-      if (isGuestRoute && state.matchedLocation != '/login') {
+      if (isGuestRoute && currentPath != '/login') {
+         debugPrint('Router: Redirecting to /overview from Guest Route');
          return '/overview';
       }
 
@@ -331,13 +366,13 @@ class _AuthRefreshListenable extends ChangeNotifier {
       }
 
       // Critical Check 2: Profile Completeness Status changed
-      if (prev.isProfileComplete != next.isProfileComplete) {
+      if (prev.isIdentityComplete != next.isIdentityComplete) {
         notifyListeners();
         return;
       }
       
-      // Critical Check 3: Name changed from empty to non-empty (or vice-versa) - affects redirect
-      if ((prev.name.isEmpty && next.name.isNotEmpty) || (prev.name.isNotEmpty && next.name.isEmpty)) {
+      // Critical Check 3: Full Profile Completeness (Optional for redirect but good for consistency)
+      if (prev.isProfileComplete != next.isProfileComplete) {
         notifyListeners();
         return;
       }

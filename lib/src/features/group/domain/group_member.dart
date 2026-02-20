@@ -2,8 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class GroupMember {
   final String uid;
-  final String role; // owner/admin/viewer
+  final String role; // owner/caretaker/member
   final String displayName;
+  final String username;
   final String avatarUrl;
   final DateTime? joinedAt;
 
@@ -11,6 +12,7 @@ class GroupMember {
     required this.uid,
     required this.role,
     required this.displayName,
+    required this.username,
     required this.avatarUrl,
     required this.joinedAt,
   });
@@ -20,8 +22,9 @@ class GroupMember {
     final ts = data['joinedAt'];
     return GroupMember(
       uid: doc.id,
-      role: (data['role'] ?? 'viewer') as String,
+      role: (data['role'] ?? 'member') as String,
       displayName: (data['displayName'] ?? 'Unknown') as String,
+      username: (data['username'] ?? '') as String,
       avatarUrl: (data['avatarUrl'] ?? '') as String,
       joinedAt: ts is Timestamp ? ts.toDate() : null,
     );
@@ -31,6 +34,7 @@ class GroupMember {
     return {
       'role': role,
       'displayName': displayName,
+      'username': username,
       'avatarUrl': avatarUrl,
       'joinedAt': joinedAt == null ? FieldValue.serverTimestamp() : joinedAt,
     };

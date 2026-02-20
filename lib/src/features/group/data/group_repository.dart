@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:rxdart/rxdart.dart';
 
 import '../domain/group.dart';
 import '../domain/group_member.dart';
@@ -15,6 +16,8 @@ class GroupRepository {
 
   final FirebaseFirestore _db;
   final FirebaseAuth _auth;
+
+  final _random = Random.secure();
 
   String get _uid {
     final u = _auth.currentUser;
@@ -35,8 +38,8 @@ class GroupRepository {
       _groupRef(groupId).collection('join_requests');
 
   // ---------- OWNER GROUP ID (stored in users/{uid}.ownerGroupId) ----------
-  Stream<String?> watchOwnerGroupId() {
-    return _userRef(_uid).snapshots().map((snap) {
+  Stream<String?> watchOwnerGroupId(String uid) {
+    return _userRef(uid).snapshots().map((snap) {
       final data = snap.data() ?? {};
       return data['ownerGroupId'] as String?;
     });
@@ -49,8 +52,8 @@ class GroupRepository {
   }
 
   // ---------- GROUP ----------
-  Stream<Group?> watchMyOwnerGroup() {
-    return watchOwnerGroupId().asyncMap((groupId) async {
+  Stream<Group?> watchMyOwnerGroup(String uid) {
+    return watchOwnerGroupId(uid).asyncMap((groupId) async {
       if (groupId == null) return null;
       final doc = await _groupRef(groupId).get();
       if (!doc.exists) return null;
@@ -72,12 +75,20 @@ class GroupRepository {
     final groupId = newGroupDoc.id;
 
     // อ่าน user profile สั้นๆ ไปแสดงใน member list
-    final displayName = (userSnap.data() ?? {})['displayName'] as String? ?? 'Unknown';
-    final avatarUrl = (userSnap.data() ?? {})['avatarUrl'] as String? ?? '';
+    final data = userSnap.data() ?? {};
+    final displayName = data['name'] as String? ?? 'Unknown';
+    final username = data['username'] as String? ?? '';
+    final avatarUrl = data['avatarUrl'] as String? ?? '';
+
+    // If name is the default "My Group", use nickname's group instead
+    String finalGroupName = name;
+    if (finalGroupName == 'My Group' && username.isNotEmpty) {
+      finalGroupName = "$username's group";
+    }
 
     await _db.runTransaction((tx) async {
       tx.set(newGroupDoc, {
-        'name': name,
+        'name': finalGroupName,
         'ownerUid': uid,
         'inviteCode': code,
         'createdAt': FieldValue.serverTimestamp(),
@@ -87,6 +98,7 @@ class GroupRepository {
       tx.set(_membersCol(groupId).doc(uid), {
         'role': 'owner',
         'displayName': displayName,
+        'username': username,
         'avatarUrl': avatarUrl,
         'joinedAt': FieldValue.serverTimestamp(),
       });
@@ -104,6 +116,12 @@ class GroupRepository {
     await _groupRef(groupId).update({
       'inviteCode': code,
       'inviteUpdatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> updateGroupName(String groupId, String name) async {
+    await _groupRef(groupId).update({
+      'name': name.trim(),
     });
   }
 
@@ -139,9 +157,10 @@ class GroupRepository {
     final groupId = q.docs.first.id;
 
     // ดึง user profile
-    final uSnap = await _userRef(_uid).get();
-    final u = uSnap.data() ?? {};
-    final displayName = (u['displayName'] as String?) ?? 'Unknown';
+    final userSnap = await _userRef(_uid).get();
+    final u = userSnap.data() ?? {};
+    final displayName = (u['name'] as String?) ?? 'Unknown';
+    final username = (u['username'] as String?) ?? '';
     final avatarUrl = (u['avatarUrl'] as String?) ?? '';
 
     // ถ้าเป็นสมาชิกอยู่แล้ว ไม่ต้องขอซ้ำ
@@ -151,6 +170,7 @@ class GroupRepository {
     await _requestsCol(groupId).doc(_uid).set({
       'uid': _uid,
       'displayName': displayName,
+      'username': username,
       'avatarUrl': avatarUrl,
       'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
@@ -160,11 +180,12 @@ class GroupRepository {
   Future<void> approveRequest({
     required String groupId,
     required String targetUid,
-    String role = 'viewer',
+    String role = 'member',
   }) async {
     final targetUser = await _userRef(targetUid).get();
     final u = targetUser.data() ?? {};
-    final displayName = (u['displayName'] as String?) ?? 'Unknown';
+    final displayName = (u['name'] as String?) ?? 'Unknown';
+    final username = (u['username'] as String?) ?? '';
     final avatarUrl = (u['avatarUrl'] as String?) ?? '';
 
     final memberRef = _membersCol(groupId).doc(targetUid);
@@ -174,8 +195,14 @@ class GroupRepository {
       tx.set(memberRef, {
         'role': role,
         'displayName': displayName,
+        'username': username,
         'avatarUrl': avatarUrl,
         'joinedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // NEW: Also add to user's joinedGroupIds
+      tx.set(_userRef(targetUid), {
+        'joinedGroupIds': FieldValue.arrayUnion([groupId]),
       }, SetOptions(merge: true));
 
       tx.delete(reqRef);
@@ -207,8 +234,7 @@ class GroupRepository {
 
   // ---------- HELPERS ----------
   String _genCode() {
-    final r = Random.secure();
-    final num = 1000 + r.nextInt(9000); // 1000-9999
+    final num = 1000 + _random.nextInt(9000); // 1000-9999
     return 'LG-$num';
   }
 }

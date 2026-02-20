@@ -439,7 +439,6 @@ class AuthRepository {
         // Login Flow: Even if profile missing, we let them in. 
         // Redirection logic in router will guide them to complete profile.
 
-        // Update Session ID (ONLY if profile exists)
         if (profileExists) {
           final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
           await _firestore.collection('users').doc(user.uid).update({
@@ -447,7 +446,14 @@ class AuthRepository {
           });
           debugPrint('AuthRepository: Session ID updated (Google)');
         } else {
-          debugPrint('AuthRepository: Profile missing (Google), blocking login');
+          debugPrint('AuthRepository: Profile missing (Google), blocking login and deleting orphan Auth record');
+          try {
+            await user.delete(); // ✅ Delete the Firebase account since they haven't registered
+            await GoogleSignIn().signOut();
+          } catch (e) {
+            debugPrint('AuthRepository: Failed to delete orphan user: $e');
+            await signOut();
+          }
           throw Exception('user-not-found');
         }
       } else {
@@ -509,7 +515,6 @@ class AuthRepository {
       if (isLogin) {
         // Login Flow: Let them in even if profile missing.
         
-        // Update Session ID (ONLY if profile exists)
         if (profileExists) {
           final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
           await _firestore.collection('users').doc(user.uid).update({
@@ -517,7 +522,13 @@ class AuthRepository {
           });
           debugPrint('AuthRepository: Session ID updated (Apple)');
         } else {
-          debugPrint('AuthRepository: Profile missing (Apple), blocking login');
+          debugPrint('AuthRepository: Profile missing (Apple), blocking login and deleting orphan Auth record');
+          try {
+            await user.delete(); // ✅ Delete the Firebase account since they haven't registered
+          } catch (e) {
+            debugPrint('AuthRepository: Failed to delete orphan user: $e');
+            await signOut();
+          }
           throw Exception('user-not-found');
         }
       } else {

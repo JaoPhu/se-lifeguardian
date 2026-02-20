@@ -9,6 +9,7 @@ import '../../notification/presentation/notification_bell.dart';
 import '../../profile/data/user_repository.dart';
 import '../../statistics/domain/simulation_event.dart';
 import '../../../common_widgets/user_avatar.dart';
+import '../../group/providers/group_providers.dart';
 
 class OverviewScreen extends ConsumerWidget {
   const OverviewScreen({super.key});
@@ -80,6 +81,65 @@ class OverviewScreen extends ConsumerWidget {
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
+                  // Patient Selector
+                  Consumer(
+                    builder: (context, ref, child) {
+                      final targetUsersAsync = ref.watch(targetUsersProvider);
+                      final targets = targetUsersAsync.valueOrNull ?? [];
+                      if (targets.isEmpty || targets.length == 1) return const SizedBox();
+
+                      final selectedUid = ref.watch(resolvedTargetUidProvider);
+                      // Ensure selectedUid is in the list, otherwise fallback to first
+                      final validUid = targets.any((t) => t.uid == selectedUid) ? selectedUid : targets.first.uid;
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Row(
+                          children: [
+                            const Text(
+                              'Viewing: ',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0D9488),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).cardColor,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: const Color(0xFF0D9488).withValues(alpha: 0.3)),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String>(
+                                    value: validUid,
+                                    isExpanded: true,
+                                    icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF0D9488)),
+                                    onChanged: (String? newValue) {
+                                      ref.read(activeTargetUidProvider.notifier).state = newValue;
+                                    },
+                                    items: targets.map((target) {
+                                      return DropdownMenuItem<String>(
+                                        value: target.uid,
+                                        child: Text(
+                                          target.name,
+                                          style: const TextStyle(fontWeight: FontWeight.w600),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+
                   ...cameras.map((camera) => _buildCameraCard(context, ref, camera, healthState)),
                   
                   const SizedBox(height: 24),
@@ -100,7 +160,11 @@ class OverviewScreen extends ConsumerWidget {
                           ],
                         ),
                     child: ElevatedButton(
-                      onPressed: () => context.push('/demo-setup'),
+                      onPressed: () {
+                        // Switch view back to self when testing demo
+                        ref.read(activeTargetUidProvider.notifier).state = null; 
+                        context.push('/demo-setup');
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0D9488),
                         foregroundColor: Colors.white,
@@ -186,13 +250,50 @@ class OverviewScreen extends ConsumerWidget {
                         final confirm = await showDialog<bool>(
                           context: context,
                           builder: (context) => AlertDialog(
-                            title: const Text('Delete Camera?'),
-                            content: const Text('This will remove the camera and permanently delete all its associated history and images.'),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                            title: const Center(
+                              child: Text(
+                                'Delete Camera?',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                              ),
+                            ),
+                            content: const Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'This will remove the camera and permanently delete all its associated history and images.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(fontSize: 14),
+                                ),
+                              ],
+                            ),
                             actions: [
-                              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, true), 
-                                child: const Text('Delete', style: TextStyle(color: Colors.red))
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: ElevatedButton(
+                                      onPressed: () => Navigator.pop(context, false),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF0D9488),
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                      ),
+                                      child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: ElevatedButton(
+                                      onPressed: () => Navigator.pop(context, true),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFFD65D5D),
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                      ),
+                                      child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),

@@ -10,6 +10,7 @@ import '../../statistics/domain/simulation_event.dart';
 import '../../events/data/event_repository.dart';
 import '../../events/data/cloud_verification_service.dart';
 import '../../authentication/providers/auth_providers.dart';
+import '../../group/providers/group_providers.dart';
 
 enum HealthStatus { normal, warning, emergency, none }
 
@@ -90,31 +91,35 @@ class HealthState {
 
 class HealthStatusNotifier extends StateNotifier<HealthState> {
   final EventRepository _eventRepository;
+  final Ref _ref;
   Timer? _timer;
 
-  HealthStatusNotifier(this._eventRepository) : super(HealthState.initial()) {
-    loadState();
+  HealthStatusNotifier(this._eventRepository, this._ref) : super(HealthState.initial()) {
     _startTimer();
   }
 
   static const _storageKey = 'health_state_v2';
 
-  Future<void> loadState() async {
+  Future<void> loadState(String targetUid) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final jsonStr = prefs.getString(_storageKey);
+      // Ensure local cache is namespaced by targetUid so users don't see each other's data
+      final key = '${_storageKey}_$targetUid';
+      final jsonStr = prefs.getString(key);
       if (jsonStr != null) {
         state = HealthState.fromJson(json.decode(jsonStr) as Map<String, dynamic>);
+      } else {
+        // Reset to initial if no cache exists for this user
+        state = HealthState.initial();
       }
 
       // 2. Fetch latest events and status from Firestore (Override local if online)
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
+      if (targetUid.isNotEmpty) {
         try {
           // Fetch events
           final eventsSnapshot = await FirebaseFirestore.instance
               .collection('users')
-              .doc(user.uid)
+              .doc(targetUid)
               .collection('events')
               .orderBy('startTimeMs', descending: true)
               .limit(50)
@@ -127,7 +132,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
           // Fetch current status/score
           final statusDoc = await FirebaseFirestore.instance
               .collection('users')
-              .doc(user.uid)
+              .doc(targetUid)
               .get();
 
           if (statusDoc.exists) {
@@ -153,19 +158,22 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
   Future<void> _saveState() async {
     try {
+      final targetUid = _ref.read(resolvedTargetUidProvider);
+      if (targetUid.isEmpty) return; // Don't save if no user is active
+
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_storageKey, json.encode(state.toJson()));
+      final key = '${_storageKey}_$targetUid';
+      await prefs.setString(key, json.encode(state.toJson()));
       
       // Sync basic status to Firestore root user doc for quick access
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        // Warning: This write will only succeed if Security Rules allow it,
+        // or if targetUid is the user's own UID. For guest patients, this will fail silently.
+        await FirebaseFirestore.instance.collection('users').doc(targetUid).set({
           'health_score': state.score,
           'health_status': state.status.index,
           'last_activity': state.currentActivity,
           'last_updated': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
-      }
     } catch (e) {
       debugPrint("Error saving health state: $e");
     }
@@ -387,9 +395,9 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
               confidence: confidence,
               description: "${e.description} (Verified)",
             );
-            // Sync verified status to Firestore
-            _eventRepository.syncEvent(updated);
-            return updated;
+              // Sync verified status to Firestore
+              _eventRepository.syncEvent(updated);
+              return updated;
           }
           return e;
         }).toList();
@@ -501,12 +509,12 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
 final healthStatusProvider = StateNotifierProvider<HealthStatusNotifier, HealthState>((ref) {
   final eventRepo = ref.watch(eventRepositoryProvider);
-  final notifier = HealthStatusNotifier(eventRepo);
+  final notifier = HealthStatusNotifier(eventRepo, ref);
 
-  // Watch auth state and trigger loadState when it changes
-  ref.listen(authStateProvider, (previous, next) {
-    notifier.loadState();
-  });
+  // Watch selected targetUid and trigger loadState when it changes
+  ref.listen(resolvedTargetUidProvider, (previous, next) {
+    notifier.loadState(next);
+  }, fireImmediately: true);
 
   return notifier;
 });

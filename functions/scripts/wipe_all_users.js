@@ -69,7 +69,7 @@ async function wipeAll() {
 
     // 2. Clear Firestore Collections
     console.log("   Deleting Firestore collections...");
-    const collectionsToWipe = ['users', 'invite_codes'];
+    const collectionsToWipe = ['users', 'groups', 'invite_codes'];
 
     for (const col of collectionsToWipe) {
         const ref = db.collection(col);

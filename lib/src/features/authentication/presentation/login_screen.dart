@@ -30,40 +30,59 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   void _onAuthError(Object e) {
     final err = e.toString().toLowerCase();
+    
+    // 🔥 Firebase often returns 'invalid-credential' for both wrong password AND non-existent users
+    // to prevent email enumeration. We treat it as a "maybe you need to register" case
+    // if it's a fresh wipe test.
     if (err.contains('user-not-found') ||
         err.contains('no user record') ||
-        err.contains('user not found')) {
+        err.contains('user not found') ||
+        err.contains('invalid-credential')) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Row(
-            children: [
-              Icon(Icons.account_circle_outlined, color: Color(0xFF0D9488)),
-              SizedBox(width: 8),
-              Text('ไม่พบข้อมูลบัญชี'),
-            ],
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Center(
+            child: Text(
+              'ไม่พบข้อมูลบัญชี',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
           ),
           content: const Text(
-            'ไม่พบอีเมลนี้ในระบบ หรือบัญชีของคุณอาจถูกลบไปแล้ว กรุณาสมัครสมาชิกเพื่อเริ่มต้นใช้งานใหม่',
-            style: TextStyle(fontSize: 16),
+            'ไม่พบอีเมลนี้ในระบบ หรือบัญชีของคุณอาจถูกลบไปแล้ว (หากพึ่งล้างข้อมูลระบบ กรุณาสมัครสมาชิกใหม่ครับ)',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                context.pushReplacement('/register');
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0D9488),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text('สมัครสมาชิก'),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD65D5D),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    ),
+                    child: const Text('ยกเลิก', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      context.go('/register');
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0D9488),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    ),
+                    child: const Text('สมัครสมาชิก', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -352,7 +371,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     style: TextStyle(color: Colors.grey),
                   ),
                   GestureDetector(
-                    onTap: isLoading ? null : () => context.pushReplacement('/register'),
+                    onTap: isLoading ? null : () => context.go('/register'),
                     child: Text(
                       'Sign up',
                       style: TextStyle(

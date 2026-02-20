@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // ✅ controller
 import 'package:lifeguardian/src/features/authentication/controllers/auth_controller.dart';
+import 'package:lifeguardian/src/features/profile/data/user_repository.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -115,36 +116,48 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Row(
-            children: [
-              Icon(Icons.info_outline, color: Color(0xFF0D9488)),
-              SizedBox(width: 8),
-              Text('บัญชีนี้มีอยู่ในระบบแล้ว'),
-            ],
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Center(
+            child: Text(
+              'บัญชีนี้มีอยู่ในระบบแล้ว',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
           ),
           content: const Text(
             'อีเมลนี้ได้รับการลงทะเบียนแล้ว กรุณาเข้าสู่ระบบเพื่อใช้งาน',
-            style: TextStyle(fontSize: 16),
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                context.pushReplacement('/login');
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0D9488),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text('เข้าสู่ระบบ'),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD65D5D),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    ),
+                    child: const Text('ยกเลิก', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      context.go('/login');
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0D9488),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    ),
+                    child: const Text('เข้าสู่ระบบ', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
