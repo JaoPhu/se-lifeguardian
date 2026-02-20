@@ -15,7 +15,8 @@ class User {
   final String currentMedications;
   final String drugAllergies;
   final String foodAllergies;
-  final String? inviteCode;
+  final String? ownerGroupId;
+  final List<String> joinedGroupIds;
   final String? sessionId;
 
   const User({
@@ -35,7 +36,8 @@ class User {
     required this.currentMedications,
     required this.drugAllergies,
     required this.foodAllergies,
-    this.inviteCode,
+    this.ownerGroupId,
+    this.joinedGroupIds = const [],
     this.sessionId,
   });
 
@@ -56,7 +58,8 @@ class User {
     String? currentMedications,
     String? drugAllergies,
     String? foodAllergies,
-    String? inviteCode,
+    String? ownerGroupId,
+    List<String>? joinedGroupIds,
     String? sessionId,
   }) {
     return User(
@@ -76,9 +79,16 @@ class User {
       currentMedications: currentMedications ?? this.currentMedications,
       drugAllergies: drugAllergies ?? this.drugAllergies,
       foodAllergies: foodAllergies ?? this.foodAllergies,
-      inviteCode: inviteCode ?? this.inviteCode,
+      ownerGroupId: ownerGroupId ?? this.ownerGroupId,
+      joinedGroupIds: joinedGroupIds ?? this.joinedGroupIds,
       sessionId: sessionId ?? this.sessionId,
     );
+  }
+
+  bool get isIdentityComplete {
+    // If they have a name and at least one other piece of identifying data,
+    // they are an existing user from previous onboarding.
+    return name.isNotEmpty && (username.isNotEmpty || phoneNumber.isNotEmpty || bloodType.isNotEmpty);
   }
 
   bool get isProfileComplete {
@@ -109,7 +119,8 @@ class User {
       other.currentMedications == currentMedications &&
       other.drugAllergies == drugAllergies &&
       other.foodAllergies == foodAllergies &&
-      other.inviteCode == inviteCode &&
+      other.ownerGroupId == ownerGroupId &&
+      other.joinedGroupIds == joinedGroupIds &&
       other.sessionId == sessionId;
   }
 
@@ -131,7 +142,8 @@ class User {
       currentMedications.hashCode ^
       drugAllergies.hashCode ^
       foodAllergies.hashCode ^
-      inviteCode.hashCode ^
+      ownerGroupId.hashCode ^
+      joinedGroupIds.hashCode ^
       sessionId.hashCode;
   }
 }

@@ -51,15 +51,32 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Account Not Found'),
-            content: const Text('There is no account associated with this email address. Please check your email or register a new account.'),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: const Center(
+              child: Text(
+                'Account Not Found',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ),
+            content: const Text(
+              'There is no account associated with this email address. Please check your email or register a new account.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14),
+            ),
             actions: [
-              TextButton(
-                onPressed: () => context.pop(),
-                child: const Text('OK', style: TextStyle(color: Color(0xFF0D9488))),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => context.pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0D9488),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  ),
+                  child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
               ),
             ],
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
         setState(() => _isLoading = false);
@@ -85,22 +102,50 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('ส่งรหัสไม่สำเร็จ'),
-            content: const Text('ไม่สามารถส่งรหัส OTP ได้ คุณต้องการรับลิ้งค์รีเซ็ตรหัสผ่านแทนหรือไม่?'),
-            actions: [
-              TextButton(
-                onPressed: () => context.pop(),
-                child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: const Center(
+              child: Text(
+                'ส่งรหัสไม่สำเร็จ',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
-              TextButton(
-                onPressed: () {
-                  context.pop();
-                  _sendResetLink(email);
-                },
-                child: const Text('ส่งลิ้งค์', style: TextStyle(color: Color(0xFF0D9488))),
+            ),
+            content: const Text(
+              'ไม่สามารถส่งรหัส OTP ได้ คุณต้องการรับลิ้งค์รีเซ็ตรหัสผ่านแทนหรือไม่?',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14),
+            ),
+            actions: [
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => context.pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD65D5D),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                      ),
+                      child: const Text('ยกเลิก', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        context.pop();
+                        _sendResetLink(email);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0D9488),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                      ),
+                      child: const Text('ส่งลิ้งค์', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
               ),
             ],
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       }

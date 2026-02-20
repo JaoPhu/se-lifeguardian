@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart' as auth;
+import 'package:lifeguardian/src/features/authentication/providers/auth_providers.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -18,6 +20,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
+    
+    // Verify if the current user is still valid on Firebase's backend
+    _verifyUserStatus();
     
     // Progress animation (20ms steps, 2000ms duration)
     _timer = Timer.periodic(const Duration(milliseconds: 20), (timer) async {
@@ -38,6 +43,23 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         }
       }
     });
+  }
+
+  Future<void> _verifyUserStatus() async {
+    try {
+      final user = ref.read(firebaseAuthProvider).currentUser;
+      if (user != null) {
+        // This will force Firebase to refresh the user's token and state.
+        // It will throw an exception if the user was deleted or disabled.
+        await user.reload();
+      }
+    } catch (e) {
+      if (e is auth.FirebaseAuthException) {
+        if (e.code == 'user-not-found' || e.code == 'user-disabled') {
+          await ref.read(firebaseAuthProvider).signOut();
+        }
+      }
+    }
   }
 
   @override

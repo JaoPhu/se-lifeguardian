@@ -325,152 +325,185 @@ class SettingsScreen extends ConsumerWidget {
                                     return StatefulBuilder(
                                      builder: (context, setState) {
                                        return AlertDialog(
-                                         title: const Text('Delete Account'),
-                                         content: Column(
-                                           mainAxisSize: MainAxisSize.min,
-                                           crossAxisAlignment: CrossAxisAlignment.start,
-                                           children: [
-                                             const Text(
-                                               'ยืนยันการลบบัญชี? การดำเนินการนี้ไม่สามารถย้อนกลับได้และข้อมูลทั้งหมดจะถูกลบถาวร',
-                                               style: TextStyle(fontWeight: FontWeight.bold),
-                                             ),
-                                             const SizedBox(height: 12),
-                                             Container(
-                                               padding: const EdgeInsets.all(12),
-                                               decoration: BoxDecoration(
-                                                 color: Colors.amber.withValues(alpha: 0.1),
-                                                 borderRadius: BorderRadius.circular(12),
-                                                 border: Border.all(color: Colors.amber.withValues(alpha: 0.5)),
-                                               ),
-                                               child: const Row(
-                                                 children: [
-                                                   Icon(Icons.info_outline, color: Colors.orange, size: 20),
-                                                   SizedBox(width: 8),
-                                                   Expanded(
-                                                     child: Text(
-                                                       'เพื่อความปลอดภัย หากคุณไม่ได้เข้าสู่ระบบนานเกินไป ระบบอาจขอให้คุณยืนยันตัวตนใหม่ก่อนทำการลบครับ',
-                                                       style: TextStyle(fontSize: 12, color: Colors.orange),
-                                                     ),
-                                                   ),
-                                                 ],
-                                                ),
-                                              ),
-                                             const SizedBox(height: 16),
-                                             
-                                             if (isEmailUser) ...[
+                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                         title: const Center(
+                                           child: Text(
+                                             'Delete Account',
+                                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                                           ),
+                                         ),
+                                         content: SingleChildScrollView(
+                                           child: Column(
+                                             mainAxisSize: MainAxisSize.min,
+                                             crossAxisAlignment: CrossAxisAlignment.start,
+                                             children: [
                                                const Text(
-                                                 'ยืนยันตัวตน: กรุณากรอกรหัสผ่านของคุณ',
+                                                 'ยืนยันการลบบัญชี? การดำเนินการนี้ไม่สามารถย้อนกลับได้และข้อมูลทั้งหมดจะถูกลบถาวร',
+                                                 textAlign: TextAlign.center,
+                                                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                               ),
+                                               const SizedBox(height: 16),
+                                               Container(
+                                                 padding: const EdgeInsets.all(12),
+                                                 decoration: BoxDecoration(
+                                                   color: Colors.amber.withValues(alpha: 0.1),
+                                                   borderRadius: BorderRadius.circular(16),
+                                                   border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                                                 ),
+                                                 child: const Row(
+                                                   children: [
+                                                     Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                                                     SizedBox(width: 8),
+                                                     Expanded(
+                                                       child: Text(
+                                                         'เพื่อความปลอดภัย ระบบอาจขอให้คุณยืนยันตัวตนใหม่ก่อนทำการลบครับ',
+                                                         style: TextStyle(fontSize: 12, color: Colors.orange),
+                                                       ),
+                                                     ),
+                                                   ],
+                                                 ),
+                                               ),
+                                               const SizedBox(height: 20),
+                                               
+                                               if (isEmailUser) ...[
+                                                 const Text(
+                                                   'กรุณากรอกรหัสผ่านของคุณ',
+                                                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                                 ),
+                                                 const SizedBox(height: 8),
+                                                 TextField(
+                                                   controller: passwordController,
+                                                   obscureText: true,
+                                                   autofocus: true,
+                                                   enabled: !isLoading,
+                                                   decoration: InputDecoration(
+                                                     hintText: 'รหัสผ่าน (Password)',
+                                                     prefixIcon: const Icon(Icons.lock_outline),
+                                                     border: OutlineInputBorder(
+                                                       borderRadius: BorderRadius.circular(16),
+                                                       borderSide: BorderSide(color: Colors.grey.shade200),
+                                                     ),
+                                                     enabledBorder: OutlineInputBorder(
+                                                       borderRadius: BorderRadius.circular(16),
+                                                       borderSide: BorderSide(color: Colors.grey.shade200),
+                                                     ),
+                                                     contentPadding: const EdgeInsets.all(12),
+                                                   ),
+                                                   onChanged: (value) => setState(() {}),
+                                                 ),
+                                                 const SizedBox(height: 16),
+                                               ],
+
+                                               const Text(
+                                                 'พิมพ์คำว่า "Confirm" เพื่อยืนยัน',
                                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                                                ),
                                                const SizedBox(height: 8),
                                                TextField(
-                                                 controller: passwordController,
-                                                 obscureText: true,
-                                                 autofocus: true,
+                                                 controller: confirmController,
+                                                 autofocus: !isEmailUser,
                                                  enabled: !isLoading,
                                                  decoration: InputDecoration(
-                                                   hintText: 'รหัสผ่าน (Password)',
-                                                   prefixIcon: const Icon(Icons.lock_outline),
+                                                   hintText: 'Confirm',
                                                    border: OutlineInputBorder(
-                                                     borderRadius: BorderRadius.circular(12),
+                                                     borderRadius: BorderRadius.circular(16),
+                                                     borderSide: BorderSide(color: Colors.grey.shade200),
+                                                   ),
+                                                   enabledBorder: OutlineInputBorder(
+                                                     borderRadius: BorderRadius.circular(16),
+                                                     borderSide: BorderSide(color: Colors.grey.shade200),
                                                    ),
                                                    contentPadding: const EdgeInsets.all(12),
                                                  ),
                                                  onChanged: (value) => setState(() {}),
                                                ),
-                                               const SizedBox(height: 16),
-                                             ],
+                                               
+                                               if (isLoading) ...[
+                                                 const SizedBox(height: 24),
+                                                 const Center(child: CircularProgressIndicator(color: Color(0xFF0D9488))),
+                                               ],
 
-                                             const Text(
-                                               'พิมพ์คำว่า "Confirm" เพื่อยืนยันการลบ',
-                                               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                             ),
-                                             const SizedBox(height: 8),
-                                             TextField(
-                                               controller: confirmController,
-                                               autofocus: !isEmailUser,
-                                               enabled: !isLoading,
-                                               decoration: InputDecoration(
-                                                 hintText: 'Confirm',
-                                                 border: OutlineInputBorder(
-                                                   borderRadius: BorderRadius.circular(12),
-                                                 ),
-                                                 contentPadding: const EdgeInsets.all(12),
-                                               ),
-                                               onChanged: (value) => setState(() {}),
-                                             ),
-                                             
-                                             if (isLoading) ...[
-                                               const SizedBox(height: 16),
-                                               const Center(child: CircularProgressIndicator()),
-                                             ],
-                                           ],
-                                         ),
-                                         actions: [
-                                           TextButton(
-                                             onPressed: isLoading ? null : () {
-                                               confirmController.dispose();
-                                               passwordController.dispose();
-                                               Navigator.of(dialogContext).pop();
-                                             },
-                                             child: const Text('ยกเลิก'),
-                                           ),
-                                           TextButton(
-                                             onPressed: (
-                                               confirmController.text == 'Confirm' && 
-                                               (!isEmailUser || passwordController.text.isNotEmpty)
-                                             ) && !isLoading
-                                               ? () async {
-                                                 setState(() => isLoading = true);
-                                                 
-                                                 try {
-                                                   final password = isEmailUser ? passwordController.text : null;
-                                                   await ref.read(authControllerProvider.notifier).deleteAccount(password: password);
-                                                   
-                                                   final authState = ref.read(authControllerProvider);
-                                                   
-                                                   if (context.mounted) {
-                                                     if (authState.hasError) {
-                                                       setState(() => isLoading = false);
-                                                       
-                                                       ScaffoldMessenger.of(context).showSnackBar(
-                                                         SnackBar(
-                                                           content: Text('ล้มเหลว: ${authState.error}'),
-                                                           backgroundColor: Colors.red,
-                                                         ),
-                                                       );
-                                                     } else {
-                                                       confirmController.dispose();
-                                                       passwordController.dispose();
-                                                       if (Navigator.of(dialogContext).canPop()) {
+                                               const SizedBox(height: 24),
+                                               Row(
+                                                 children: [
+                                                   Expanded(
+                                                     child: ElevatedButton(
+                                                       onPressed: isLoading ? null : () {
+                                                         confirmController.dispose();
+                                                         passwordController.dispose();
                                                          Navigator.of(dialogContext).pop();
-                                                       }
-                                                     }
-                                                   }
-                                                 } catch (e) {
-                                                   if (context.mounted) {
-                                                     setState(() => isLoading = false);
-                                                     ScaffoldMessenger.of(context).showSnackBar(
-                                                       SnackBar(
-                                                         content: Text('เกิดข้อผิดพลาด: $e'),
-                                                         backgroundColor: Colors.red,
+                                                       },
+                                                       style: ElevatedButton.styleFrom(
+                                                         backgroundColor: const Color(0xFF0D9488),
+                                                         foregroundColor: Colors.white,
+                                                         padding: const EdgeInsets.symmetric(vertical: 12),
+                                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                                                        ),
-                                                     );
-                                                   }
-                                                 }
-                                               }
-                                               : null,
-                                             child: Text(
-                                               'ลบบัญชี', 
-                                               style: TextStyle(
-                                                 color: (
-                                                   confirmController.text == 'Confirm' && 
-                                                   (!isEmailUser || passwordController.text.isNotEmpty)
-                                                 ) ? Colors.red : Colors.grey
-                                               )
-                                             ),
+                                                       child: const Text('ยกเลิก', style: TextStyle(fontWeight: FontWeight.bold)),
+                                                     ),
+                                                   ),
+                                                   const SizedBox(width: 8),
+                                                   Expanded(
+                                                     child: ElevatedButton(
+                                                       onPressed: (
+                                                         confirmController.text == 'Confirm' && 
+                                                         (!isEmailUser || passwordController.text.isNotEmpty)
+                                                       ) && !isLoading
+                                                         ? () async {
+                                                           setState(() => isLoading = true);
+                                                           
+                                                           try {
+                                                             final password = isEmailUser ? passwordController.text : null;
+                                                             await ref.read(authControllerProvider.notifier).deleteAccount(password: password);
+                                                             
+                                                             final authState = ref.read(authControllerProvider);
+                                                             
+                                                             if (context.mounted) {
+                                                               if (authState.hasError) {
+                                                                 setState(() => isLoading = false);
+                                                                 
+                                                                 ScaffoldMessenger.of(context).showSnackBar(
+                                                                   SnackBar(
+                                                                     content: Text('ล้มเหลว: ${authState.error}'),
+                                                                     backgroundColor: Colors.red,
+                                                                   ),
+                                                                 );
+                                                               } else {
+                                                                 confirmController.dispose();
+                                                                 passwordController.dispose();
+                                                                 if (Navigator.of(dialogContext).canPop()) {
+                                                                   Navigator.of(dialogContext).pop();
+                                                                 }
+                                                               }
+                                                             }
+                                                           } catch (e) {
+                                                             if (context.mounted) {
+                                                               setState(() => isLoading = false);
+                                                               ScaffoldMessenger.of(context).showSnackBar(
+                                                                 SnackBar(
+                                                                   content: Text('เกิดข้อผิดพลาด: $e'),
+                                                                   backgroundColor: Colors.red,
+                                                                 ),
+                                                               );
+                                                              }
+                                                           }
+                                                         }
+                                                         : null,
+                                                       style: ElevatedButton.styleFrom(
+                                                         backgroundColor: const Color(0xFFD65D5D),
+                                                         foregroundColor: Colors.white,
+                                                         padding: const EdgeInsets.symmetric(vertical: 12),
+                                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                                         disabledBackgroundColor: Colors.grey.shade200,
+                                                       ),
+                                                       child: const Text('ลบบัญชี', style: TextStyle(fontWeight: FontWeight.bold)),
+                                                     ),
+                                                   ),
+                                                 ],
+                                               ),
+                                             ],
                                            ),
-                                         ],
+                                         ),
                                        );
                                      }
                                    );

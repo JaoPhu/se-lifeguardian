@@ -2,18 +2,25 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../pose_detection/data/health_status_provider.dart';
 import '../../dashboard/data/camera_provider.dart';
 import '../../events/data/event_repository.dart';
 import '../../statistics/domain/simulation_event.dart';
 import '../../profile/data/user_repository.dart';
+import '../../group/providers/group_providers.dart';
 
-class EventsScreen extends ConsumerWidget {
+class EventsScreen extends ConsumerStatefulWidget {
   final String cameraId;
   const EventsScreen({super.key, required this.cameraId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<EventsScreen> createState() => _EventsScreenState();
+}
+
+class _EventsScreenState extends ConsumerState<EventsScreen> {
+  bool _isGalleryExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(userProvider);
     // final healthState = ref.watch(healthStatusProvider);
     final eventsStream = ref.watch(eventsStreamProvider);
@@ -22,8 +29,8 @@ class EventsScreen extends ConsumerWidget {
     
     // Get camera name for context
     final cameras = ref.watch(cameraProvider);
-    final camera = cameras.any((c) => c.id == cameraId) 
-        ? cameras.firstWhere((c) => c.id == cameraId)
+    final camera = cameras.any((c) => c.id == widget.cameraId) 
+        ? cameras.firstWhere((c) => c.id == widget.cameraId)
         : null;
     final cameraName = camera?.name ?? 'Camera';
 
@@ -99,10 +106,77 @@ class EventsScreen extends ConsumerWidget {
                 children: [
                                    eventsStream.when(
                     data: (allEvents) {
-                      final events = allEvents.where((e) => e.cameraId == cameraId).toList();
+                      final events = allEvents.where((e) => e.cameraId == widget.cameraId).toList();
+                      
+                      // For wrapping gallery:
+                      final int maxPreviewCount = 4; // 2 rows of 2 columns
+                      final bool showToggle = events.length > maxPreviewCount;
+                      final List<SimulationEvent> displayEvents = (showToggle && !_isGalleryExpanded) 
+                          ? events.take(maxPreviewCount).toList() 
+                          : events;
+
                       return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // Horizontal Gallery
+                          // --- Patient Selector Dropdown ---
+                          Consumer(
+                            builder: (context, ref, child) {
+                              final targetUsersAsync = ref.watch(targetUsersProvider);
+                              final targets = targetUsersAsync.valueOrNull ?? [];
+                              if (targets.isEmpty || targets.length == 1) return const SizedBox();
+
+                              final selectedUid = ref.watch(resolvedTargetUidProvider);
+                              final validUid = targets.any((t) => t.uid == selectedUid) ? selectedUid : targets.first.uid;
+
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 24),
+                                child: Row(
+                                  children: [
+                                    const Text(
+                                      'Viewing: ',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF0D9488),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context).cardColor,
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: const Color(0xFF0D9488).withValues(alpha: 0.3)),
+                                        ),
+                                        child: DropdownButtonHideUnderline(
+                                          child: DropdownButton<String>(
+                                            value: validUid,
+                                            isExpanded: true,
+                                            icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF0D9488)),
+                                            onChanged: (String? newValue) {
+                                              ref.read(activeTargetUidProvider.notifier).state = newValue;
+                                            },
+                                            items: targets.map((target) {
+                                              return DropdownMenuItem<String>(
+                                                value: target.uid,
+                                                child: Text(
+                                                  target.name,
+                                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                                ),
+                                              );
+                                            }).toList(),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+
+                          // Gallery Section
                           Text(
                             'Events of $cameraName',
                             style: const TextStyle(
@@ -112,20 +186,46 @@ class EventsScreen extends ConsumerWidget {
                             ),
                           ),
                           const SizedBox(height: 16),
-                          SizedBox(
-                            height: 180,
-                            child: events.isEmpty 
-                              ? _buildEmptyGallery(context)
-                              : ListView.separated(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount: events.length,
-                                  separatorBuilder: (context, index) => const SizedBox(width: 16),
-                                  itemBuilder: (context, index) {
-                                    final event = events[index];
-                                    return _buildGalleryItem(context, event, cameraName);
-                                  },
+                          events.isEmpty 
+                            ? _buildEmptyGallery(context)
+                            : GridView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 12,
+                                  childAspectRatio: 0.9,
                                 ),
-                          ),
+                                itemCount: displayEvents.length,
+                                itemBuilder: (context, index) {
+                                  return _buildGalleryItem(context, displayEvents[index], cameraName);
+                                },
+                              ),
+                          if (showToggle) ...[
+                            const SizedBox(height: 8),
+                            Center(
+                              child: TextButton.icon(
+                                onPressed: () {
+                                  setState(() {
+                                    _isGalleryExpanded = !_isGalleryExpanded;
+                                  });
+                                },
+                                icon: Icon(
+                                  _isGalleryExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                                  color: const Color(0xFF0D9488),
+                                ),
+                                label: Text(
+                                  _isGalleryExpanded ? 'Show Less' : 'Show All',
+                                  style: const TextStyle(
+                                    color: Color(0xFF0D9488),
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+
                           const SizedBox(height: 32),
                           // Recent Events List
                           Row(
@@ -229,7 +329,7 @@ class EventsScreen extends ConsumerWidget {
 
   Widget _buildGalleryItem(BuildContext context, SimulationEvent event, String cameraName) {
     return Container(
-      width: 180, // Narrower as in prototype
+      // width removed so GridView contrains it
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,

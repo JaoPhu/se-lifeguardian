@@ -22,6 +22,24 @@ class CameraConfig {
     this.durationText,
   });
 
+  CameraConfig copyWith({
+    String? date,
+    String? originalDate,
+    String? startTime,
+    String? thumbnailUrl,
+    String? eventType,
+    String? durationText,
+  }) {
+    return CameraConfig(
+      date: date ?? this.date,
+      originalDate: originalDate ?? this.originalDate,
+      startTime: startTime ?? this.startTime,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      eventType: eventType ?? this.eventType,
+      durationText: durationText ?? this.durationText,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'date': date,

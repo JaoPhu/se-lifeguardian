@@ -72,7 +72,7 @@ class PreLoginScreen extends StatelessWidget {
                     height: 56,
                     child: ElevatedButton(
                       onPressed: () {
-                        context.push('/register');
+                        context.go('/register');
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0D9488),
@@ -98,7 +98,7 @@ class PreLoginScreen extends StatelessWidget {
                     height: 56,
                     child: ElevatedButton(
                       onPressed: () {
-                        context.push('/login');
+                        context.go('/login');
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0D9488),

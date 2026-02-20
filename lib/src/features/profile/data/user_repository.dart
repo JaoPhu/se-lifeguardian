@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/user_model.dart';
 import 'storage_repository.dart';
@@ -35,15 +36,20 @@ class UserRepository {
           currentMedications: data['currentMedications'] ?? '',
           drugAllergies: data['drugAllergies'] ?? '',
           foodAllergies: data['foodAllergies'] ?? '',
-          inviteCode: data['inviteCode'],
+          ownerGroupId: data['ownerGroupId'],
+          joinedGroupIds: List<String>.from(data['joinedGroupIds'] ?? []),
           sessionId: data['sessionId'],
         );
       }
     } catch (e) {
-      print('Error fetching user: $e');
+      debugPrint('UserRepository: Error fetching user: $e');
+      rethrow; // Rethrow to distinguish from "not found"
     }
     return null;
   }
+
+  // Alias for fetchUser used in EditProfileScreen
+  Future<User?> getUser(String uid) => fetchUser(uid);
 
   Future<void> saveUser(User user) async {
     try {
@@ -68,15 +74,9 @@ class UserRepository {
         'currentMedications': user.currentMedications,
         'drugAllergies': user.drugAllergies,
         'foodAllergies': user.foodAllergies,
+        'ownerGroupId': user.ownerGroupId,
+        'joinedGroupIds': user.joinedGroupIds,
       };
-
-      if (user.inviteCode != null) {
-        data['inviteCode'] = user.inviteCode;
-      } else {
-        // Generate code if missing
-        final code = await generateUniqueInviteCode(uid);
-        data['inviteCode'] = code;
-      }
 
       await _firestore.collection('users').doc(uid).set(data, SetOptions(merge: true));
     } catch (e) {
@@ -85,63 +85,14 @@ class UserRepository {
     }
   }
 
-  Future<String> generateUniqueInviteCode(String uid) async {
-    final random = Random();
-    String code = '';
-    bool isUnique = false;
-    int attempts = 0;
-
-    while (!isUnique && attempts < 10) {
-      attempts++;
-      final num = random.nextInt(10000).toString().padLeft(4, '0');
-      code = 'LG-$num';
-
-      try {
-        // Check uniqueness in 'users' collection only (bypassing restricted 'invite_codes')
-        final query = await _firestore
-            .collection('users')
-            .where('inviteCode', isEqualTo: code)
-            .limit(1)
-            .get();
-        
-        if (query.docs.isEmpty) {
-          isUnique = true;
-        }
-      } catch (e) {
-        print('Error checking code $code: $e');
-      }
-    }
-    
-    if (!isUnique) {
-      throw Exception('Failed to generate unique code after $attempts attempts');
-    }
-    
-    return code;
-  }
+  // Alias for saveUser used in EditProfileScreen
+  Future<void> updateUserProfile(User user) => saveUser(user);
 
   Future<String> uploadAvatar(String uid, dynamic file) async {
     final downloadUrl = await _storage.uploadProfileImage(uid, file);
     // Use set with merge: true instead of update() to support new users
     await _firestore.collection('users').doc(uid).set({'avatarUrl': downloadUrl}, SetOptions(merge: true));
     return downloadUrl;
-  }
-
-  Future<String?> getUidByInviteCode(String code) async {
-    try {
-      // Lookup in 'users' collection directly
-      final query = await _firestore
-          .collection('users')
-          .where('inviteCode', isEqualTo: code)
-          .limit(1)
-          .get();
-      
-      if (query.docs.isNotEmpty) {
-        return query.docs.first.id;
-      }
-    } catch (e) {
-      print('Error getting UID by invite code: $e');
-    }
-    return null;
   }
 
   Future<bool> isUsernameTaken(String username, String currentUid) async {
@@ -186,19 +137,10 @@ class UserRepository {
       'age': age,
       // เผื่อใช้กับ group
       'ownerGroupId': null,
+      'joinedGroupIds': [],
       'updatedAt': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-
-    // ✅ ถ้า inviteCode ยังไม่มี -> สร้างให้
-    final snap = await docRef.get();
-    final data = snap.data() ?? {};
-    final invite = (data['inviteCode'] as String?) ?? '';
-    if (invite.isEmpty) {
-      final code = await generateUniqueInviteCode(u.uid); // Fixed: Added u.uid
-      await docRef.set({'inviteCode': code}, SetOptions(merge: true));
-    }
-  }
   }
 }
 
@@ -228,71 +170,70 @@ class UserNotifier extends StateNotifier<User> {
     
     if (firebaseUser != null) {
       final uid = firebaseUser.uid;
-      final user = await _repo.fetchUser(uid);
-      
-      if (user != null) {
-        // Check if name/email is missing in Firestore but available in Auth
-        bool needsUpdate = false;
-        String updatedName = user.name;
-        String updatedEmail = user.email;
-
-        if (updatedName.isEmpty && firebaseUser.displayName != null && firebaseUser.displayName!.isNotEmpty) {
-          updatedName = firebaseUser.displayName!;
-          needsUpdate = true;
-        }
-
-        if (updatedEmail.isEmpty && firebaseUser.email != null && firebaseUser.email!.isNotEmpty) {
-          updatedEmail = firebaseUser.email!;
-          needsUpdate = true;
-        }
-
-        User finalUser = user;
-        if (needsUpdate) {
-          print('UserNotifier: Syncing missing profile data from Auth');
-          finalUser = user.copyWith(name: updatedName, email: updatedEmail);
-          // Don't await this to avoid blocking UI, but trigger save
-          _repo.saveUser(finalUser);
-        }
-
-        state = finalUser;
-        _currentSessionId = finalUser.sessionId;
-        // set grace period for 5 seconds to allow AuthRepository to update session ID
-        _gracePeriodEnd = DateTime.now().add(const Duration(seconds: 5));
+      try {
+        final user = await _repo.fetchUser(uid);
         
-        // Setup session listener
-        _listenToSessionChanges(uid);
+        if (user != null) {
+          // Check if name/email is missing in Firestore but available in Auth
+          bool needsUpdate = false;
+          String updatedName = user.name;
+          String updatedEmail = user.email;
 
-        // Auto-generate invite code if missing
-        if (finalUser.inviteCode == null || finalUser.inviteCode!.isEmpty) {
-          try {
-            final code = await _repo.generateUniqueInviteCode(uid);
-            final updatedUserWithCode = finalUser.copyWith(inviteCode: code);
-            await _repo.saveUser(updatedUserWithCode);
-            state = updatedUserWithCode;
-          } catch (e) {
-            print('Error auto-generating invite code for existing user: $e');
+          if (updatedName.isEmpty && firebaseUser.displayName != null && firebaseUser.displayName!.isNotEmpty) {
+            updatedName = firebaseUser.displayName!;
+            needsUpdate = true;
           }
+
+          if (updatedEmail.isEmpty && firebaseUser.email != null && firebaseUser.email!.isNotEmpty) {
+            updatedEmail = firebaseUser.email!;
+            needsUpdate = true;
+          }
+
+          User finalUser = user;
+          if (needsUpdate) {
+            debugPrint('UserNotifier: Syncing missing profile data from Auth');
+            finalUser = user.copyWith(name: updatedName, email: updatedEmail);
+            // Don't await this to avoid blocking UI, but trigger save
+            _repo.saveUser(finalUser);
+          }
+
+          state = finalUser;
+          _currentSessionId = finalUser.sessionId;
+          // set grace period for 5 seconds to allow AuthRepository to update session ID
+          _gracePeriodEnd = DateTime.now().add(const Duration(seconds: 5));
+          
+          // Setup session listener
+          _listenToSessionChanges(uid);
+        } else {
+          // Doc EXPLICITLY doesn't exist yet
+          // CRITCAL FIX: Do NOT prefill the `id` here with `firebaseUser.uid`.
+          // If we prefill the ID before the actual Firestore doc exists, AppRouter assumes
+          // the user is successfully logged in and aggressively redirects them to `/edit-profile`. 
+          // By keeping `id: ''`, GoRouter will pause and wait, allowing `AuthRepository` time 
+          // to delete orphan accounts and throw the 'user-not-found' error dialog properly.
+          state = User(
+            id: '', 
+            name: '', 
+            username: '', 
+            email: firebaseUser.email ?? '', 
+            phoneNumber: '', 
+            avatarUrl: '', 
+            birthDate: '', 
+            age: '', 
+            gender: '', 
+            bloodType: '', 
+            height: '', 
+            weight: '', 
+            medicalCondition: '', 
+            currentMedications: '', 
+            drugAllergies: '', 
+            foodAllergies: '');
         }
-      } else {
-        // Doc doesn't exist yet, but we have a logged in user in Auth.
-        // During registration, this is expected. We pre-fill ID and Email from Auth.
-        state = User(
-          id: firebaseUser.uid, 
-          name: '', 
-          username: '', 
-          email: firebaseUser.email ?? '', 
-          phoneNumber: '', 
-          avatarUrl: '', 
-          birthDate: '', 
-          age: '', 
-          gender: '', 
-          bloodType: '', 
-          height: '', 
-          weight: '', 
-          medicalCondition: '', 
-          currentMedications: '', 
-          drugAllergies: '', 
-          foodAllergies: '');
+      } catch (e) {
+        debugPrint('UserNotifier: loadUser failed (network or permission): $e');
+        // CRITICAL: If fetch fails, we stay in the initial "loading" state (id: '')
+        // or keep current state. We do NOT populate the UID with empty fields here
+        // as that would trigger the router to think it's an incomplete NEW user.
       }
     } else {
       _currentSessionId = null;

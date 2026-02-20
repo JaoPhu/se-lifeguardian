@@ -13,7 +13,6 @@ import '../data/health_status_provider.dart';
 import 'pose_painter.dart';
 import 'package:video_player/video_player.dart';
 import 'package:screenshot/screenshot.dart';
-import 'package:gal/gal.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:async';
@@ -172,7 +171,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
              date: "2025-06-15",
              thumbnailUrl: _firstFramePath,
           ));
-          if (mounted) {
+          if (mounted && camera != null) {
             setState(() {
               _registeredCameraId = camera.id;
               _registeredCameraName = camera.name;
@@ -581,22 +580,17 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
       final image = _lastCapturedFrameBytes ?? await _screenshotController.capture(pixelRatio: 1.5);
       
       if (image != null) {
-        // Use ApplicationDocumentsDirectory so images persist across restarts
-        final directory = await getApplicationDocumentsDirectory();
+        // ✅ [Cloud Only] Use TemporaryDirectory so images are naturally purged by OS
+        // if not explicitly deleted by EventRepository after upload.
+        final directory = await getTemporaryDirectory();
         final fileName = 'event_${DateTime.now().millisecondsSinceEpoch}.png';
         final imagePath = '${directory.path}/$fileName';
         final imageFile = File(imagePath);
         await imageFile.writeAsBytes(image);
         
-        // Save to gallery for user visibility if requested
-        // Note: Gal might need external storage permission, handled by the plugin/OS
-        try {
-          await Gal.putImage(imagePath);
-        } catch (e) {
-          debugPrint("Gallery save failed (harmless): $e");
-        }
+        // ❌ [Cloud Only] Removed Gal.putImage to stop saving to native gallery
         
-        debugPrint("Snapshot saved: $imagePath");
+        debugPrint("Snapshot saved (temp): $imagePath");
         return imagePath;
       }
     } catch (e) {

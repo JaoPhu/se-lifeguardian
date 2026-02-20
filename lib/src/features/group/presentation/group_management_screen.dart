@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../features/profile/data/user_repository.dart';
 import '../../../common_widgets/user_avatar.dart';
+import '../../authentication/providers/auth_providers.dart';
 
 // ✅ เพิ่ม: import providers + domain models ของ group
 import '../providers/group_providers.dart';
@@ -28,15 +29,15 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
   String _roleLabel(String role) {
     final r = role.toLowerCase();
     if (r == 'owner') return 'Owner';
-    if (r == 'admin') return 'Admin';
-    return 'Viewer';
+    if (r == 'caretaker') return 'Caretaker';
+    return 'Member';
   }
 
   Color _roleBg(BuildContext context, String role) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final r = role.toLowerCase();
     if (r == 'owner') return isDark ? Colors.red.shade900.withValues(alpha: 0.3) : Colors.red.shade50;
-    if (r == 'admin') return isDark ? Colors.orange.shade900.withValues(alpha: 0.3) : Colors.orange.shade50;
+    if (r == 'caretaker') return isDark ? Colors.orange.shade900.withValues(alpha: 0.3) : Colors.orange.shade50;
     return isDark ? Colors.teal.shade900.withValues(alpha: 0.3) : Colors.teal.shade50;
   }
 
@@ -44,7 +45,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final r = role.toLowerCase();
     if (r == 'owner') return isDark ? Colors.red.shade100 : Colors.red.shade600;
-    if (r == 'admin') return isDark ? Colors.orange.shade100 : Colors.orange.shade600;
+    if (r == 'caretaker') return isDark ? Colors.orange.shade100 : Colors.orange.shade600;
     return isDark ? Colors.teal.shade100 : Colors.teal.shade600;
   }
 
@@ -52,7 +53,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final r = role.toLowerCase();
     if (r == 'owner') return isDark ? Colors.red.shade800 : Colors.red.shade200;
-    if (r == 'admin') return isDark ? Colors.orange.shade800 : Colors.orange.shade200;
+    if (r == 'caretaker') return isDark ? Colors.orange.shade800 : Colors.orange.shade200;
     return isDark ? Colors.teal.shade800 : Colors.teal.shade200;
   }
 
@@ -65,21 +66,71 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
   }
 
   Future<void> _createGroupDialog() async {
-    final controller = TextEditingController(text: 'My Group');
+    final user = ref.read(userProvider);
+    final nickname = user.username.trim();
+    final defaultName = nickname.isNotEmpty ? "$nickname's group" : 'My Group';
+    final controller = TextEditingController(text: defaultName);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Create Group'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            hintText: 'Group name',
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Center(
+          child: Text(
+            'Create Group',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
           ),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create')),
-        ],
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                hintText: 'Group name',
+                hintStyle: TextStyle(color: Colors.grey.shade300),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD65D5D),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    ),
+                    child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0D9488),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    ),
+                    child: const Text('Create', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
 
@@ -133,15 +184,15 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
               ),
               const SizedBox(height: 16),
               ListTile(
-                title: const Text('Admin'),
-                subtitle: const Text('Can manage and view all data.'),
+                title: const Text('Caretaker'),
+                subtitle: const Text('Can assist in managing alerts and events.'),
                 onTap: () async {
                   Navigator.pop(context);
                   try {
                     await ref.read(groupRepoProvider).changeRole(
                       groupId: groupId,
                       targetUid: member.uid,
-                      role: 'admin',
+                      role: 'caretaker',
                     );
                   } catch (e) {
                     if (!mounted) return;
@@ -152,15 +203,15 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                 },
               ),
               ListTile(
-                title: const Text('Viewer'),
-                subtitle: const Text('Can only view data.'),
+                title: const Text('Member'),
+                subtitle: const Text('Standard group participant.'),
                 onTap: () async {
                   Navigator.pop(context);
                   try {
                     await ref.read(groupRepoProvider).changeRole(
                       groupId: groupId,
                       targetUid: member.uid,
-                      role: 'viewer',
+                      role: 'member',
                     );
                   } catch (e) {
                     if (!mounted) return;
@@ -179,6 +230,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
 
   void _viewMemberProfile({
     required GroupMember member,
+    VoidCallback? onEdit,
   }) {
     showDialog(
       context: context,
@@ -191,19 +243,47 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
             builder: (context, snap) {
               final data = snap.data?.data() ?? {};
               final email = (data['email'] as String?) ?? '-';
-              final phone = (data['phone'] as String?) ?? '-';
+              final phone = (data['phoneNumber'] as String?) ?? '-';
 
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  UserAvatar(
-                    avatarUrl: member.avatarUrl,
-                    radius: 50,
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      UserAvatar(
+                        avatarUrl: member.avatarUrl,
+                        radius: 50,
+                      ),
+                      if (onEdit != null)
+                        Positioned(
+                          top: 0,
+                          right: -8, // Adjust visual alignment if needed
+                          child: IconButton(
+                            icon: const Icon(Icons.edit, color: Color(0xFF0D9488)),
+                            onPressed: () {
+                              Navigator.pop(context); // Close dialog first
+                              onEdit();
+                            },
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 16),
-                  Text(member.displayName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                  Text(
+                    member.username.isNotEmpty ? member.username : 'Unknown',
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
                   Text(_roleLabel(member.role), style: const TextStyle(color: Colors.grey)),
                   const Divider(height: 32),
+                  Row(
+                    children: [
+                      const Icon(Icons.person, size: 20, color: Color(0xFF0D9488)),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(member.displayName)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       const Icon(Icons.email, size: 20, color: Color(0xFF0D9488)),
@@ -219,17 +299,10 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                       Expanded(child: Text(phone)),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      const Icon(Icons.fingerprint, size: 20, color: Color(0xFF0D9488)),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(member.uid)),
-                    ],
-                  ),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
+                    height: 48,
                     child: ElevatedButton(
                       onPressed: () => Navigator.pop(context),
                       style: ElevatedButton.styleFrom(
@@ -237,7 +310,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: const Text('Close'),
+                      child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],
@@ -249,6 +322,92 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
     );
   }
 
+  Future<void> _editGroupNameDialog(Group group) async {
+    final controller = TextEditingController(text: group.name);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Center(
+          child: Text(
+            'Change group name',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                hintText: 'Enter name',
+                hintStyle: TextStyle(color: Colors.grey.shade300),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD65D5D),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    ),
+                    child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0D9488),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    ),
+                    child: const Text('Apply', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (ok != true) return;
+    if (controller.text.trim().isEmpty) return;
+
+    try {
+      await ref.read(groupRepoProvider).updateGroupName(group.id, controller.text.trim());
+      // Force refresh the provider to show the new name since we are not using snapshots() for permissions compatibility
+      ref.invalidate(ownerGroupProvider);
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Group name updated')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Update failed: $e')),
+      );
+    }
+  }
+
   Future<void> _confirmRemove({
     required String groupId,
     required GroupMember member,
@@ -256,12 +415,53 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Remove member?'),
-        content: Text('Remove ${member.displayName} from this group?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Remove')),
-        ],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Center(
+          child: Text(
+            'Remove member?',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Remove ${member.username.isNotEmpty ? member.username : member.displayName} from this group?',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0D9488),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    ),
+                    child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD65D5D),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    ),
+                    child: const Text('Remove', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
 
@@ -498,31 +698,6 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        try {
-                          await ref.read(groupRepoProvider).regenerateInviteCode(group.id);
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Invite code regenerated')),
-                          );
-                        } catch (e) {
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Regenerate failed: $e')),
-                          );
-                        }
-                      },
-                      icon: const Icon(Icons.refresh, color: Color(0xFF0D9488)),
-                      label: const Text('Regenerate Code'),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFF0D9488)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
                   const SizedBox(height: 12),
                   Text(
                     'Send this code to authorize access to the data.',
@@ -572,13 +747,31 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                 const Text('👑', style: TextStyle(fontSize: 18)),
                 const SizedBox(width: 8),
                 membersAsync.when(
-                  loading: () => const Text('Group members (...)',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0D9488))),
-                  error: (e, _) => Text('Group members (error)',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0D9488))),
-                  data: (members) => Text(
-                    'Group members (${members.length})',
+                  loading: () => const Text(
+                    'Group members (...)',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0D9488)),
+                  ),
+                  error: (e, _) => Text(
+                    'Group members (error)',
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0D9488)),
+                  ),
+                  data: (members) => Row(
+                    children: [
+                      Text(
+                        group.name,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0D9488)),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '(${members.length})',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0D9488)),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () => _editGroupNameDialog(group),
+                        child: Icon(Icons.edit_note_outlined, size: 24, color: Colors.grey.shade700),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -594,6 +787,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                       .map((m) => _buildMemberCard(
                             groupId: group.id,
                             member: m,
+                            allMembers: members,
                           ))
                       .toList(),
                 );
@@ -656,7 +850,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                       await ref.read(groupRepoProvider).approveRequest(
                             groupId: groupId,
                             targetUid: req.uid,
-                            role: 'viewer',
+                            role: 'member',
                           );
                     } catch (e) {
                       if (!mounted) return;
@@ -710,6 +904,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
   Widget _buildMemberCard({
     required String groupId,
     required GroupMember member,
+    required List<GroupMember> allMembers,
   }) {
     final roleType = _roleLabel(member.role);
 
@@ -717,8 +912,25 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
     final roleTextColor = _roleText(context, member.role);
     final roleBorderColor = _roleBorder(context, member.role);
 
+    final currentUserUid = ref.read(firebaseAuthProvider).currentUser?.uid;
+    final currentUserMember = allMembers.where((m) => m.uid == currentUserUid).firstOrNull;
+    final amICaretaker = currentUserMember?.role.toLowerCase() == 'caretaker';
+    final isTargetOwner = member.role.toLowerCase() == 'owner';
+    final canEdit = amICaretaker && isTargetOwner;
+
     return GestureDetector(
-      onTap: () => _viewMemberProfile(member: member),
+      onTap: () => _viewMemberProfile(
+        member: member,
+        onEdit: canEdit
+            ? () {
+                // Navigate to edit profile screen passing target member ID and medical-only mode
+                context.push('/edit-profile', extra: {
+                  'editableUid': member.uid,
+                  'medicalOnly': true,
+                });
+              }
+            : null,
+      ),
       child: Container(
         padding: const EdgeInsets.all(16),
         margin: const EdgeInsets.only(bottom: 12),
@@ -736,7 +948,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    member.displayName,
+                    member.username.isNotEmpty ? member.username : member.displayName,
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,

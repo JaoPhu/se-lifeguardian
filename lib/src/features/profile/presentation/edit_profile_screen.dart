@@ -8,13 +8,22 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:image_picker/image_picker.dart';
 import '../data/user_repository.dart';
+import '../domain/user_model.dart';
 import '../../../features/authentication/providers/auth_providers.dart';
 import '../../../common_widgets/user_avatar.dart';
 
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   final bool fromRegistration;
-  const EditProfileScreen({super.key, this.fromRegistration = false});
+  final String? editableUid;
+  final bool medicalOnly;
+  
+  const EditProfileScreen({
+    super.key, 
+    this.fromRegistration = false,
+    this.editableUid,
+    this.medicalOnly = false,
+  });
 
   @override
   ConsumerState<EditProfileScreen> createState() => _EditProfileScreenState();
@@ -38,6 +47,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _birthDateFocusNode = FocusNode();
   dynamic _imageFile; // File on mobile, XFile on web
   bool _isUploading = false;
+  bool _isLoadingTarget = false;
+  String _targetAvatarUrl = '';
 
   @override
   void initState() {
@@ -68,6 +79,42 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     
     _birthDateController.addListener(_onBirthDateChanged);
     _birthDateFocusNode.addListener(_onBirthDateFocusChange);
+
+    if (widget.editableUid != null && widget.editableUid != user.id) {
+      _loadTargetUser(widget.editableUid!);
+    } else {
+      _targetAvatarUrl = user.avatarUrl;
+    }
+  }
+
+  Future<void> _loadTargetUser(String uid) async {
+    setState(() => _isLoadingTarget = true);
+    try {
+      final doc = await ref.read(userRepositoryProvider).getUser(uid);
+      if (doc != null) {
+        setState(() {
+          _nameController.text = doc.name;
+          _usernameController.text = doc.username;
+          _emailController.text = doc.email;
+          _phoneNumberController.text = doc.phoneNumber;
+          _birthDateController.text = doc.birthDate;
+          _ageController.text = doc.age;
+          _genderController.text = doc.gender;
+          _bloodTypeController.text = doc.bloodType;
+          _heightController.text = doc.height;
+          _weightController.text = doc.weight;
+          _medicalController.text = doc.medicalCondition;
+          _medicationsController.text = doc.currentMedications;
+          _drugAllergiesController.text = doc.drugAllergies;
+          _foodAllergiesController.text = doc.foodAllergies;
+          _targetAvatarUrl = doc.avatarUrl;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading target user for edit: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingTarget = false);
+    }
   }
 
   void _onBirthDateFocusChange() {
@@ -165,6 +212,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
 
   Future<void> _pickImage() async {
+    if (widget.medicalOnly) return; // Disallow avatar changes in medical mode
+    
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(
       source: ImageSource.gallery,
@@ -238,7 +287,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     if (name.isEmpty || usernameText.isEmpty || phone.isEmpty || birthDate.isEmpty || bloodType.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน (ชื่อจริง, Username, เบอร์โทร, วันเกิด, กรุ๊ปเลือด) เพื่อบันทึกข้อมูลครับ'),
+          content: Text('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน (ชื่อจริง, Nickname, เบอร์โทร, วันเกิด, กรุ๊ปเลือด) เพื่อบันทึกข้อมูลครับ'),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -266,7 +315,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Username นี้มีผู้ใช้งานแล้ว กรุณาใช้ชื่ออื่นครับ'),
+              content: Text('Nickname นี้มีผู้ใช้งานแล้ว กรุณาใช้ชื่ออื่นครับ'),
               backgroundColor: Colors.orange,
             ),
           );
@@ -290,7 +339,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         }
       }
 
+      final fUser = ref.read(firebaseAuthProvider).currentUser;
+      final targetId = currentUser.id.isEmpty ? (fUser?.uid ?? '') : currentUser.id;
+
       final updatedUser = currentUser.copyWith(
+        id: targetId,
         name: name,
         username: usernameText,
         email: _emailController.text.trim(),
@@ -308,7 +361,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         foodAllergies: _foodAllergiesController.text,
       );
 
-      await ref.read(userProvider.notifier).updateUser(updatedUser);
+      if (widget.editableUid != null && widget.editableUid != currentUser.id) {
+        // We are a Caretaker editing an Owner's profile directly
+        await ref.read(userRepositoryProvider).updateUserProfile(updatedUser);
+      } else {
+        // Updating our own profile
+        await ref.read(userProvider.notifier).updateUser(updatedUser);
+      }
       
       if (mounted) {
         if (widget.fromRegistration) {
@@ -330,6 +389,55 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Listen to user profile changes to populate fields when data arrives (e.g. after Hot Restart)
+    ref.listen<User>(userProvider, (previous, next) {
+      if (next.id.isNotEmpty) {
+        // Only update if the field is currently empty to avoid overwriting user input
+        if (_nameController.text.isEmpty && next.name.isNotEmpty) {
+          _nameController.text = next.name;
+        }
+        if (_usernameController.text.isEmpty && next.username.isNotEmpty) {
+          _usernameController.text = next.username;
+        }
+        if (_emailController.text.isEmpty && next.email.isNotEmpty) {
+          _emailController.text = next.email;
+        }
+        if (_phoneNumberController.text.isEmpty && next.phoneNumber.isNotEmpty) {
+          _phoneNumberController.text = next.phoneNumber;
+        }
+        if (_birthDateController.text.isEmpty && next.birthDate.isNotEmpty) {
+          _birthDateController.text = next.birthDate;
+          // Trigger age calculation
+          _formatAndCalculateAge(next.birthDate.replaceAll('/', ''));
+        }
+        if (_genderController.text.isEmpty && next.gender.isNotEmpty) {
+          _genderController.text = next.gender;
+        }
+        if (_bloodTypeController.text.isEmpty && next.bloodType.isNotEmpty) {
+          _bloodTypeController.text = next.bloodType;
+        }
+        if (_heightController.text.isEmpty && next.height.isNotEmpty) {
+          _heightController.text = next.height;
+        }
+        if (_weightController.text.isEmpty && next.weight.isNotEmpty) {
+          _weightController.text = next.weight;
+        }
+        if (_medicalController.text.isEmpty && next.medicalCondition.isNotEmpty) {
+          _medicalController.text = next.medicalCondition;
+        }
+        if (_medicationsController.text.isEmpty && next.currentMedications.isNotEmpty) {
+          _medicationsController.text = next.currentMedications;
+        }
+        if (_drugAllergiesController.text.isEmpty && next.drugAllergies.isNotEmpty) {
+          _drugAllergiesController.text = next.drugAllergies;
+        }
+        if (_foodAllergiesController.text.isEmpty && next.foodAllergies.isNotEmpty) {
+          _foodAllergiesController.text = next.foodAllergies;
+        }
+        setState(() {});
+      }
+    });
+
     final user = ref.watch(userProvider);
     final theme = Theme.of(context);
     // final isDark = theme.brightness == Brightness.dark; // Unused
@@ -406,26 +514,27 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                   ),
                                 )
                           : UserAvatar(
-                              avatarUrl: user.avatarUrl,
+                              avatarUrl: _targetAvatarUrl,
                               radius: 50,
                             ),
-                      Positioned(
-                        right: 0,
-                        bottom: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: theme.cardColor,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: theme.scaffoldBackgroundColor, width: 2),
-                          ),
-                          child: Icon(
-                            _isUploading ? LucideIcons.loader : LucideIcons.image,
-                            size: 16,
-                            color: theme.iconTheme.color,
+                      if (!widget.medicalOnly)
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: theme.cardColor,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: theme.scaffoldBackgroundColor, width: 2),
+                            ),
+                            child: Icon(
+                              _isUploading ? LucideIcons.loader : LucideIcons.image,
+                              size: 16,
+                              color: theme.iconTheme.color,
+                            ),
                           ),
                         ),
-                      ),
                       if (_isUploading)
                         const Positioned.fill(
                           child: Center(
@@ -469,14 +578,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               ),
 
               // Form
-              _buildInputField('Name', _nameController, theme, hintText: 'Somchai Jaidee', isRequired: true),
-              _buildInputField('Username', _usernameController, theme, hintText: 'somchai.j', isRequired: true),
+              _buildInputField('Name and Surname', _nameController, theme, hintText: 'Somchai Jaidee', isRequired: true, readOnly: widget.medicalOnly),
+              _buildInputField('Nickname', _usernameController, theme, hintText: 'somchai.j', isRequired: true, readOnly: widget.medicalOnly),
               _buildInputField('Email', _emailController, theme, hintText: 'somchai@example.com', readOnly: true),
-              _buildInputField('Phone Number', _phoneNumberController, theme, isNumeric: true, hintText: '0812345678', isRequired: true),
+              _buildInputField('Phone Number', _phoneNumberController, theme, isNumeric: true, hintText: '0812345678', isRequired: true, readOnly: widget.medicalOnly),
               
               Row(
                 children: [
-                   Expanded(child: _buildInputField('Birth Date', _birthDateController, theme, hintText: '01/01/1980', focusNode: _birthDateFocusNode, isRequired: true)),
+                   Expanded(child: _buildInputField('Birth Date', _birthDateController, theme, hintText: '01/01/1980', focusNode: widget.medicalOnly ? null : _birthDateFocusNode, isRequired: true, readOnly: widget.medicalOnly)),
                   const SizedBox(width: 16),
                   Expanded(child: _buildInputField('Age', _ageController, theme, isNumeric: true, hintText: 'Auto-calculated', readOnly: true)),
                 ],
@@ -488,7 +597,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       'Gender',
                       _genderController.text,
                       ['Male', 'Female', 'Other'],
-                      (value) => setState(() => _genderController.text = value!),
+                      widget.medicalOnly ? null : (value) => setState(() => _genderController.text = value!),
                       theme,
                       hintText: 'Select Gender',
                     ),
@@ -500,7 +609,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       // Normalize O+ to O etc. for display if needed
                       _bloodTypeController.text.replaceAll('+', '').replaceAll('-', ''),
                       ['A', 'B', 'AB', 'O'],
-                      (value) => setState(() => _bloodTypeController.text = value!),
+                      widget.medicalOnly ? null : (value) => setState(() => _bloodTypeController.text = value!),
                       theme,
                       hintText: 'Select Type',
                       isRequired: true,
@@ -510,9 +619,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               ),
               Row(
                 children: [
-                  Expanded(child: _buildInputField('Height', _heightController, theme, isNumeric: true, hintText: '175')),
+                  Expanded(child: _buildInputField('Height', _heightController, theme, isNumeric: true, hintText: '175', readOnly: widget.medicalOnly)),
                   const SizedBox(width: 16),
-                  Expanded(child: _buildInputField('Weight', _weightController, theme, isNumeric: true, hintText: '70')),
+                  Expanded(child: _buildInputField('Weight', _weightController, theme, isNumeric: true, hintText: '70', readOnly: widget.medicalOnly)),
                 ],
               ),
 
@@ -613,7 +722,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     );
   }
 
-  Widget _buildDropdownField(String label, String value, List<String> items, void Function(String?) onChanged, ThemeData theme, {String? hintText, bool isRequired = false}) {
+  Widget _buildDropdownField(String label, String value, List<String> items, void Function(String?)? onChanged, ThemeData theme, {String? hintText, bool isRequired = false}) {
     // Ensure value is present in items or use null
     final String? selectedValue = items.contains(value) ? value : null;
 

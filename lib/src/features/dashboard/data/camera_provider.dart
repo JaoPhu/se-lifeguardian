@@ -1,13 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/camera.dart';
 import 'camera_repository.dart';
-import '../../authentication/providers/auth_providers.dart'; // import authStateProvider
 import '../../statistics/domain/simulation_event.dart';
+
+import '../../group/providers/group_providers.dart';
 
 class CameraNotifier extends StateNotifier<List<Camera>> {
   final CameraRepository _repository;
+  final Ref _ref;
 
-  CameraNotifier(this._repository) : super([]);
+  CameraNotifier(this._repository, this._ref) : super([]);
 
   // Placeholder camera for future real camera implementation
   static const _placeholderCamera = Camera(
@@ -40,7 +42,7 @@ class CameraNotifier extends StateNotifier<List<Camera>> {
     await _repository.saveCamera(camera);
   }
 
-  Future<Camera> addCameraSafely(String baseName, {CameraConfig? config}) async {
+  Future<Camera?> addCameraSafely(String baseName, {CameraConfig? config}) async {
     // 1. Ensure unique name within the user's camera list
     String uniqueName = baseName;
     int suffix = 1;
@@ -51,13 +53,23 @@ class CameraNotifier extends StateNotifier<List<Camera>> {
     }
 
     final id = 'cam-${DateTime.now().millisecondsSinceEpoch}';
+    
+    // 2. Handle Thumbnail Upload (if local)
+    CameraConfig? finalConfig = config;
+    if (config?.thumbnailUrl != null && !config!.thumbnailUrl!.startsWith('http')) {
+      final remoteUrl = await _repository.uploadThumbnail(config.thumbnailUrl!, id);
+      if (remoteUrl != null) {
+        finalConfig = config.copyWith(thumbnailUrl: remoteUrl);
+      }
+    }
+
     final newCamera = Camera(
       id: id,
       name: uniqueName,
       status: CameraStatus.online,
       source: CameraSource.demo,
       events: const [],
-      config: config,
+      config: finalConfig,
     );
     // Optimistic
     state = [newCamera, ...state];
@@ -86,17 +98,21 @@ class CameraNotifier extends StateNotifier<List<Camera>> {
 
 final cameraProvider = StateNotifierProvider<CameraNotifier, List<Camera>>((ref) {
   final repository = ref.watch(cameraRepositoryProvider);
-  final notifier = CameraNotifier(repository);
+  final notifier = CameraNotifier(repository, ref);
 
-  // Watch for auth changes to reload stream
-  ref.watch(authStateProvider);
+  // Watch for the active target UID
+  final targetUid = ref.watch(resolvedTargetUidProvider);
 
-  // Subscribe to Firestore updates
-  final subscription = repository.watchCameras().listen((cameras) {
-    notifier.loadCameras(cameras);
-  });
-  
-  ref.onDispose(() => subscription.cancel());
+  if (targetUid.isNotEmpty) {
+    final subscription = repository.watchCameras(targetUid).listen((cameras) {
+      notifier.loadCameras(cameras);
+    });
+    
+    ref.onDispose(() => subscription.cancel());
+  } else {
+    // Pass empty if no UID available
+    notifier.loadCameras([]);
+  }
 
   return notifier;
 });
