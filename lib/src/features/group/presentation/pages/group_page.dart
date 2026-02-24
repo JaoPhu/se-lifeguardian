@@ -123,71 +123,60 @@ class _GroupPageState extends ConsumerState<GroupPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Group Header
-        Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        group.name,
-                        style: const TextStyle(
-                            fontSize: 22, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          const Text('Code: ', style: TextStyle(color: Colors.grey)),
-                          Text(
-                            group.inviteCode,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+        // Group Header (Invite Code)
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            children: [
+              Text(
+                'Your group invitation code (Invite\nCode)',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
-                Column(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.copy, color: Colors.teal),
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: group.inviteCode));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Code copied to clipboard!')),
-                        );
-                      },
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    group.inviteCode,
+                    style: const TextStyle(
+                      color: Colors.teal,
+                      fontSize: 40,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 2,
                     ),
-                    if (isOwner)
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.teal),
-                        onPressed: () async {
-                          final newName = await showDialog<String>(
-                            context: context,
-                            builder: (ctx) =>
-                                ChangeGroupNameDialog(currentName: group.name),
-                          );
-                          if (newName != null && newName.isNotEmpty) {
-                            ref
-                                .read(groupProvider.notifier)
-                                .changeGroupName(newName);
-                          }
-                        },
-                      ),
-                  ],
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: Icon(Icons.copy_outlined, color: Colors.grey.shade500, size: 28),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: group.inviteCode));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Code copied to clipboard!')),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Send this code to the administrator to\nauthorize access to the data.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.grey.shade500,
+                  fontSize: 14,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 24),
