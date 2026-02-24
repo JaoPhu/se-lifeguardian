@@ -134,7 +134,7 @@ class _GroupPageState extends ConsumerState<GroupPage>
           child: Column(
             children: [
               Text(
-                'Your group invitation code (Invite\nCode)',
+                'Your group invitation code\n(Invite Code)',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.grey.shade600,
