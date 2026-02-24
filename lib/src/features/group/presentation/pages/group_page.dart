@@ -192,40 +192,6 @@ class _GroupPageState extends ConsumerState<GroupPage>
         ),
         const SizedBox(height: 24),
 
-        // Pending Requests
-        if (isOwner && state.pendingRequests.isNotEmpty) ...[
-          const Text(
-            'Pending Requests',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          ...state.pendingRequests.map((req) => Card(
-                margin: const EdgeInsets.only(bottom: 8.0),
-                child: ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.person)),
-                  title: Text(req.name),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.check_circle, color: Colors.green),
-                        onPressed: () => ref
-                            .read(groupProvider.notifier)
-                            .approveRequest(req.userId),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.cancel, color: Colors.red),
-                        onPressed: () => ref
-                            .read(groupProvider.notifier)
-                            .declineRequest(req.userId),
-                      ),
-                    ],
-                  ),
-                ),
-              )),
-          const SizedBox(height: 24),
-        ],
-
         // Members List
         Text(
           'Members (${state.members.length})',
@@ -240,6 +206,49 @@ class _GroupPageState extends ConsumerState<GroupPage>
               onChangeRole: (newRole) =>
                   ref.read(groupProvider.notifier).changeMemberRole(m.id, newRole),
             )),
+        const SizedBox(height: 24),
+
+        // Pending Requests
+        if (isOwner && state.pendingRequests.isNotEmpty) ...[
+          const Text(
+            'Pending Requests',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          ...state.pendingRequests.map((req) => Card(
+                elevation: 0,
+                color: Colors.teal.shade50.withOpacity(0.5),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                margin: const EdgeInsets.only(bottom: 12.0),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.tealAccent.shade100,
+                    child: const Icon(Icons.person, color: Colors.black87),
+                  ),
+                  title: Text(req.name),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.check_circle, color: Colors.green, size: 28),
+                        onPressed: () => ref
+                            .read(groupProvider.notifier)
+                            .approveRequest(req.userId),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.cancel, color: Colors.redAccent, size: 28),
+                        onPressed: () => ref
+                            .read(groupProvider.notifier)
+                            .declineRequest(req.userId),
+                      ),
+                    ],
+                  ),
+                ),
+              )),
+          const SizedBox(height: 24),
+        ],
       ],
     );
   }
