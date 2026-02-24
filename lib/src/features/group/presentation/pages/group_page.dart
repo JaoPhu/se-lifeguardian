@@ -53,9 +53,23 @@ class _GroupPageState extends ConsumerState<GroupPage>
           'Manage user groups',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        centerTitle: true,
+        centerTitle: false,
         backgroundColor: Colors.teal,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications),
+            onPressed: () {},
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: CircleAvatar(
+              backgroundColor: Colors.white,
+              radius: 16,
+              child: const Icon(Icons.person, color: Colors.grey, size: 20),
+            ),
+          ),
+        ],
       ),
       backgroundColor: Colors.teal, // Keep background teal at top
       body: SafeArea(
