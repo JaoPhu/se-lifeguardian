@@ -55,7 +55,15 @@ class _GroupPageState extends ConsumerState<GroupPage>
 
     return Scaffold(
       appBar: AppBar(
-        // Remove title from here to place it in the body with custom padding
+        title: const Text(
+          'LifeGuardain',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 24,
+          ),
+        ),
+        centerTitle: false,
         backgroundColor: Colors.teal,
         elevation: 0,
         actions: [
