@@ -12,6 +12,17 @@ class JoinGroupForm extends ConsumerStatefulWidget {
 class _JoinGroupFormState extends ConsumerState<JoinGroupForm> {
   final _codeController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _hasInput = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _codeController.addListener(() {
+      setState(() {
+        _hasInput = _codeController.text.trim().isNotEmpty;
+      });
+    });
+  }
 
   @override
   void dispose() {
@@ -80,7 +91,7 @@ class _JoinGroupFormState extends ConsumerState<JoinGroupForm> {
                     if (states.contains(WidgetState.pressed)) {
                       return Colors.teal;
                     }
-                    return Colors.grey.shade400; // Gray when idle
+                    return _hasInput ? Colors.teal : Colors.grey.shade400;
                   },
                 ),
                 foregroundColor: WidgetStateProperty.all(Colors.white),
