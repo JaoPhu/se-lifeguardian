@@ -57,7 +57,7 @@ class _GroupPageState extends ConsumerState<GroupPage>
       appBar: AppBar(
         title: const Text(
           'Manage user groups',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
         centerTitle: true,
         backgroundColor: Colors.teal,
@@ -73,13 +73,22 @@ class _GroupPageState extends ConsumerState<GroupPage>
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.grey.shade900 : Colors.yellow.shade100,
+                  color: Colors.white,
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 2),
-                  image: DecorationImage(
-                    image: NetworkImage(user.avatarUrl),
-                    fit: BoxFit.cover,
-                  ),
+                ),
+                child: ClipOval(
+                  child: user.avatarUrl.isNotEmpty
+                      ? Image.network(
+                          user.avatarUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Icon(Icons.person_outline,
+                                color: Colors.grey, size: 24);
+                          },
+                        )
+                      : const Icon(Icons.person_outline,
+                          color: Colors.grey, size: 24),
                 ),
               ),
             ),
