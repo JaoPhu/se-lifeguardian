@@ -113,6 +113,15 @@ class _JoinGroupFormState extends ConsumerState<JoinGroupForm> {
                       style: TextStyle(fontSize: 16),
                     ),
             ),
+            const SizedBox(height: 24),
+            Text(
+              'เมื่อเข้าร่วมแล้ว คุณจะสามารถดูสถานะและการแจ้ง\nเตือนจากเจ้าของกลุ่มได้',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 14,
+              ),
+            ),
           ],
         ),
       ),
