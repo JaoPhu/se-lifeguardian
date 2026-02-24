@@ -121,12 +121,11 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                           // --- Patient Selector Dropdown ---
                           Consumer(
                             builder: (context, ref, child) {
-                              final targetUsersAsync = ref.watch(targetUsersProvider);
-                              final targets = targetUsersAsync.valueOrNull ?? [];
+                              final targets = ref.watch(targetUsersProvider);
                               if (targets.isEmpty || targets.length == 1) return const SizedBox();
 
                               final selectedUid = ref.watch(resolvedTargetUidProvider);
-                              final validUid = targets.any((t) => t.uid == selectedUid) ? selectedUid : targets.first.uid;
+                              final validUid = targets.any((t) => t.id == selectedUid) ? selectedUid : targets.first.id;
 
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 24),
@@ -159,7 +158,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                                             },
                                             items: targets.map((target) {
                                               return DropdownMenuItem<String>(
-                                                value: target.uid,
+                                                value: target.id,
                                                 child: Text(
                                                   target.name,
                                                   style: const TextStyle(fontWeight: FontWeight.w600),

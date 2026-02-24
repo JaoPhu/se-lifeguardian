@@ -23,7 +23,7 @@ import 'package:lifeguardian/src/features/authentication/presentation/change_pas
 
 import 'package:lifeguardian/src/features/settings/presentation/settings_screen.dart';
 import 'package:lifeguardian/src/features/status/presentation/status_screen.dart';
-import 'package:lifeguardian/src/features/group/presentation/group_management_screen.dart';
+import 'package:lifeguardian/src/features/group/presentation/pages/group_page.dart';
 import 'package:lifeguardian/src/features/statistics/presentation/statistics_screen.dart';
 import 'package:lifeguardian/src/features/history/presentation/pages/history_list_page.dart';
 import 'package:lifeguardian/src/features/history/presentation/pages/history_detail_page.dart';
@@ -106,7 +106,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/group',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const GroupManagementScreen(),
+        builder: (context, state) => const GroupPage(),
       ),
       GoRoute(
         path: '/profile',
@@ -223,7 +223,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: '/users',
-                builder: (context, state) => const GroupManagementScreen(),
+                builder: (context, state) => const GroupPage(),
               ),
             ],
           ),

@@ -84,13 +84,12 @@ class OverviewScreen extends ConsumerWidget {
                   // Patient Selector
                   Consumer(
                     builder: (context, ref, child) {
-                      final targetUsersAsync = ref.watch(targetUsersProvider);
-                      final targets = targetUsersAsync.valueOrNull ?? [];
+                      final targets = ref.watch(targetUsersProvider);
                       if (targets.isEmpty || targets.length == 1) return const SizedBox();
 
                       final selectedUid = ref.watch(resolvedTargetUidProvider);
                       // Ensure selectedUid is in the list, otherwise fallback to first
-                      final validUid = targets.any((t) => t.uid == selectedUid) ? selectedUid : targets.first.uid;
+                      final validUid = targets.any((t) => t.id == selectedUid) ? selectedUid : targets.first.id;
 
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 16),
@@ -123,7 +122,7 @@ class OverviewScreen extends ConsumerWidget {
                                     },
                                     items: targets.map((target) {
                                       return DropdownMenuItem<String>(
-                                        value: target.uid,
+                                        value: target.id,
                                         child: Text(
                                           target.name,
                                           style: const TextStyle(fontWeight: FontWeight.w600),

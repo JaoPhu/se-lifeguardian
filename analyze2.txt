@@ -1,0 +1,17 @@
+Analyzing se-lifeguardian...                                    
+
+   info • The private field _gender could be 'final' • lib/src/features/authentication/presentation/register_screen.dart:26:11 • prefer_final_fields
+warning • The declaration '_onBirthDateChanged' isn't referenced • lib/src/features/authentication/presentation/register_screen.dart:42:8 • unused_element
+warning • The value of the field '_ref' isn't used • lib/src/features/dashboard/data/camera_provider.dart:10:13 • unused_field
+  error • The getter 'valueOrNull' isn't defined for the type 'List<GroupMemberEntity>' • lib/src/features/dashboard/presentation/overview_screen.dart:88:56 • undefined_getter
+warning • Unused import: '../../authentication/providers/auth_providers.dart' • lib/src/features/events/data/event_repository.dart:8:8 • unused_import
+   info • Use 'const' for final variables initialized to a constant value • lib/src/features/events/presentation/events_screen.dart:112:23 • prefer_const_declarations
+  error • The getter 'valueOrNull' isn't defined for the type 'List<GroupMemberEntity>' • lib/src/features/events/presentation/events_screen.dart:125:64 • undefined_getter
+  error • Target of URI doesn't exist: 'group_provider.dart' • lib/src/features/group/providers/group_providers.dart:4:8 • uri_does_not_exist
+  error • Undefined name 'groupProvider' • lib/src/features/group/providers/group_providers.dart:9:32 • undefined_identifier
+warning • Unused import: 'package:firebase_auth/firebase_auth.dart' • lib/src/features/pose_detection/data/health_status_provider.dart:7:8 • unused_import
+warning • Unused import: '../../authentication/providers/auth_providers.dart' • lib/src/features/pose_detection/data/health_status_provider.dart:12:8 • unused_import
+warning • Unused import: 'dart:math' • lib/src/features/profile/data/user_repository.dart:2:8 • unused_import
+warning • The value of the field '_isLoadingTarget' isn't used • lib/src/features/profile/presentation/edit_profile_screen.dart:50:8 • unused_field
+warning • The value of the local variable 'user' isn't used • lib/src/features/profile/presentation/edit_profile_screen.dart:441:11 • unused_local_variable
+

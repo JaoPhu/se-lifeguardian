@@ -1,0 +1,34 @@
+Analyzing se-lifeguardian...                                    
+
+   info • The private field _gender could be 'final' • lib/src/features/authentication/presentation/register_screen.dart:26:11 • prefer_final_fields
+warning • The declaration '_onBirthDateChanged' isn't referenced • lib/src/features/authentication/presentation/register_screen.dart:42:8 • unused_element
+  error • Target of URI doesn't exist: '../../group/providers/group_providers.dart' • lib/src/features/dashboard/data/camera_provider.dart:6:8 • uri_does_not_exist
+warning • The value of the field '_ref' isn't used • lib/src/features/dashboard/data/camera_provider.dart:10:13 • unused_field
+  error • Undefined name 'resolvedTargetUidProvider' • lib/src/features/dashboard/data/camera_provider.dart:104:31 • undefined_identifier
+  error • Target of URI doesn't exist: '../../group/providers/group_providers.dart' • lib/src/features/dashboard/presentation/overview_screen.dart:12:8 • uri_does_not_exist
+  error • Undefined name 'targetUsersProvider' • lib/src/features/dashboard/presentation/overview_screen.dart:87:58 • undefined_identifier
+  error • Undefined name 'resolvedTargetUidProvider' • lib/src/features/dashboard/presentation/overview_screen.dart:91:53 • undefined_identifier
+  error • Undefined name 'activeTargetUidProvider' • lib/src/features/dashboard/presentation/overview_screen.dart:122:48 • undefined_identifier
+  error • Undefined name 'activeTargetUidProvider' • lib/src/features/dashboard/presentation/overview_screen.dart:165:34 • undefined_identifier
+  error • Target of URI doesn't exist: '../../group/providers/group_providers.dart' • lib/src/features/events/data/event_repository.dart:9:8 • uri_does_not_exist
+  error • Undefined name 'resolvedTargetUidProvider' • lib/src/features/events/data/event_repository.dart:110:31 • undefined_identifier
+  error • Target of URI doesn't exist: '../../group/providers/group_providers.dart' • lib/src/features/events/presentation/events_screen.dart:9:8 • uri_does_not_exist
+   info • Use 'const' for final variables initialized to a constant value • lib/src/features/events/presentation/events_screen.dart:112:23 • prefer_const_declarations
+  error • Undefined name 'targetUsersProvider' • lib/src/features/events/presentation/events_screen.dart:124:66 • undefined_identifier
+  error • Undefined name 'resolvedTargetUidProvider' • lib/src/features/events/presentation/events_screen.dart:128:61 • undefined_identifier
+  error • Undefined name 'activeTargetUidProvider' • lib/src/features/events/presentation/events_screen.dart:158:56 • undefined_identifier
+  error • Target of URI doesn't exist: 'widgets/group_member_card.dart' • lib/src/features/group/presentation/pages/group_page.dart:6:8 • uri_does_not_exist
+  error • Target of URI doesn't exist: 'widgets/join_group_form.dart' • lib/src/features/group/presentation/pages/group_page.dart:7:8 • uri_does_not_exist
+  error • Target of URI doesn't exist: 'widgets/change_group_name_dialog.dart' • lib/src/features/group/presentation/pages/group_page.dart:8:8 • uri_does_not_exist
+  error • The method 'ChangeGroupNameDialog' isn't defined for the type '_GroupPageState' • lib/src/features/group/presentation/pages/group_page.dart:178:33 • undefined_method
+  error • The method 'GroupMemberCard' isn't defined for the type '_GroupPageState' • lib/src/features/group/presentation/pages/group_page.dart:235:37 • undefined_method
+  error • Invalid constant value • lib/src/features/group/presentation/pages/group_page.dart:248:14 • invalid_constant
+  error • The method 'JoinGroupForm' isn't defined for the type '_GroupPageState' • lib/src/features/group/presentation/pages/group_page.dart:248:14 • undefined_method
+  error • Target of URI doesn't exist: '../../group/providers/group_providers.dart' • lib/src/features/pose_detection/data/health_status_provider.dart:13:8 • uri_does_not_exist
+  error • Undefined name 'resolvedTargetUidProvider' • lib/src/features/pose_detection/data/health_status_provider.dart:161:35 • undefined_identifier
+  error • Undefined name 'resolvedTargetUidProvider' • lib/src/features/pose_detection/data/health_status_provider.dart:515:14 • undefined_identifier
+  error • The argument type 'Object?' can't be assigned to the parameter type 'String'.  • lib/src/features/pose_detection/data/health_status_provider.dart:516:24 • argument_type_not_assignable
+warning • Unused import: 'dart:math' • lib/src/features/profile/data/user_repository.dart:2:8 • unused_import
+warning • The value of the field '_isLoadingTarget' isn't used • lib/src/features/profile/presentation/edit_profile_screen.dart:50:8 • unused_field
+warning • The value of the local variable 'user' isn't used • lib/src/features/profile/presentation/edit_profile_screen.dart:441:11 • unused_local_variable
+
