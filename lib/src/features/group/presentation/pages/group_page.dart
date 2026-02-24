@@ -55,11 +55,7 @@ class _GroupPageState extends ConsumerState<GroupPage>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Manage user groups',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-        ),
-        centerTitle: true,
+        // Remove title from here to place it in the body with custom padding
         backgroundColor: Colors.teal,
         elevation: 0,
         actions: [
@@ -99,6 +95,17 @@ class _GroupPageState extends ConsumerState<GroupPage>
       body: SafeArea(
         child: Column(
           children: [
+            const SizedBox(height: 16), // Extra spacing below AppBar
+            // Title moved from AppBar
+            const Text(
+              'Manage user groups',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 24,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 8),
             // Subtitle
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16.0),
