@@ -8,6 +8,7 @@ import '../widgets/join_group_form.dart';
 import '../widgets/change_group_name_dialog.dart';
 import '../../../profile/data/user_repository.dart';
 import '../../../notification/presentation/notification_bell.dart';
+import '../../../common_widgets/user_avatar.dart';
 import 'package:go_router/go_router.dart';
 
 class GroupPage extends ConsumerStatefulWidget {
@@ -74,27 +75,9 @@ class _GroupPageState extends ConsumerState<GroupPage>
             padding: const EdgeInsets.only(right: 24.0),
             child: GestureDetector(
               onTap: () => context.push('/profile'),
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                ),
-                child: ClipOval(
-                  child: user.avatarUrl.isNotEmpty
-                      ? Image.network(
-                          user.avatarUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return const Icon(Icons.person_outline,
-                                color: Colors.grey, size: 24);
-                          },
-                        )
-                      : const Icon(Icons.person_outline,
-                          color: Colors.grey, size: 24),
-                ),
+              child: UserAvatar(
+                avatarUrl: user.avatarUrl,
+                radius: 18,
               ),
             ),
           ),
