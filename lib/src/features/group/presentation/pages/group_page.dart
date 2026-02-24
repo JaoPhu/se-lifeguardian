@@ -49,23 +49,93 @@ class _GroupPageState extends ConsumerState<GroupPage>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Group Management'),
-        backgroundColor: Colors.teal,
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          tabs: const [
-            Tab(text: 'My Group'),
-            Tab(text: 'Join Group'),
-          ],
+        title: const Text(
+          'Manage user groups',
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
+        centerTitle: true,
+        backgroundColor: Colors.teal,
+        elevation: 0,
       ),
+      backgroundColor: Colors.teal, // Keep background teal at top
       body: SafeArea(
-        child: TabBarView(
-          controller: _tabController,
+        child: Column(
           children: [
-            _buildMyGroupTab(),
-            _buildJoinGroupTab(),
+            // Subtitle
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0),
+              child: Text(
+                'Share health information or join to care for others.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontSize: 14),
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // Custom Tab Bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Container(
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(4.0),
+                  child: TabBar(
+                    controller: _tabController,
+                    indicator: BoxDecoration(
+                      color: Colors.teal,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    labelColor: Colors.white,
+                    unselectedLabelColor: Colors.grey.shade600,
+                    labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    dividerColor: Colors.transparent,
+                    tabs: [
+                      Tab(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(Icons.people_outline, size: 20),
+                            SizedBox(width: 8),
+                            Text('My Group'),
+                          ],
+                        ),
+                      ),
+                      Tab(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(Icons.phone_iphone, size: 20), // Placeholder icon for "Join Group" if needed
+                            SizedBox(width: 8),
+                            Text('Join Group'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Main Content Area
+            Expanded(
+              child: Container(
+                color: Colors.white, // Lower half background is white
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildMyGroupTab(),
+                    _buildJoinGroupTab(),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
