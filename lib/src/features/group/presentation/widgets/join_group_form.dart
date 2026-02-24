@@ -74,9 +74,19 @@ class _JoinGroupFormState extends ConsumerState<JoinGroupForm> {
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: state.isLoading ? null : _submit,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.teal,
-                padding: const EdgeInsets.symmetric(vertical: 16),
+              style: ButtonStyle(
+                backgroundColor: WidgetStateProperty.resolveWith<Color>(
+                  (Set<WidgetState> states) {
+                    if (states.contains(WidgetState.pressed)) {
+                      return Colors.teal;
+                    }
+                    return Colors.teal.shade800;
+                  },
+                ),
+                foregroundColor: WidgetStateProperty.all(Colors.white),
+                padding: WidgetStateProperty.all(
+                  const EdgeInsets.symmetric(vertical: 16),
+                ),
               ),
               child: state.isLoading
                   ? const SizedBox(
