@@ -237,6 +237,8 @@ class _GroupPageState extends ConsumerState<GroupPage>
               isOwnerCurrent: isOwner,
               onRemove: () =>
                   ref.read(groupProvider.notifier).removeMember(m.id),
+              onChangeRole: (newRole) =>
+                  ref.read(groupProvider.notifier).changeMemberRole(m.id, newRole),
             )),
       ],
     );

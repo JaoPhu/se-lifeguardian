@@ -126,6 +126,16 @@ class GroupNotifier extends StateNotifier<GroupState> {
       state = state.copyWith(isLoading: false, errorMessage: e.toString());
     }
   }
+
+  Future<void> changeMemberRole(String userId, String newRole) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      await repository.changeMemberRole(userId, newRole);
+      await refreshGroupData();
+    } catch (e) {
+      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+    }
+  }
 }
 
 final groupProvider = StateNotifierProvider<GroupNotifier, GroupState>((ref) {

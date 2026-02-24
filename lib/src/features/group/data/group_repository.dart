@@ -75,6 +75,18 @@ class GroupRepository {
     _members.removeWhere((m) => m.id == userId);
   }
 
+  Future<void> changeMemberRole(String userId, String newRole) async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    final index = _members.indexWhere((m) => m.id == userId);
+    if (index != -1) {
+      final oldMember = _members[index];
+      // Do not allow changing the role of the Owner
+      if (oldMember.role != 'Owner') {
+        _members[index] = oldMember.copyWith(role: newRole);
+      }
+    }
+  }
+
   Future<GroupEntity?> getCurrentGroup() async {
     await Future.delayed(const Duration(milliseconds: 200));
     return _currentGroup;
