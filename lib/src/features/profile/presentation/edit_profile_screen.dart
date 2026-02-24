@@ -211,6 +211,44 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     }
   }
 
+  Future<void> _showImagePickerOptions() async {
+    if (widget.medicalOnly) return;
+    
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(LucideIcons.image),
+              title: const Text('Choose from Gallery'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage();
+              },
+            ),
+            if (_imageFile != null || _targetAvatarUrl.isNotEmpty)
+              ListTile(
+                leading: const Icon(LucideIcons.trash2, color: Colors.red),
+                title: const Text('Remove Photo', style: TextStyle(color: Colors.red)),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    _imageFile = null;
+                    _targetAvatarUrl = '';
+                  });
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _pickImage() async {
     if (widget.medicalOnly) return; // Disallow avatar changes in medical mode
     
@@ -324,7 +362,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         return;
       }
 
-      String avatarUrl = currentUser.avatarUrl;
+      String avatarUrl = _targetAvatarUrl;
 
       // Upload image if picked
       if (_imageFile != null) {
@@ -468,7 +506,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               // Avatar Section
               Center(
                 child: GestureDetector(
-                  onTap: _isUploading ? null : _pickImage,
+                  onTap: _isUploading ? null : _showImagePickerOptions,
                   child: Stack(
                     children: [
                       _imageFile != null
