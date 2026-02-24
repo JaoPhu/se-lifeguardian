@@ -60,7 +60,8 @@ class _GroupPageState extends ConsumerState<GroupPage>
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
-            fontSize: 24,
+            fontSize: 28, // Matched with statistics screen
+            letterSpacing: 0.5,
           ),
         ),
         centerTitle: false,
