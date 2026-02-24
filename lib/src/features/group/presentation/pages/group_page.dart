@@ -110,7 +110,7 @@ class _GroupPageState extends ConsumerState<GroupPage>
               'Manage user groups',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                fontSize: 24,
+                fontSize: 22, // Decreased from 24
                 color: Colors.white,
               ),
             ),
