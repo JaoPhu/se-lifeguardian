@@ -6,8 +6,8 @@ import '../providers/group_provider.dart';
 import '../widgets/group_member_card.dart';
 import '../widgets/join_group_form.dart';
 import '../widgets/change_group_name_dialog.dart';
-import '../../profile/data/user_repository.dart';
-import '../../notification/presentation/notification_bell.dart';
+import '../../../profile/data/user_repository.dart';
+import '../../../notification/presentation/notification_bell.dart';
 import 'package:go_router/go_router.dart';
 
 class GroupPage extends ConsumerStatefulWidget {
