@@ -80,7 +80,7 @@ class _JoinGroupFormState extends ConsumerState<JoinGroupForm> {
                     if (states.contains(WidgetState.pressed)) {
                       return Colors.teal;
                     }
-                    return Colors.teal.shade800;
+                    return Colors.grey.shade400; // Gray when idle
                   },
                 ),
                 foregroundColor: WidgetStateProperty.all(Colors.white),
