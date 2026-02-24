@@ -62,11 +62,42 @@ class GroupMemberCard extends StatelessWidget {
                       onChangeRole!(newValue);
                     }
                   },
+                  selectedItemBuilder: (BuildContext context) {
+                    return <String>['Admin', 'Viewer'].map((String value) {
+                      return Center(
+                        child: Text(
+                          value,
+                          style: TextStyle(
+                            color: member.role == 'Admin'
+                                ? Colors.orange.shade800
+                                : Colors.teal.shade800,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      );
+                    }).toList();
+                  },
                   items: <String>['Admin', 'Viewer']
                       .map<DropdownMenuItem<String>>((String value) {
                     return DropdownMenuItem<String>(
                       value: value,
-                      child: Text(value),
+                      child: Row(
+                        children: [
+                          if (member.role == value) ...[
+                            const Icon(Icons.check, color: Colors.black, size: 18),
+                            const SizedBox(width: 8),
+                          ] else ...[
+                            const SizedBox(width: 26),
+                          ],
+                          Text(
+                            value,
+                            style: const TextStyle(
+                              color: Colors.black,
+                              fontWeight: FontWeight.normal,
+                            ),
+                          ),
+                        ],
+                      ),
                     );
                   }).toList(),
                 ),
