@@ -6,6 +6,9 @@ import '../providers/group_provider.dart';
 import '../widgets/group_member_card.dart';
 import '../widgets/join_group_form.dart';
 import '../widgets/change_group_name_dialog.dart';
+import '../../profile/data/user_repository.dart';
+import '../../notification/presentation/notification_bell.dart';
+import 'package:go_router/go_router.dart';
 
 class GroupPage extends ConsumerStatefulWidget {
   const GroupPage({super.key});
@@ -32,6 +35,9 @@ class _GroupPageState extends ConsumerState<GroupPage>
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(userProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     // Listen to changes for error messages mapped to snackbars
     ref.listen<GroupState>(groupProvider, (previous, next) {
       if (next.errorMessage != null &&
@@ -53,20 +59,29 @@ class _GroupPageState extends ConsumerState<GroupPage>
           'Manage user groups',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        centerTitle: false,
+        centerTitle: true,
         backgroundColor: Colors.teal,
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications),
-            onPressed: () {},
-          ),
+          const NotificationBell(color: Colors.white),
+          const SizedBox(width: 16),
           Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: CircleAvatar(
-              backgroundColor: Colors.white,
-              radius: 16,
-              child: const Icon(Icons.person, color: Colors.grey, size: 20),
+            padding: const EdgeInsets.only(right: 24.0),
+            child: GestureDetector(
+              onTap: () => context.push('/profile'),
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.grey.shade900 : Colors.yellow.shade100,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                  image: DecorationImage(
+                    image: NetworkImage(user.avatarUrl),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
             ),
           ),
         ],
