@@ -782,12 +782,19 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Text('Members error: $e'),
               data: (List<GroupMember> members) {
+                final sortedMembers = List<GroupMember>.from(members)
+                  ..sort((a, b) {
+                    if (a.role == 'owner' && b.role != 'owner') return -1;
+                    if (a.role != 'owner' && b.role == 'owner') return 1;
+                    return 0;
+                  });
+
                 return Column(
-                  children: members
+                  children: sortedMembers
                       .map((m) => _buildMemberCard(
                             groupId: group.id,
                             member: m,
-                            allMembers: members,
+                            allMembers: sortedMembers,
                           ))
                       .toList(),
                 );
