@@ -9,6 +9,7 @@ import '../../authentication/providers/auth_providers.dart';
 import '../../../common_widgets/user_avatar.dart';
 import '../../notification/presentation/notification_bell.dart';
 import '../../pose_detection/data/health_status_provider.dart';
+
 import 'change_password_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -306,6 +307,9 @@ class SettingsScreen extends ConsumerWidget {
                                   ],
                                 ),
                               );
+                            },
+                          ),
+                          Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
                             },
                           ),
                           Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
