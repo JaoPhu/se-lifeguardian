@@ -47,7 +47,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _birthDateFocusNode = FocusNode();
   dynamic _imageFile; // File on mobile, XFile on web
   bool _isUploading = false;
-  bool _isLoadingTarget = false;
   String _targetAvatarUrl = '';
 
   @override
@@ -88,7 +87,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
 
   Future<void> _loadTargetUser(String uid) async {
-    setState(() => _isLoadingTarget = true);
     try {
       final doc = await ref.read(userRepositoryProvider).getUser(uid);
       if (doc != null) {
@@ -112,8 +110,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       }
     } catch (e) {
       debugPrint('Error loading target user for edit: $e');
-    } finally {
-      if (mounted) setState(() => _isLoadingTarget = false);
     }
   }
 
@@ -438,7 +434,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       }
     });
 
-    final user = ref.watch(userProvider);
     final theme = Theme.of(context);
     // final isDark = theme.brightness == Brightness.dark; // Unused
 
