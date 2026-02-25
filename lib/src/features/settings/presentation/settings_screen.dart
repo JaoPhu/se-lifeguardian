@@ -8,7 +8,7 @@ import '../../authentication/controllers/auth_controller.dart';
 import '../../authentication/providers/auth_providers.dart';
 import '../../../common_widgets/user_avatar.dart';
 import '../../notification/presentation/notification_bell.dart';
-import 'change_password_dialog.dart';
+import 'change_password_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -238,6 +238,29 @@ class SettingsScreen extends ConsumerWidget {
                       child: Column(
                         children: [
 
+                          // Change Password
+                          ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
+                            title: Text(
+                              'Change Password',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: theme.textTheme.bodyLarge?.color,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            trailing: const Icon(LucideIcons.chevronRight, size: 20, color: Colors.grey),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const ChangePasswordScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                          Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
+
                           // Logout
                           ListTile(
                             contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
@@ -256,46 +279,7 @@ class SettingsScreen extends ConsumerWidget {
                             },
                           ),
                           Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
-                          if (ref.watch(firebaseAuthProvider).currentUser?.providerData.any((p) => p.providerId == 'password') ?? false) ...[
-                            // Change Password
-                            ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
-                              title: const Text(
-                                'Change Password',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Color(0xFFEF4444),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              trailing: const Icon(LucideIcons.chevronRight, size: 20, color: Colors.grey),
-                              onTap: () {
-                                showDialog(
-                                  context: context,
-                                  builder: (context) => const ChangePasswordDialog(),
-                                );
-                              },
-                            ),
-                            Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
 
-                            // Forgot Password
-                            ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
-                              title: const Text(
-                                'Forgot Password',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Color(0xFFEF4444),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              trailing: const Icon(LucideIcons.chevronRight, size: 20, color: Colors.grey),
-                              onTap: () {
-                                context.push('/settings-forgot-password');
-                              },
-                            ),
-                            Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
-                          ],
                           // Delete Account
                           ListTile(
                             contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
