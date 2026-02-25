@@ -261,25 +261,32 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? Colors.grey.shade800
-                                  : Colors.grey.shade200,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              _formattedDate,
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _selectedDate = DateTime.now();
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
                                 color: Theme.of(context).brightness ==
                                         Brightness.dark
-                                    ? Colors.grey.shade300
-                                    : Colors.grey.shade600,
+                                    ? Colors.grey.shade800
+                                    : Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                _formattedDate,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Colors.grey.shade300
+                                      : Colors.grey.shade600,
+                                ),
                               ),
                             ),
                           ),
