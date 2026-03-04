@@ -103,5 +103,6 @@ final resolvedTargetUidProvider = Provider<String>((ref) {
   final selected = ref.watch(activeTargetUidProvider);
   if (selected != null) return selected;
   
-  return ref.watch(userProvider).id;
+  final userId = ref.watch(userProvider).id;
+  return userId.isNotEmpty ? userId : 'demo_user';
 });
