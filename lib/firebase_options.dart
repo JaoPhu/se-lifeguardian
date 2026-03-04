@@ -66,7 +66,7 @@ class DefaultFirebaseOptions {
     storageBucket: 'lifeguardian-app.firebasestorage.app',
     androidClientId: '292872685738-6ot8uu0g5u27seulvjgc6tub0ujgtbn4.apps.googleusercontent.com',
     iosClientId: '292872685738-s8muujp6hdv453lpknjakpa8cr4m3q9v.apps.googleusercontent.com',
-    iosBundleId: 'com.example.lifeguardian',
+    iosBundleId: 'com.hewkaow.lifeguardian',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -77,7 +77,7 @@ class DefaultFirebaseOptions {
     storageBucket: 'lifeguardian-app.firebasestorage.app',
     androidClientId: '292872685738-6ot8uu0g5u27seulvjgc6tub0ujgtbn4.apps.googleusercontent.com',
     iosClientId: '292872685738-s8muujp6hdv453lpknjakpa8cr4m3q9v.apps.googleusercontent.com',
-    iosBundleId: 'com.example.lifeguardian',
+    iosBundleId: 'com.hewkaow.lifeguardian',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
