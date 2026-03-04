@@ -56,3 +56,5 @@ serviceAccountKey.json
 *.jks
 *.keystore
 .env*
+
+ios/build/

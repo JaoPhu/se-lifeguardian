@@ -163,3 +163,68 @@ exports.resetPasswordWithOTP = onCall({ cors: true }, async (request) => {
         throw new HttpsError('internal', `Reset failed: ${error.message}`);
     }
 });
+
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+
+exports.onNotificationCreated = onDocumentCreated("users/{uid}/notifications/{notiId}", async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) return;
+
+    const notiData = snapshot.data();
+    const patientUid = event.params.uid;
+
+    console.log(`New notification for patient ${patientUid}: ${notiData.title}`);
+
+    try {
+        // 1. Find groups this user belongs to as the monitored person
+        const groupsSnapshot = await db.collection('groups').where('ownerUid', 'isEqualTo', patientUid).get();
+
+        const caregiverTokens = new Set();
+
+        for (const groupDoc of groupsSnapshot.docs) {
+            const groupId = groupDoc.id;
+            // 2. Find all members in this group who are caregivers/caretakers
+            const membersSnapshot = await db.collection('groups').doc(groupId).collection('members').get();
+
+            for (const memberDoc of membersSnapshot.docs) {
+                const memberUid = memberDoc.id;
+                const memberData = memberDoc.data();
+
+                // if (memberUid === patientUid) continue; // Commented out for easier testing/verification
+
+                if (memberData.role === 'caretaker' || memberData.role === 'owner') {
+                    // 3. Get FCM tokens for this caregiver
+                    const caregiverDoc = await db.collection('users').doc(memberUid).get();
+                    if (caregiverDoc.exists) {
+                        const tokens = caregiverDoc.data().fcm_tokens || [];
+                        tokens.forEach(t => caregiverTokens.add(t));
+                    }
+                }
+            }
+        }
+
+        if (caregiverTokens.size === 0) {
+            console.log("No caregivers found with FCM tokens.");
+            return;
+        }
+
+        // 4. Send Message via FCM
+        const message = {
+            notification: {
+                title: notiData.title,
+                body: notiData.message,
+            },
+            data: {
+                type: 'CRITICAL_EVENT',
+                userId: patientUid,
+                click_action: 'FLUTTER_NOTIFICATION_CLICK',
+            },
+            tokens: Array.from(caregiverTokens),
+        };
+
+        const response = await admin.messaging().sendEachForMulticast(message);
+        console.log(`${response.successCount} messages were sent successfully`);
+    } catch (error) {
+        console.error("Error sending FCM:", error);
+    }
+});

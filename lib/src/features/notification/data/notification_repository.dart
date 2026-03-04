@@ -7,7 +7,8 @@ import 'package:rxdart/rxdart.dart';
 abstract class NotificationRepository {
   Future<List<NotificationModel>> fetchNotifications();
   Stream<List<NotificationModel>> watchNotifications({List<String> targetUids = const []});
-  Future<void> addNotification(NotificationModel notification);
+  Future<void> addNotification(NotificationModel notification, {String? targetUid});
+  Future<void> deleteNotification(String id);
 }
 
 class NotificationRepositoryFirestore implements NotificationRepository {
@@ -37,34 +38,33 @@ class NotificationRepositoryFirestore implements NotificationRepository {
 
   @override
   Stream<List<NotificationModel>> watchNotifications({List<String> targetUids = const []}) {
-    final uid = _uid;
-    if (uid == null) return Stream.value([]);
+    final authUid = _uid;
 
-    // Streams to combine: My own notifications + Subscriptions
+    // In demo mode (not logged in), watch the first targetUid directly
+    if (authUid == null) {
+      if (targetUids.isEmpty) return Stream.value([]);
+      return _getNotificationStream(targetUids.first);
+    }
+
     final streams = <Stream<List<NotificationModel>>>[];
 
-    // 1. My notifications
-    streams.add(_getNotificationStream(uid));
+    // 1. My own notifications
+    streams.add(_getNotificationStream(authUid));
 
-    // 2. Subscribed notifications (e.g. from people I follow/care for)
-    // Note: The prompt says "Account in someone else's group will receive notifications of the group owner"
-    // So if I am in Group A (Owned by Alice), I should see Alice's notifications.
-    // 'targetUids' should contain ['alice_uid']
+    // 2. Subscribed notifications
     for (final targetId in targetUids) {
-      if (targetId != uid) {
+      if (targetId != authUid) {
         streams.add(_getNotificationStream(targetId));
       }
     }
 
     if (streams.isEmpty) return Stream.value([]);
 
-    // Merge all streams and combine lists
     return Rx.combineLatest(streams, (List<List<NotificationModel>> values) {
       final allNotifications = <NotificationModel>[];
       for (final list in values) {
         allNotifications.addAll(list);
       }
-      // Sort by date descending
       allNotifications.sort((a, b) => b.date.compareTo(a.date));
       return allNotifications;
     });
@@ -89,8 +89,8 @@ class NotificationRepositoryFirestore implements NotificationRepository {
   }
 
   @override
-  Future<void> addNotification(NotificationModel notification) async {
-    final uid = _uid;
+  Future<void> addNotification(NotificationModel notification, {String? targetUid}) async {
+    final uid = targetUid ?? _uid;
     if (uid == null) return;
 
     await _firestore
@@ -98,6 +98,23 @@ class NotificationRepositoryFirestore implements NotificationRepository {
         .doc(uid)
         .collection('notifications')
         .add(notification.toJson());
+  }
+
+  @override
+  Future<void> deleteNotification(String id) async {
+    final uid = _uid;
+    if (uid == null) return;
+
+    try {
+      await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('notifications')
+          .doc(id)
+          .delete();
+    } catch (e) {
+      // Ignore delete errors (item may already be gone)
+    }
   }
 }
 
