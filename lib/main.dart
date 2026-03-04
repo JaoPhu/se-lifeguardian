@@ -8,6 +8,7 @@ import 'src/server/fcm_service.dart';
 import 'src/common/shared_preferences_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
