@@ -11,6 +11,8 @@ import '../../events/data/event_repository.dart';
 import '../../events/data/cloud_verification_service.dart';
 import '../../authentication/providers/auth_providers.dart';
 import '../../group/providers/group_providers.dart';
+import '../../notification/data/notification_repository.dart';
+import '../../notification/domain/notification_model.dart';
 
 enum HealthStatus { normal, warning, emergency, none }
 
@@ -91,10 +93,11 @@ class HealthState {
 
 class HealthStatusNotifier extends StateNotifier<HealthState> {
   final EventRepository _eventRepository;
+  final NotificationRepository _notificationRepository;
   final Ref _ref;
   Timer? _timer;
 
-  HealthStatusNotifier(this._eventRepository, this._ref) : super(HealthState.initial()) {
+  HealthStatusNotifier(this._eventRepository, this._notificationRepository, this._ref) : super(HealthState.initial()) {
     _startTimer();
   }
 
@@ -334,6 +337,9 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       
       // Trigger Cloud Verification and Sync
       _syncAndVerify(newEvent);
+      
+      // NEW: Trigger Notification Model creation
+      _triggerCriticalNotification(activity, newEvent);
     } else {
       state = state.copyWith(
         currentActivity: activity,
@@ -484,13 +490,67 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       );
 
       // Periodically sync active event to Firestore (every 5 simulation minutes = approx 5 seconds)
-      if (durationChanged && updatedEvents.first.durationSeconds != null && updatedEvents.first.durationSeconds! % 300 == 0) {
-        _eventRepository.syncEvent(updatedEvents.first);
+      if (durationChanged && updatedEvents.first.durationSeconds != null) {
+        final duration = updatedEvents.first.durationSeconds!;
+        
+        // Trigger history notification at 1 minute sitting (60 sim-seconds ≈ 1 real second at 60x)
+        if (updatedEvents.first.type == 'sitting' && duration == 60) {
+           _triggerSittingNotification(updatedEvents.first);
+        }
+
+        if (duration % 300 == 0) {
+          _eventRepository.syncEvent(updatedEvents.first);
+        }
       }
 
       if (newScore != state.score) {
          _saveState();
       }
+    }
+  }
+
+  Future<void> _triggerCriticalNotification(String activity, SimulationEvent event) async {
+    try {
+      final targetUid = _ref.read(resolvedTargetUidProvider);
+      // Allow 'demo_user' in demo mode
+      final uid = targetUid.isEmpty ? 'demo_user' : targetUid;
+
+      final isFalling = activity == 'falling';
+      final notification = NotificationModel(
+        id: '', // Firestore will generate
+        title: isFalling ? 'ตรวจพบการล้ม!' : 'ตรวจพบอาการเสียหลัก (Near Fall)',
+        message: isFalling 
+            ? 'พบเหตุการณ์ล้มในกล้อง ${event.cameraId ?? "หลัก"} โปรดตรวจสอบทันที'
+            : 'พบแนวโน้มการล้มในกล้อง ${event.cameraId ?? "หลัก"} โปรดติดตามสถานะอย่างใกล้ชิด',
+        type: isFalling ? NotificationType.danger : NotificationType.warning,
+        date: _currentTime,
+      );
+
+      // Save to user's notifications collection
+      await _notificationRepository.addNotification(notification, targetUid: uid);
+      debugPrint("Logged critical notification for $uid");
+    } catch (e) {
+      debugPrint("Error triggering notification: $e");
+    }
+  }
+
+  Future<void> _triggerSittingNotification(SimulationEvent event) async {
+    try {
+      final targetUid = _ref.read(resolvedTargetUidProvider);
+      final uid = targetUid.isEmpty ? 'demo_user' : targetUid;
+
+      final notification = NotificationModel(
+        id: '', // Firestore will generate
+        title: 'นั่งนิ่งเป็นเวลานาน',
+        message: 'พบว่ามีการนั่งนานเกิน 1 ชั่วโมงที่กล้อง ${event.cameraId ?? "หลัก"} ควรมีการปรับเปลี่ยนอิริยาบถเพื่อสุขภาพที่ดี',
+        type: NotificationType.warning,
+        date: _currentTime,
+      );
+
+      await _notificationRepository.addNotification(notification, targetUid: uid);
+      debugPrint("Logged sitting notification for $uid");
+    } catch (e) {
+      debugPrint("Error triggering sitting notification: $e");
     }
   }
 
@@ -509,7 +569,8 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
 final healthStatusProvider = StateNotifierProvider<HealthStatusNotifier, HealthState>((ref) {
   final eventRepo = ref.watch(eventRepositoryProvider);
-  final notifier = HealthStatusNotifier(eventRepo, ref);
+  final notificationRepo = ref.watch(notificationRepositoryProvider);
+  final notifier = HealthStatusNotifier(eventRepo, notificationRepo, ref);
 
   // Watch selected targetUid and trigger loadState when it changes
   ref.listen(resolvedTargetUidProvider, (previous, next) {

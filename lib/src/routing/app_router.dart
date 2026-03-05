@@ -35,6 +35,7 @@ import 'package:lifeguardian/src/features/pose_detection/presentation/analysis_l
 import 'package:lifeguardian/src/features/notification/presentation/notification_screen.dart';
 import 'package:lifeguardian/src/features/events/presentation/events_screen.dart';
 import 'package:lifeguardian/src/features/pose_detection/presentation/pose_detector_view.dart';
+import 'package:lifeguardian/src/features/notification/data/notification_service.dart';
 
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -43,11 +44,12 @@ final _rootNavigatorKey = GlobalKey<NavigatorState>();
 bool _isFirstLaunch = true;
 
 final goRouterProvider = Provider<GoRouter>((ref) {
-  return GoRouter(
+  final router = GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/splash',
     refreshListenable: _AuthRefreshListenable(ref),
     routes: [
+      // ...
       // ... (routes stay same)
       GoRoute(
         path: '/splash',
@@ -346,6 +348,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
   );
+
+  return router;
 });
 
 /// A Listenable that notifies GoRouter when the Auth state changes.

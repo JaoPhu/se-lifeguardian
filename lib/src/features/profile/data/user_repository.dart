@@ -145,6 +145,21 @@ class UserRepository {
     }
   }
 
+  Future<void> saveFcmToken(String uid, String token) async {
+    try {
+      await _firestore.collection('users').doc(uid).update({
+        'fcm_tokens': FieldValue.arrayUnion([token]),
+        'last_token_update': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      // If doc doesn't have fcm_tokens yet, use set with merge
+      await _firestore.collection('users').doc(uid).set({
+        'fcm_tokens': [token],
+        'last_token_update': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+  }
+
   Future<bool> isUsernameTaken(String username, String currentUid) async {
     final normalized = username.trim().toLowerCase();
     if (normalized.isEmpty) return false;
