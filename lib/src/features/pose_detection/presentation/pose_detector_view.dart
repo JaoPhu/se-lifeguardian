@@ -12,6 +12,7 @@ import '../data/pose_detection_service.dart';
 import '../data/health_status_provider.dart';
 import 'pose_painter.dart';
 import 'package:video_player/video_player.dart';
+import '../../../common/widgets/top_notification_toast.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:go_router/go_router.dart';
@@ -63,6 +64,13 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   final bool _showDiagnosticInsights = true;
   final double _healthScore = 98.0;
   String _diagnosticMessage = "Scanning Systemic Alignment...";
+
+  // Notification state
+  String? _lastWarnedEventId;
+  bool _hasWarnedSittingForCurrentEvent = false;
+  // 60 simulation-seconds = 1 real second at 60x speed (adjust to 1800 for 30-min real threshold)
+  static const int _sittingWarningThresholdSeconds = 60;
+
 
   // Video Player state
   VideoPlayerController? _videoController;
@@ -607,6 +615,53 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
 
   @override
   Widget build(BuildContext context) {
+    // --- Notification Listener ---
+    ref.listen<HealthState>(healthStatusProvider, (previous, next) {
+      if (next.events.isEmpty) return;
+      final currentEvent = next.events.first;
+
+      // Reset sitting warning if it's a new event
+      if (_lastWarnedEventId != currentEvent.id) {
+        _lastWarnedEventId = currentEvent.id;
+        _hasWarnedSittingForCurrentEvent = false;
+      }
+
+      // Check for falling/near_fall
+      if (currentEvent.type == 'falling' || currentEvent.type == 'near_fall') {
+        // Prevent spamming the same fall warning multiple times in a row
+        // We'll use a local variable to track if we've shown it recently for this specific id
+        // Actually, for falling, we want it to show immediately.
+        // We will show it only if the previous state wasn't already falling/near_fall for THIS event
+        final wasAlreadyFalling = previous?.events.isNotEmpty == true &&
+            previous!.events.first.id == currentEvent.id &&
+            (previous.events.first.type == 'falling' || previous.events.first.type == 'near_fall');
+
+        if (!wasAlreadyFalling) {
+          TopNotificationToast.show(
+            context,
+            'ตรวจพบการล้ม! ⚠️',
+            'พบเหตุการณ์ล้มในกล้อง ${currentEvent.cameraId ?? "หลัก"} โปรดตรวจสอบทันที',
+            time: currentEvent.timestamp.split(':').sublist(0, 2).join(':'), 
+          );
+        }
+      }
+
+      // Check for prolonged sitting
+      if (currentEvent.type == 'sitting' && !_hasWarnedSittingForCurrentEvent) {
+        if (currentEvent.durationSeconds != null &&
+            currentEvent.durationSeconds! >= _sittingWarningThresholdSeconds) {
+          _hasWarnedSittingForCurrentEvent = true;
+          TopNotificationToast.show(
+            context,
+            'ระวังออฟฟิศซินโดรมถามหานะครับ! ⚠️',
+            'ลุกขึ้นหมุนหัวไหล่และสะบัดข้อมือสัก 2-3 นาทีดีไหมครับ? 💪',
+            time: currentEvent.timestamp.split(':').sublist(0, 2).join(':'), 
+          );
+        }
+      }
+    });
+    // -----------------------------
+
     if (widget.videoPath == null) {
       return const Scaffold(
         body: Center(child: Text("No video path provided.")),

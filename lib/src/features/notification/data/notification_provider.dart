@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../presentation/notification_screen.dart';
 import 'notification_repository.dart';
+import '../../group/providers/group_providers.dart';
 
 class NotificationState {
   final List<NotificationItem> notifications;
@@ -15,19 +16,17 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
   final NotificationRepository _repo;
   StreamSubscription? _subscription;
 
-  NotificationNotifier(this._repo) : super(NotificationState(notifications: [])) {
-    _init();
-  }
+  NotificationNotifier(this._repo) : super(NotificationState(notifications: []));
 
-  void _init() async {
-    // TODO: Fetch real subscribed UIDs from UserRepository or GroupRepository
-    // For now, we simulate an empty list or a hardcoded one for testing if needed.
-    // In a real app, this would be: 
-    // final user = _ref.read(userRepositoryProvider).currentUser;
-    // final initialTargets = user.subscribedTo ?? [];
+  void updateTarget(String targetUid) {
+    _subscription?.cancel();
     
-    final List<String> targetUids = []; 
-    // Example: targetUids.add('owner_uid_123');
+    if (targetUid.isEmpty) {
+      state = NotificationState(notifications: []);
+      return;
+    }
+
+    final List<String> targetUids = [targetUid]; 
 
     _subscription = _repo.watchNotifications(targetUids: targetUids).listen((models) {
       final items = models.map((m) {
@@ -36,15 +35,22 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
         if (m.type.name == 'warning') uiType = 'warning';
         if (m.type.name == 'danger') uiType = 'error';
 
-        // simple logic: if created in last 5 mins, mark as new for now (or manage via local storage/firestore field)
-        // For history, we just show them.
-        final isNew = DateTime.now().difference(m.date).inMinutes < 5; 
+        // For history, simple check if it is new
+        final isNew = DateTime.now().difference(m.date).inMinutes < 5;
+        
+        // Format time for display
+        final h = m.date.hour.toString().padLeft(2, '0');
+        final min = m.date.minute.toString().padLeft(2, '0');
+        final d = m.date.day.toString().padLeft(2, '0');
+        final mo = m.date.month.toString().padLeft(2, '0');
+        final timeStr = '$h:$min  $d/$mo/${m.date.year}';
 
         return NotificationItem(
           id: m.id,
           message: m.message,
           type: uiType,
           isNew: isNew,
+          time: timeStr,
         );
       }).toList();
 
@@ -64,20 +70,29 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
         id: n.id,
         message: n.message,
         type: n.type,
+        time: n.time,
         isNew: false, 
       );
     }).toList();
     state = NotificationState(notifications: updatedList);
   }
 
-  Future<void> addNotification(NotificationItem item) async {
-    // This might be used by Simulation/Logic to push local alerts to Firestore
-    // But typically the backend or detector does this.
-    // For now, we don't implementation writes here, as Repo handles it.
+  void removeNotification(String id) {
+    state = NotificationState(
+      notifications: state.notifications.where((n) => n.id != id).toList(),
+    );
+    // Also delete from Firestore
+    _repo.deleteNotification(id);
   }
 }
 
 final notificationProvider = StateNotifierProvider<NotificationNotifier, NotificationState>((ref) {
   final repo = ref.watch(notificationRepositoryProvider);
-  return NotificationNotifier(repo);
+  final notifier = NotificationNotifier(repo);
+
+  ref.listen<String>(resolvedTargetUidProvider, (previous, next) {
+    notifier.updateTarget(next);
+  }, fireImmediately: true);
+  
+  return notifier;
 });
