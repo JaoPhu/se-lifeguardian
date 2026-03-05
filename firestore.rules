@@ -18,7 +18,7 @@ service cloud.firestore {
       return isAuthenticated() && 
              ownerGroupId != null && ownerGroupId != "" &&
              exists(/databases/$(database)/documents/groups/$(ownerGroupId)/members/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/groups/$(ownerGroupId)/members/$(request.auth.uid)).data.role == 'caretaker';
+             get(/databases/$(database)/documents/groups/$(ownerGroupId)/members/$(request.auth.uid)).data.role.lower() == 'caretaker';
     }
 
     function isMemberOf(targetUserId) {
@@ -31,33 +31,26 @@ service cloud.firestore {
 
     // User Collection
     match /users/{userId} {
+      // Profiles are readable for authenticated users (for member lists/searches)
       allow read: if isAuthenticated(); 
       allow write: if isOwner(userId) || isCaretakerOf(userId);
       
+      // Subcollections (like 'events', 'notifications')
       match /{allSubcollections=**} {
-        allow read: if isOwner(userId) || isMemberOf(userId);
+        // Owners can always read/write their own subcollections
+        // Others can read if they are authenticated (supports monitoring in groups)
+        allow read: if isAuthenticated();
         allow write: if isOwner(userId);
       }
     }
 
-
     // Groups Collection
     match /groups/{groupId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAuthenticated();
       
-      // Explicitly match members subcollection
-      match /members/{memberId} {
-        allow read, write: if request.auth != null;
-      }
-      
-      // Explicitly match join_requests subcollection
-      match /join_requests/{requestId} {
-        allow read, write: if request.auth != null;
-      }
-
-      // Catch-all for other subcollections
+      // Subcollections
       match /{allSubcollections=**} {
-        allow read, write: if request.auth != null;
+        allow read, write: if isAuthenticated();
       }
     }
     

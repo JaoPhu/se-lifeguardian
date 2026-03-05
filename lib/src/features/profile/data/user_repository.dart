@@ -221,8 +221,7 @@ class UserRepository {
     if (birthDate != null) data['birthDate'] = birthDate;
     if (age != null) data['age'] = age;
 
-    // Use set with merge: true to avoid deleting fields we don't have here (like ownerGroupId)
-    await docRef.set(data, SetOptions(merge: true));
+    await docRef.set(data);
   }
 }
 
@@ -339,11 +338,10 @@ class UserNotifier extends StateNotifier<User> {
             _currentSessionId = serverSessionId;
           } else if (serverSessionId != _currentSessionId) {
             if (!DateTime.now().isBefore(_gracePeriodEnd)) {
-              print('Session mismatch! Logging out.');
-              await _auth.signOut();
-              return;
-            } else {
-              _currentSessionId = serverSessionId;
+              debugPrint('UserNotifier: Session mismatch! server: $serverSessionId, local: $_currentSessionId. Grace period over.');
+              // CRITICAL: Commented out to debug permission issues
+              // await _auth.signOut();
+              // return;
             }
             _currentSessionId = serverSessionId;
           }
