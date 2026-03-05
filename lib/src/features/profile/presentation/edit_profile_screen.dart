@@ -48,6 +48,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   dynamic _imageFile; // File on mobile, XFile on web
   bool _isUploading = false;
   String _targetAvatarUrl = '';
+  User? _targetUser; // Explicitly store the user being edited (Owner)
 
   @override
   void initState() {
@@ -91,6 +92,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       final doc = await ref.read(userRepositoryProvider).getUser(uid);
       if (doc != null) {
         setState(() {
+          _targetUser = doc;
           _nameController.text = doc.name;
           _usernameController.text = doc.username;
           _emailController.text = doc.email;
@@ -280,18 +282,21 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     }
 
     // Mandatory validation for BOTH onboarding and regular editing
-    if (name.isEmpty || usernameText.isEmpty || phone.isEmpty || birthDate.isEmpty || bloodType.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน (ชื่อจริง, Nickname, เบอร์โทร, วันเกิด, กรุ๊ปเลือด) เพื่อบันทึกข้อมูลครับ'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-      return;
+    // ✅ [Bypass] Identity validation if editing ONLY medical info (Caretaker context)
+    if (!widget.medicalOnly) {
+      if (name.isEmpty || usernameText.isEmpty || phone.isEmpty || birthDate.isEmpty || bloodType.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน (ชื่อจริง, Nickname, เบอร์โทร, วันเกิด, กรุ๊ปเลือด) เพื่อบันทึกข้อมูลครับ'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        return;
+      }
     }
 
     // Phone number length validation (Exactly 10 digits)
-    if (phone.length != 10) {
+    if (!widget.medicalOnly && phone.length != 10) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('กรุณากรอกเบอร์โทรศัพท์ให้ครบ 10 หลักครับ'),
@@ -304,28 +309,37 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     setState(() => _isUploading = true);
     try {
       final currentUser = ref.read(userProvider);
+      final fUser = ref.read(firebaseAuthProvider).currentUser;
+      final targetId = widget.editableUid ?? (currentUser.id.isEmpty ? (fUser?.uid ?? '') : currentUser.id);
+
+      // ✅ Determine which user object to base the update on
+      // If editableUid is provided, use _targetUser (the Owner), otherwise use currentUser (Self)
+      final baseUser = (widget.editableUid != null && _targetUser != null) ? _targetUser! : currentUser;
       
-      // Check if username is taken
-      final isTaken = await ref.read(userRepositoryProvider).isUsernameTaken(usernameText, currentUser.id);
-      if (isTaken) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Nickname นี้มีผู้ใช้งานแล้ว กรุณาใช้ชื่ออื่นครับ'),
-              backgroundColor: Colors.orange,
-            ),
-          );
+      // Check if username is taken (Only if identity is being edited)
+      if (!widget.medicalOnly) {
+        final isTaken = await ref.read(userRepositoryProvider).isUsernameTaken(usernameText, currentUser.id);
+        if (isTaken) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Nickname นี้มีผู้ใช้งานแล้ว กรุณาใช้ชื่ออื่นครับ'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          setState(() => _isUploading = false);
+          return;
         }
-        setState(() => _isUploading = false);
-        return;
       }
 
-      String avatarUrl = currentUser.avatarUrl;
+      String avatarUrl = baseUser.avatarUrl;
 
       // Upload image if picked
       if (_imageFile != null) {
         debugPrint('EditProfileScreen: Starting avatar upload...');
-        final newUrl = await ref.read(userRepositoryProvider).uploadAvatar(currentUser.id, _imageFile!);
+        // Correctly upload using the ID of the user being edited
+        final newUrl = await ref.read(userRepositoryProvider).uploadAvatar(targetId, _imageFile!);
         debugPrint('EditProfileScreen: Upload complete. URL: $newUrl');
         
         if (newUrl.isNotEmpty) {
@@ -335,27 +349,37 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         }
       }
 
-      final fUser = ref.read(firebaseAuthProvider).currentUser;
-      final targetId = currentUser.id.isEmpty ? (fUser?.uid ?? '') : currentUser.id;
 
-      final updatedUser = currentUser.copyWith(
-        id: targetId,
-        name: name,
-        username: usernameText,
-        email: _emailController.text.trim(),
-        phoneNumber: phone,
-        avatarUrl: avatarUrl,
-        birthDate: birthDate,
-        age: _ageController.text,
-        gender: _genderController.text,
-        bloodType: bloodType,
-        height: _heightController.text,
-        weight: _weightController.text,
-        medicalCondition: _medicalController.text,
-        currentMedications: _medicationsController.text,
-        drugAllergies: _drugAllergiesController.text,
-        foodAllergies: _foodAllergiesController.text,
-      );
+      final User updatedUser;
+      if (widget.medicalOnly) {
+        // ✅ STRICTOR: Only copy over medical fields to preserve Owner's basic identity 100%
+        updatedUser = baseUser.copyWith(
+          id: targetId,
+          medicalCondition: _medicalController.text.trim(),
+          currentMedications: _medicationsController.text.trim(),
+          drugAllergies: _drugAllergiesController.text.trim(),
+          foodAllergies: _foodAllergiesController.text.trim(),
+        );
+      } else {
+        updatedUser = baseUser.copyWith(
+          id: targetId,
+          name: name,
+          username: usernameText,
+          email: _emailController.text.trim(),
+          phoneNumber: phone,
+          avatarUrl: avatarUrl,
+          birthDate: birthDate,
+          age: _ageController.text,
+          gender: _genderController.text,
+          bloodType: bloodType,
+          height: _heightController.text,
+          weight: _weightController.text,
+          medicalCondition: _medicalController.text.trim(),
+          currentMedications: _medicationsController.text.trim(),
+          drugAllergies: _drugAllergiesController.text.trim(),
+          foodAllergies: _foodAllergiesController.text.trim(),
+        );
+      }
 
       if (widget.editableUid != null && widget.editableUid != currentUser.id) {
         // We are a Caretaker editing an Owner's profile directly
@@ -386,8 +410,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     // Listen to user profile changes to populate fields when data arrives (e.g. after Hot Restart)
-    ref.listen<User>(userProvider, (previous, next) {
-      if (next.id.isNotEmpty) {
+    // ✅ Skip this listener if we are editing ANOTHER user (Owner) to prevent self-data shadowing
+    if (widget.editableUid == null) {
+      ref.listen<User>(userProvider, (previous, next) {
+        if (next.id.isNotEmpty) {
         // Only update if the field is currently empty to avoid overwriting user input
         if (_nameController.text.isEmpty && next.name.isNotEmpty) {
           _nameController.text = next.name;
@@ -430,9 +456,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         if (_foodAllergiesController.text.isEmpty && next.foodAllergies.isNotEmpty) {
           _foodAllergiesController.text = next.foodAllergies;
         }
+        }
         setState(() {});
-      }
-    });
+      });
+    }
 
     final theme = Theme.of(context);
     // final isDark = theme.brightness == Brightness.dark; // Unused
@@ -463,7 +490,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               // Avatar Section
               Center(
                 child: GestureDetector(
-                  onTap: _isUploading ? null : _pickImage,
+                  onTap: (widget.medicalOnly || _isUploading) ? null : _pickImage,
                   child: Stack(
                     children: [
                       _imageFile != null
@@ -620,17 +647,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 ],
               ),
 
-              _buildInputField('Medical condition', _medicalController, theme, hintText: 'Hypertension'),
-              _buildInputField('Current Medications', _medicationsController, theme, hintText: 'Amlodipine 5mg'),
-              _buildInputField('Drug Allergies', _drugAllergiesController, theme, hintText: 'None'),
-              _buildInputField('Food Allergies', _foodAllergiesController, theme, hintText: 'Peanuts'),
+              _buildInputField('Medical condition', _medicalController, theme, hintText: 'Hypertension', isMultiline: true),
+              _buildInputField('Current Medications', _medicationsController, theme, hintText: 'Amlodipine 5mg', isMultiline: true),
+              _buildInputField('Drug Allergies', _drugAllergiesController, theme, hintText: 'None', isMultiline: true),
+              _buildInputField('Food Allergies', _foodAllergiesController, theme, hintText: 'Peanuts', isMultiline: true),
 
               const SizedBox(height: 24),
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: _save,
+                      onPressed: (widget.editableUid != null && _targetUser == null) ? null : _save,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0D9488),
                         foregroundColor: Colors.white,
@@ -671,7 +698,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     );
   }
 
-  Widget _buildInputField(String label, TextEditingController controller, ThemeData theme, {bool isNumeric = false, String? hintText, bool readOnly = false, FocusNode? focusNode, bool isRequired = false}) {
+  Widget _buildInputField(String label, TextEditingController controller, ThemeData theme, {bool isNumeric = false, String? hintText, bool readOnly = false, FocusNode? focusNode, bool isRequired = false, bool isMultiline = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
       child: Column(
@@ -696,7 +723,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             controller: controller,
             focusNode: focusNode,
             readOnly: readOnly,
-            keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
+            keyboardType: isMultiline ? TextInputType.multiline : (isNumeric ? TextInputType.number : TextInputType.text),
+            maxLines: isMultiline ? null : 1,
             inputFormatters: const [], // Removed all restrictive formatters
             decoration: InputDecoration(
               filled: true,

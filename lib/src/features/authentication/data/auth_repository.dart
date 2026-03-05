@@ -320,7 +320,53 @@ class AuthRepository {
     final firestore = FirebaseFirestore.instance;
     final userRef = firestore.collection('users').doc(uid);
 
-    // 1. Delete associated subcollections FIRST
+    // 0. Fetch user data to find groups
+    final userSnap = await userRef.get();
+    final userData = userSnap.data() ?? {};
+    final ownerGroupId = userData['ownerGroupId'] as String?;
+    final joinedGroupIds = List<String>.from(userData['joinedGroupIds'] ?? []);
+
+    // 1. Cleanup Owned Group (If exists)
+    if (ownerGroupId != null && ownerGroupId.isNotEmpty) {
+      try {
+        final groupRef = firestore.collection('groups').doc(ownerGroupId);
+        
+        // Delete members
+        final members = await groupRef.collection('members').get();
+        for (var doc in members.docs) {
+          await doc.reference.delete();
+        }
+        
+        // Delete join requests
+        final requests = await groupRef.collection('join_requests').get();
+        for (var doc in requests.docs) {
+          await doc.reference.delete();
+        }
+
+        // Delete group document
+        await groupRef.delete();
+        debugPrint('AuthRepository: Owned group $ownerGroupId deleted');
+      } catch (e) {
+        debugPrint('AuthRepository: Error deleting owned group: $e');
+      }
+    }
+
+    // 2. Remove self from Joined Groups
+    for (final groupId in joinedGroupIds) {
+      try {
+        await firestore
+            .collection('groups')
+            .doc(groupId)
+            .collection('members')
+            .doc(uid)
+            .delete();
+        debugPrint('AuthRepository: Removed from joined group $groupId');
+      } catch (e) {
+        debugPrint('AuthRepository: Error removing from joined group $groupId: $e');
+      }
+    }
+
+    // 3. Delete associated subcollections
     // (Events)
     try {
       final events = await userRef.collection('events').get();
@@ -343,7 +389,7 @@ class AuthRepository {
       debugPrint('AuthRepository: Error deleting notifications: $e');
     }
 
-    // 2. Delete main user document LAST
+    // 4. Delete main user document LAST
     await userRef.delete();
     debugPrint('AuthRepository: Main user document deleted');
   }

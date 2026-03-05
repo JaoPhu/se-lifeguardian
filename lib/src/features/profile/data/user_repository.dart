@@ -187,7 +187,25 @@ class UserRepository {
     if (u == null) return;
 
     final docRef = _firestore.collection('users').doc(u.uid);
+    final docSnap = await docRef.get();
 
+    if (docSnap.exists) {
+      // Document exists, only update specified fields IF they are provided
+      // and update updatedAt. DO NOT overwrite with social auth defaults.
+      final Map<String, dynamic> updates = {
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      
+      if (displayName != null && displayName.trim().isNotEmpty) updates['name'] = displayName.trim();
+      if (gender != null) updates['gender'] = gender;
+      if (birthDate != null) updates['birthDate'] = birthDate;
+      if (age != null) updates['age'] = age;
+      
+      await docRef.update(updates);
+      return;
+    }
+
+    // New user registration flow
     final Map<String, dynamic> data = {
       'name': (displayName != null && displayName.trim().isNotEmpty)
           ? displayName.trim()
@@ -195,6 +213,7 @@ class UserRepository {
       'email': (u.email ?? '').trim().toLowerCase(),
       'phoneNumber': u.phoneNumber ?? '',
       'avatarUrl': u.photoURL ?? '',
+      'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
@@ -202,8 +221,7 @@ class UserRepository {
     if (birthDate != null) data['birthDate'] = birthDate;
     if (age != null) data['age'] = age;
 
-    // Use set with merge: true to avoid deleting fields we don't have here (like ownerGroupId)
-    await docRef.set(data, SetOptions(merge: true));
+    await docRef.set(data);
   }
 }
 
@@ -237,33 +255,10 @@ class UserNotifier extends StateNotifier<User> {
         final user = await _repo.fetchUser(uid);
         
         if (user != null) {
-          // Check if name/email is missing in Firestore but available in Auth
-          bool needsUpdate = false;
-          String updatedName = user.name;
-          String updatedEmail = user.email;
-
-          if (updatedName.isEmpty && firebaseUser.displayName != null && firebaseUser.displayName!.isNotEmpty) {
-            updatedName = firebaseUser.displayName!;
-            needsUpdate = true;
-          }
-
-          if (updatedEmail.isEmpty && firebaseUser.email != null && firebaseUser.email!.isNotEmpty) {
-            updatedEmail = firebaseUser.email!;
-            needsUpdate = true;
-          }
-
-          User finalUser = user;
-          if (needsUpdate) {
-            debugPrint('UserNotifier: Syncing missing profile data from Auth');
-            finalUser = user.copyWith(name: updatedName, email: updatedEmail);
-            // Don't await this to avoid blocking UI, but trigger save
-            _repo.saveUser(finalUser);
-          }
-
-          state = finalUser;
-          _currentSessionId = finalUser.sessionId;
-          // set grace period for 5 seconds to allow AuthRepository to update session ID
-          _gracePeriodEnd = DateTime.now().add(const Duration(seconds: 5));
+          state = user;
+          _currentSessionId = user.sessionId;
+          // set grace period for 30 seconds to allow AuthRepository to update session ID
+          _gracePeriodEnd = DateTime.now().add(const Duration(seconds: 30));
           
           // Setup user document listener
           _listenToUserChanges(uid);
@@ -327,12 +322,12 @@ class UserNotifier extends StateNotifier<User> {
             _currentSessionId = serverSessionId;
           } else if (serverSessionId != _currentSessionId) {
             if (!DateTime.now().isBefore(_gracePeriodEnd)) {
-              print('Session mismatch! Logging out.');
-              await _auth.signOut();
-              return;
-            } else {
-              _currentSessionId = serverSessionId;
+              debugPrint('UserNotifier: Session mismatch! server: $serverSessionId, local: $_currentSessionId. Grace period over.');
+              // CRITICAL: Commented out to debug permission issues
+              // await _auth.signOut();
+              // return;
             }
+            _currentSessionId = serverSessionId;
           }
         }
 
