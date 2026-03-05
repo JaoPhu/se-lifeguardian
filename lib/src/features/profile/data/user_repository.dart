@@ -79,6 +79,9 @@ class UserRepository {
       };
 
       await _firestore.collection('users').doc(uid).set(data, SetOptions(merge: true));
+      
+      // ✅ Sync profile changes (avatar, name) to all associated groups
+      await _syncProfileToGroups(user);
     } catch (e) {
       print('Error saving user: $e');
       rethrow;
@@ -92,7 +95,54 @@ class UserRepository {
     final downloadUrl = await _storage.uploadProfileImage(uid, file);
     // Use set with merge: true instead of update() to support new users
     await _firestore.collection('users').doc(uid).set({'avatarUrl': downloadUrl}, SetOptions(merge: true));
+    
+    // Sync the new avatarUrl immediately to groups
+    final currentUserData = await fetchUser(uid);
+    if (currentUserData != null) {
+      final updatedUser = currentUserData.copyWith(avatarUrl: downloadUrl);
+      await _syncProfileToGroups(updatedUser);
+    }
+    
     return downloadUrl;
+  }
+
+  // ✅ Helper method to broadcast profile changes to groups
+  Future<void> _syncProfileToGroups(User user) async {
+    final uid = user.id;
+    if (uid.isEmpty) return;
+
+    final batch = _firestore.batch();
+    final memberData = {
+      'displayName': user.name.isNotEmpty ? user.name : 'Unknown',
+      'username': user.username,
+      'avatarUrl': user.avatarUrl,
+    };
+
+    // 1. Update owner group
+    if (user.ownerGroupId != null && user.ownerGroupId!.isNotEmpty) {
+      batch.set(
+        _firestore.collection('groups').doc(user.ownerGroupId).collection('members').doc(uid),
+        memberData,
+        SetOptions(merge: true),
+      );
+    }
+
+    // 2. Update joined groups
+    for (final groupId in user.joinedGroupIds) {
+      if (groupId.isNotEmpty) {
+        batch.set(
+          _firestore.collection('groups').doc(groupId).collection('members').doc(uid),
+          memberData,
+          SetOptions(merge: true),
+        );
+      }
+    }
+
+    try {
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error syncing profile to groups: $e');
+    }
   }
 
   Future<bool> isUsernameTaken(String username, String currentUid) async {
