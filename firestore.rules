@@ -40,10 +40,22 @@ service cloud.firestore {
       }
     }
 
+
     // Groups Collection
     match /groups/{groupId} {
       allow read, write: if request.auth != null;
       
+      // Explicitly match members subcollection
+      match /members/{memberId} {
+        allow read, write: if request.auth != null;
+      }
+      
+      // Explicitly match join_requests subcollection
+      match /join_requests/{requestId} {
+        allow read, write: if request.auth != null;
+      }
+
+      // Catch-all for other subcollections
       match /{allSubcollections=**} {
         allow read, write: if request.auth != null;
       }
