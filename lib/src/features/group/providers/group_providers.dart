@@ -70,14 +70,17 @@ final targetUsersProvider = FutureProvider<List<TargetUser>>((ref) async {
 
   if (user.joinedGroupIds.isNotEmpty) {
     try {
-      final futures = user.joinedGroupIds.map((groupId) => 
-        FirebaseFirestore.instance.collection('groups').doc(groupId).get()
-      );
+      final futures = user.joinedGroupIds.map((groupId) => Future.wait([
+        FirebaseFirestore.instance.collection('groups').doc(groupId).get(),
+        FirebaseFirestore.instance.collection('groups').doc(groupId).collection('members').doc(user.id).get()
+      ]));
       
-      final snapshots = await Future.wait(futures);
+      final snapshotPairs = await Future.wait(futures);
       
-      for (final doc in snapshots) {
-        if (doc.exists) {
+      for (final pair in snapshotPairs) {
+        final doc = pair[0];
+        final memberDoc = pair[1];
+        if (doc.exists && memberDoc.exists) {
           final data = doc.data() ?? {};
           final ownerUid = data['ownerUid'] as String?;
           final groupName = data['name'] as String? ?? 'Unknown Group';
