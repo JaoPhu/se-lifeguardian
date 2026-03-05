@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../statistics/domain/simulation_event.dart';
 import '../../events/data/event_repository.dart';
 import '../../events/data/cloud_verification_service.dart';
@@ -192,6 +193,28 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
     _updateScoreBasedOnActivity(); // Trigger regular updates based on new time
   }
 
+  Future<Position?> _getCurrentLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return null;
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return null;
+      }
+      
+      if (permission == LocationPermission.deniedForever) return null;
+
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+    } catch (e) {
+      debugPrint("Error fetching location: $e");
+      return null;
+    }
+  }
+
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (state.status == HealthStatus.none) return; 
@@ -269,17 +292,20 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
     // Process the activity change immediately.
     // forceSync allows updating the current event's duration even if activity name hasn't changed.
     if (state.currentActivity != activity || snapshotPath != null || forceSync) {
-      _processActivityChange(activity, snapshotPath, cameraId: cameraId, customTime: customTime, forceSync: forceSync);
+      unawaited(_processActivityChange(activity, snapshotPath, cameraId: cameraId, customTime: customTime, forceSync: forceSync));
     }
   }
 
-  void _processActivityChange(String activity, String? snapshotPath, {String? cameraId, DateTime? customTime, bool forceSync = false}) {
+  Future<void> _processActivityChange(String activity, String? snapshotPath, {String? cameraId, DateTime? customTime, bool forceSync = false}) async {
     // If we're just forcing a sync of the current activity duration, don't return early
     if (state.currentActivity == activity && snapshotPath == null && !forceSync) return;
 
     final now = customTime ?? _currentTime;
     final timestamp = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
     final dateStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+    // Fetch GPS for ALL events if possible, or specifically for critical ones
+    final position = await _getCurrentLocation();
 
     // 1. Close the previous event (or current if forceSync)
     final List<SimulationEvent> updatedEvents = List.from(state.events);
@@ -321,10 +347,14 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       durationSeconds: 0, // Initial duration
       duration: "0.00 hr", 
       description: _getActivityDescription(activity),
+      latitude: position?.latitude,
+      longitude: position?.longitude,
     );
 
-    updatedEvents.insert(0, newEvent);
+    _processNewEvent(newEvent, activity, updatedEvents, position: position);
+  }
 
+  Future<void> _processNewEvent(SimulationEvent newEvent, String activity, List<SimulationEvent> updatedEvents, {Position? position}) async {
     if (activity == 'falling' || activity == 'near_fall') {
       final penalty = activity == 'falling' ? 600 : 200;
       final newScore = (state.score - penalty).clamp(0, 1000);
@@ -339,11 +369,11 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       _syncAndVerify(newEvent);
       
       // NEW: Trigger Notification Model creation
-      _triggerCriticalNotification(activity, newEvent);
+      _triggerCriticalNotification(activity, newEvent, position: position);
     } else {
       state = state.copyWith(
         currentActivity: activity,
-        events: updatedEvents,
+        events: [newEvent, ...updatedEvents],
         status: state.status == HealthStatus.none ? HealthStatus.normal : state.status,
       );
       // Sync basic activity change to Firestore
@@ -509,13 +539,16 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
     }
   }
 
-  Future<void> _triggerCriticalNotification(String activity, SimulationEvent event) async {
+  Future<void> _triggerCriticalNotification(String activity, SimulationEvent event, {Position? position}) async {
     try {
       final targetUid = _ref.read(resolvedTargetUidProvider);
-      // Allow 'demo_user' in demo mode
       final uid = targetUid.isEmpty ? 'demo_user' : targetUid;
 
       final isFalling = activity == 'falling';
+      
+      // Use provided position or fetch if missing
+      final pos = position ?? await _getCurrentLocation();
+
       final notification = NotificationModel(
         id: '', // Firestore will generate
         title: isFalling ? 'ตรวจพบการล้ม!' : 'ตรวจพบอาการเสียหลัก (Near Fall)',
@@ -524,11 +557,16 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
             : 'พบแนวโน้มการล้มในกล้อง ${event.cameraId ?? "หลัก"} โปรดติดตามสถานะอย่างใกล้ชิด',
         type: isFalling ? NotificationType.danger : NotificationType.warning,
         date: _currentTime,
+        latitude: pos?.latitude,
+        longitude: pos?.longitude,
+        imageUrl: event.remoteImageUrl ?? event.snapshotUrl, // Preference remote
+        confidence: event.confidence,
+        eventId: event.id,
       );
 
       // Save to user's notifications collection
       await _notificationRepository.addNotification(notification, targetUid: uid);
-      debugPrint("Logged critical notification for $uid");
+      debugPrint("Logged critical notification with GPS for $uid");
     } catch (e) {
       debugPrint("Error triggering notification: $e");
     }
