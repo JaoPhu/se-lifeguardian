@@ -25,34 +25,36 @@ class UserAvatar extends StatelessWidget {
         color: theme.cardColor,
       ),
       clipBehavior: Clip.antiAlias,
-      child: hasImage
-          ? Image.network(
-              avatarUrl!,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Icon(
-                  LucideIcons.user,
-                  size: radius,
-                  color: theme.iconTheme.color?.withValues(alpha: 0.5),
-                );
-              },
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return Center(
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                        : null,
-                  ),
-                );
-              },
-            )
-          : Icon(
-              LucideIcons.user,
-              size: radius,
-              color: theme.iconTheme.color?.withValues(alpha: 0.5),
-            ),
+      child: ClipOval(
+        child: hasImage
+            ? Image.network(
+                avatarUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Icon(
+                    LucideIcons.user,
+                    size: radius,
+                    color: theme.iconTheme.color?.withValues(alpha: 0.5),
+                  );
+                },
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                          : null,
+                    ),
+                  );
+                },
+              )
+            : Icon(
+                LucideIcons.user,
+                size: radius,
+                color: theme.iconTheme.color?.withValues(alpha: 0.5),
+              ),
+      ),
     );
   }
 }
