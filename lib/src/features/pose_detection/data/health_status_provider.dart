@@ -635,7 +635,6 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
       // Save to user's notifications collection
       await _notificationRepository.addNotification(notification, targetUid: uid);
-      
       // Locally show the banner so the user testing the Demo immediately sees it
       try {
         await _ref.read(notificationServiceProvider).showLocalAppNotification(
