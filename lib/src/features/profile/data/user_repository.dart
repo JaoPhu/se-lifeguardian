@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:flutter/foundation.dart';
@@ -189,23 +188,22 @@ class UserRepository {
 
     final docRef = _firestore.collection('users').doc(u.uid);
 
-    await docRef.set({
-      // ใช้ field ชื่อ "name" ให้ตรงกับ fetchUser()/saveUser() ของเธอ
+    final Map<String, dynamic> data = {
       'name': (displayName != null && displayName.trim().isNotEmpty)
           ? displayName.trim()
           : (u.displayName ?? (u.email?.split('@').first ?? 'Unknown')),
       'email': (u.email ?? '').trim().toLowerCase(),
       'phoneNumber': u.phoneNumber ?? '',
       'avatarUrl': u.photoURL ?? '',
-      'gender': gender,
-      'birthDate': birthDate,
-      'age': age,
-      // เผื่อใช้กับ group
-      'ownerGroupId': null,
-      'joinedGroupIds': [],
       'updatedAt': FieldValue.serverTimestamp(),
-      'createdAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    };
+
+    if (gender != null) data['gender'] = gender;
+    if (birthDate != null) data['birthDate'] = birthDate;
+    if (age != null) data['age'] = age;
+
+    // Use set with merge: true to avoid deleting fields we don't have here (like ownerGroupId)
+    await docRef.set(data, SetOptions(merge: true));
   }
 }
 
@@ -267,8 +265,8 @@ class UserNotifier extends StateNotifier<User> {
           // set grace period for 5 seconds to allow AuthRepository to update session ID
           _gracePeriodEnd = DateTime.now().add(const Duration(seconds: 5));
           
-          // Setup session listener
-          _listenToSessionChanges(uid);
+          // Setup user document listener
+          _listenToUserChanges(uid);
         } else {
           // Doc EXPLICITLY doesn't exist yet
           // CRITCAL FIX: Do NOT prefill the `id` here with `firebaseUser.uid`.
@@ -312,7 +310,7 @@ class UserNotifier extends StateNotifier<User> {
     }
   }
 
-  void _listenToSessionChanges(String uid) {
+  void _listenToUserChanges(String uid) {
     _sessionSubscription?.cancel();
     _sessionSubscription = _firestore
         .collection('users')
@@ -320,30 +318,52 @@ class UserNotifier extends StateNotifier<User> {
         .snapshots()
         .listen((snapshot) async {
       if (snapshot.exists && snapshot.data() != null) {
-        final serverSessionId = snapshot.data()!['sessionId'] as String?;
+        final data = snapshot.data()!;
+        
+        // 1. Session check (Security/Logout)
+        final serverSessionId = data['sessionId'] as String?;
         if (serverSessionId != null) {
           if (_currentSessionId == null) {
-            // Initial load from stream
             _currentSessionId = serverSessionId;
           } else if (serverSessionId != _currentSessionId) {
-            // Check for grace period (Race condition fix for Login)
-            if (DateTime.now().isBefore(_gracePeriodEnd)) {
-               // Accept the new session ID as ours (upgrade)
-               print('UserNotifier: Combining session mismatch due to grace period. Upgrading $_currentSessionId -> $serverSessionId');
-               _currentSessionId = serverSessionId;
-            } else {
-              // Mismatch! Someone else logged in.
-              print('Session mismatch! Logging out. Local: $_currentSessionId, Server: $serverSessionId');
+            if (!DateTime.now().isBefore(_gracePeriodEnd)) {
+              print('Session mismatch! Logging out.');
               await _auth.signOut();
-              _sessionSubscription?.cancel();
-              _sessionSubscription = null;
-              _currentSessionId = null;
-              state = const User(
-                id: '', name: '', username: '', email: '', phoneNumber: '', avatarUrl: '', 
-                birthDate: '', age: '', gender: '', bloodType: '', height: '', weight: '', 
-                medicalCondition: '', currentMedications: '', drugAllergies: '', foodAllergies: '');
+              return;
+            } else {
+              _currentSessionId = serverSessionId;
             }
           }
+        }
+
+        // 2. Full state sync
+        // We only update if the internal state is already initialized (id not empty)
+        // or if we are transition from empty to populated.
+        final newUser = User(
+          id: uid,
+          name: data['name'] ?? '',
+          username: data['username'] ?? '',
+          email: data['email'] ?? '',
+          phoneNumber: data['phoneNumber'] ?? '',
+          avatarUrl: data['avatarUrl'] ?? '',
+          birthDate: data['birthDate'] ?? '',
+          age: data['age'] ?? '',
+          gender: data['gender'] ?? '',
+          bloodType: data['bloodType'] ?? '',
+          height: data['height'] ?? '',
+          weight: data['weight'] ?? '',
+          medicalCondition: data['medicalCondition'] ?? '',
+          currentMedications: data['currentMedications'] ?? '',
+          drugAllergies: data['drugAllergies'] ?? '',
+          foodAllergies: data['foodAllergies'] ?? '',
+          ownerGroupId: data['ownerGroupId'],
+          joinedGroupIds: List<String>.from(data['joinedGroupIds'] ?? []),
+          sessionId: serverSessionId,
+        );
+
+        // Only update if something actually changed to avoid unnecessary rebuilds
+        if (state != newUser) {
+          state = newUser;
         }
       }
     });
