@@ -167,13 +167,19 @@ class GroupRepository {
     final alreadyMember = await _membersCol(groupId).doc(_uid).get();
     if (alreadyMember.exists) return;
 
-    await _requestsCol(groupId).doc(_uid).set({
-      'uid': _uid,
-      'displayName': displayName,
-      'username': username,
-      'avatarUrl': avatarUrl,
-      'createdAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    await _db.runTransaction((tx) async {
+      tx.set(_requestsCol(groupId).doc(_uid), {
+        'uid': _uid,
+        'displayName': displayName,
+        'username': username,
+        'avatarUrl': avatarUrl,
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      tx.set(_userRef(_uid), {
+        'joinedGroupIds': FieldValue.arrayUnion([groupId]),
+      }, SetOptions(merge: true));
+    });
   }
 
   /// owner/admin: approve -> ย้าย request ไป members
@@ -198,11 +204,6 @@ class GroupRepository {
         'username': username,
         'avatarUrl': avatarUrl,
         'joinedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      // NEW: Also add to user's joinedGroupIds
-      tx.set(_userRef(targetUid), {
-        'joinedGroupIds': FieldValue.arrayUnion([groupId]),
       }, SetOptions(merge: true));
 
       tx.delete(reqRef);
