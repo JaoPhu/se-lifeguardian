@@ -184,6 +184,14 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
               ),
               const SizedBox(height: 16),
               ListTile(
+                leading: Container(
+                  width: 12,
+                  height: 12,
+                  decoration: const BoxDecoration(
+                    color: Colors.orange,
+                    shape: BoxShape.circle,
+                  ),
+                ),
                 title: const Text('Caretaker'),
                 subtitle: const Text('Can assist in managing alerts and events.'),
                 onTap: () async {
@@ -202,7 +210,16 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                   }
                 },
               ),
+              const Divider(),
               ListTile(
+                leading: Container(
+                  width: 12,
+                  height: 12,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF0D9488),
+                    shape: BoxShape.circle,
+                  ),
+                ),
                 title: const Text('Member'),
                 subtitle: const Text('Standard group participant.'),
                 onTap: () async {
@@ -236,87 +253,88 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
       context: context,
       builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            future: FirebaseFirestore.instance.collection('users').doc(member.uid).get(),
-            builder: (context, snap) {
-              final data = snap.data?.data() ?? {};
-              final email = (data['email'] as String?) ?? '-';
-              final phone = (data['phoneNumber'] as String?) ?? '-';
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                future: FirebaseFirestore.instance.collection('users').doc(member.uid).get(),
+                builder: (context, snap) {
+                  final data = snap.data?.data() ?? {};
+                  final emailVal = data['email'] as String?;
+                  final phoneVal = data['phoneNumber'] as String?;
+                  final email = (emailVal == null || emailVal.isEmpty) ? '-' : emailVal;
+                  final phone = (phoneVal == null || phoneVal.isEmpty) ? '-' : phoneVal;
 
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Stack(
-                    alignment: Alignment.center,
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       UserAvatar(
                         avatarUrl: member.avatarUrl,
                         radius: 50,
                       ),
-                      if (onEdit != null)
-                        Positioned(
-                          top: 0,
-                          right: -8, // Adjust visual alignment if needed
-                          child: IconButton(
-                            icon: const Icon(Icons.edit, color: Color(0xFF0D9488)),
-                            onPressed: () {
-                              Navigator.pop(context); // Close dialog first
-                              onEdit();
-                            },
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    member.username.isNotEmpty ? member.username : 'Unknown',
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                  Text(_roleLabel(member.role), style: const TextStyle(color: Colors.grey)),
-                  const Divider(height: 32),
-                  Row(
-                    children: [
-                      const Icon(Icons.person, size: 20, color: Color(0xFF0D9488)),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(member.displayName)),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      const Icon(Icons.email, size: 20, color: Color(0xFF0D9488)),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(email)),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      const Icon(Icons.phone, size: 20, color: Color(0xFF0D9488)),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(phone)),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0D9488),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      const SizedBox(height: 16),
+                      Text(
+                        member.username.isNotEmpty ? member.username : 'Unknown',
+                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                       ),
-                      child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
+                      Text(_roleLabel(member.role), style: const TextStyle(color: Colors.grey)),
+                      const Divider(height: 32),
+                      Row(
+                        children: [
+                          const Icon(Icons.person, size: 20, color: Color(0xFF0D9488)),
+                          const SizedBox(width: 12),
+                          Expanded(child: Text(member.displayName)),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Icon(Icons.email, size: 20, color: Color(0xFF0D9488)),
+                          const SizedBox(width: 12),
+                          Expanded(child: Text(email)),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Icon(Icons.phone, size: 20, color: Color(0xFF0D9488)),
+                          const SizedBox(width: 12),
+                          Expanded(child: Text(phone)),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0D9488),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+            if (onEdit != null)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: IconButton(
+                  icon: const Icon(Icons.edit, color: Color(0xFF0D9488)),
+                  onPressed: () {
+                    Navigator.pop(context); // Close dialog first
+                    onEdit();
+                  },
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -411,22 +429,25 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
   Future<void> _confirmRemove({
     required String groupId,
     required GroupMember member,
+    bool isSelf = false,
   }) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Center(
+        title: Center(
           child: Text(
-            'Remove member?',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            isSelf ? 'Leave group?' : 'Remove member?',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
           ),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Remove ${member.username.isNotEmpty ? member.username : member.displayName} from this group?',
+              isSelf 
+                ? 'Are you sure you want to leave this group?'
+                : 'Remove ${member.username.isNotEmpty ? member.username : member.displayName} from this group?',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 14),
             ),
@@ -455,7 +476,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                     ),
-                    child: const Text('Remove', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: Text(isSelf ? 'Leave' : 'Remove', style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -552,7 +573,11 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.group, size: 16, color: _activeTab == 'my-group' ? Colors.white : Colors.grey),
+                                Icon(
+                                  Icons.group, 
+                                  size: 16, 
+                                  color: _activeTab == 'my-group' ? Colors.white : Colors.grey
+                                ),
                                 const SizedBox(width: 8),
                                 Text(
                                   'My Group',
@@ -578,7 +603,11 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.smartphone, size: 16, color: _activeTab == 'join-group' ? Colors.white : Colors.grey),
+                                Icon(
+                                  Icons.smartphone, 
+                                  size: 16, 
+                                  color: _activeTab == 'join-group' ? Colors.white : Colors.grey
+                                ),
                                 const SizedBox(width: 8),
                                 Text(
                                   'Join Group',
@@ -610,6 +639,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
   // ---------- MY GROUP ----------
   Widget _buildMyGroupContent() {
     final ownerGroupAsync = ref.watch(ownerGroupProvider);
+    final joinedGroupsAsync = ref.watch(joinedGroupsProvider);
 
     return ownerGroupAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -648,6 +678,15 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                   ],
                 ),
               ),
+              const SizedBox(height: 32),
+              
+              // Shows joined groups even if no owner group exists
+              joinedGroupsAsync.when(
+                data: (groups) => _buildJoinedGroupsList(groups),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Text('Joined groups error: $e'),
+              ),
+              
               const SizedBox(height: 120),
             ],
           );
@@ -795,10 +834,20 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                             groupId: group.id,
                             member: m,
                             allMembers: sortedMembers,
+                            canChangeRole: true, // User is owner of this group
                           ))
                       .toList(),
                 );
               },
+            ),
+
+            const SizedBox(height: 32),
+
+            // Shows joined groups below owner group
+            joinedGroupsAsync.when(
+              data: (groups) => _buildJoinedGroupsList(groups),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Text('Joined groups error: $e'),
             ),
 
             const SizedBox(height: 120),
@@ -807,6 +856,110 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
       },
     );
   }
+
+  Widget _buildJoinedGroupsList(List<Group> groups) {
+    if (groups.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Row(
+          children: [
+            Text('🤝', style: TextStyle(fontSize: 18)),
+            const SizedBox(width: 8),
+            Text(
+              'Groups you joined',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0D9488),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ...groups.map((group) => _buildJoinedGroupCard(group)),
+      ],
+    );
+  }
+
+  Widget _buildJoinedGroupCard(Group group) {
+    final membersAsync = ref.watch(groupMembersProvider(group.id));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: Row(
+            children: [
+              Text(
+                group.name,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0D9488)),
+              ),
+              const SizedBox(width: 8),
+              membersAsync.when(
+                data: (members) => Text(
+                  '(${members.length})',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0D9488)),
+                ),
+                loading: () => const Text('(...)'),
+                error: (e, _) => const Text('(err)'),
+              ),
+            ],
+          ),
+        ),
+        membersAsync.when(
+          data: (members) {
+            final sortedMembers = List<GroupMember>.from(members)
+              ..sort((a, b) {
+                if (a.role == 'owner' && b.role != 'owner') return -1;
+                if (a.role != 'owner' && b.role == 'owner') return 1;
+                return 0;
+              });
+
+            return Column(
+              children: sortedMembers
+                  .map((m) => _buildMemberCard(
+                        groupId: group.id,
+                        member: m,
+                        allMembers: sortedMembers,
+                        canChangeRole: false, // User is NOT owner of joined groups
+                      ))
+                  .toList(),
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) {
+            // If we get a permission error, it's highly likely we aren't a member yet
+            if (e.toString().contains('permission-denied')) {
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.hourglass_empty, color: Colors.orange, size: 20),
+                    SizedBox(width: 12),
+                    Text(
+                      'Waiting for owner to approve...',
+                      style: TextStyle(color: Colors.orange, fontSize: 13, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              );
+            }
+            return Text('Error loading members: $e');
+          },
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
 
   Widget _buildRequestCard({
     required String groupId,
@@ -912,6 +1065,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
     required String groupId,
     required GroupMember member,
     required List<GroupMember> allMembers,
+    required bool canChangeRole,
   }) {
     final roleType = _roleLabel(member.role);
 
@@ -962,35 +1116,47 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                       color: Theme.of(context).textTheme.bodyLarge?.color,
                     ),
                   ),
-                  Text(
-                    roleType,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
                 ],
               ),
             ),
-            GestureDetector(
-              onTap: () => _showRoleSelector(groupId: groupId, member: member),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: roleBgColor,
-                  border: Border.all(color: roleBorderColor),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  roleType,
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: roleTextColor),
+            SizedBox(
+              width: 80, // Fixed width for alignment in a column
+              child: GestureDetector(
+                onTap: (canChangeRole && roleType != 'Owner') 
+                    ? () => _showRoleSelector(groupId: groupId, member: member)
+                    : null,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: roleBgColor,
+                    border: Border.all(color: roleBorderColor),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    roleType,
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: roleTextColor),
+                  ),
                 ),
               ),
             ),
-            if (roleType != 'Owner') ...[
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () => _confirmRemove(groupId: groupId, member: member),
-                child: const Icon(Icons.delete_outline, size: 20, color: Colors.grey),
-              ),
-            ],
+            const SizedBox(width: 8),
+            () {
+              final isMe = member.uid == currentUserUid;
+              final showDelete = (canChangeRole && roleType != 'Owner') || (!canChangeRole && isMe);
+
+              if (showDelete) {
+                return GestureDetector(
+                  onTap: () => _confirmRemove(
+                    groupId: groupId,
+                    member: member,
+                    isSelf: !canChangeRole && isMe,
+                  ),
+                  child: const Icon(Icons.delete_outline, size: 20, color: Colors.grey),
+                );
+              }
+              return const SizedBox(width: 20); // Reserve same space
+            }(),
           ],
         ),
       ),

@@ -128,14 +128,12 @@ class GroupRepository {
   // ---------- MEMBERS / REQUESTS STREAM ----------
   Stream<List<GroupMember>> watchMembers(String groupId) {
     return _membersCol(groupId)
-        .orderBy('joinedAt', descending: true)
         .snapshots()
         .map((qs) => qs.docs.map((d) => GroupMember.fromDoc(d)).toList());
   }
 
   Stream<List<JoinRequest>> watchJoinRequests(String groupId) {
     return _requestsCol(groupId)
-        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((qs) => qs.docs.map((d) => JoinRequest.fromDoc(d)).toList());
   }

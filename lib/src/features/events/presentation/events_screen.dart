@@ -129,31 +129,32 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                               final validUid = targets.any((t) => t.uid == selectedUid) ? selectedUid : targets.first.uid;
 
                               return Padding(
-                                padding: const EdgeInsets.only(bottom: 24),
+                                padding: const EdgeInsets.only(bottom: 12),
                                 child: Row(
                                   children: [
                                     const Text(
                                       'Viewing: ',
                                       style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
                                         color: Color(0xFF0D9488),
                                       ),
                                     ),
                                     const SizedBox(width: 8),
                                     Expanded(
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                                        height: 36,
+                                        padding: const EdgeInsets.symmetric(horizontal: 12),
                                         decoration: BoxDecoration(
                                           color: Theme.of(context).cardColor,
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(8),
                                           border: Border.all(color: const Color(0xFF0D9488).withValues(alpha: 0.3)),
                                         ),
                                         child: DropdownButtonHideUnderline(
                                           child: DropdownButton<String>(
                                             value: validUid,
                                             isExpanded: true,
-                                            icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF0D9488)),
+                                            icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF0D9488), size: 20),
                                             onChanged: (String? newValue) {
                                               ref.read(activeTargetUidProvider.notifier).state = newValue;
                                             },
@@ -162,7 +163,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                                                 value: target.uid,
                                                 child: Text(
                                                   target.name,
-                                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                                                 ),
                                               );
                                             }).toList(),

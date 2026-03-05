@@ -8,6 +8,35 @@ import '../domain/group.dart';
 import '../domain/group_member.dart';
 import '../domain/join_request.dart';
 import '../../profile/data/user_repository.dart';
+import 'package:rxdart/rxdart.dart';
+
+final joinedGroupsProvider = StreamProvider<List<Group>>((ref) {
+  final user = ref.watch(userProvider);
+  if (user.joinedGroupIds.isEmpty) return Stream.value([]);
+  
+  // We need to double-check membership for each group in joinedGroupIds
+  // because some might be "Pending" (requested but not approved).
+  // We watch the group documents AND our member document in each.
+  
+  final streams = user.joinedGroupIds.map((id) {
+    return FirebaseFirestore.instance.collection('groups').doc(id).snapshots().asyncMap((groupDoc) async {
+       if (!groupDoc.exists) return null;
+       
+       // Verify we are actually in the members subcollection
+       final memberDoc = await groupDoc.reference.collection('members').doc(user.id).get();
+       if (!memberDoc.exists) return null; // Not approved yet
+       
+       return Group.fromDoc(groupDoc);
+    });
+  });
+  
+  return Rx.combineLatestList(streams).map((groups) {
+    return groups
+        .where((g) => g != null)
+        .cast<Group>()
+        .toList();
+  });
+});
 
 final _firestoreProvider = Provider<FirebaseFirestore>((ref) {
   return FirebaseFirestore.instance;
@@ -78,15 +107,23 @@ final targetUsersProvider = FutureProvider<List<TargetUser>>((ref) async {
       final snapshotPairs = await Future.wait(futures);
       
       for (final pair in snapshotPairs) {
-        final doc = pair[0];
+        final groupDoc = pair[0];
         final memberDoc = pair[1];
-        if (doc.exists && memberDoc.exists) {
-          final data = doc.data() ?? {};
-          final ownerUid = data['ownerUid'] as String?;
-          final groupName = data['name'] as String? ?? 'Unknown Group';
+        if (groupDoc.exists && memberDoc.exists) {
+          final groupData = groupDoc.data() ?? {};
+          final memberData = memberDoc.data() ?? {};
+          
+          final ownerUid = groupData['ownerUid'] as String?;
+          final groupName = groupData['name'] as String? ?? 'Unknown Group';
+          final myRole = memberData['role'] as String? ?? 'Member';
+          
+          // Capitalize first letter of role
+          final roleLabel = myRole.isNotEmpty 
+              ? myRole[0].toUpperCase() + myRole.substring(1) 
+              : 'Member';
           
           if (ownerUid != null && ownerUid.isNotEmpty && !targets.any((t) => t.uid == ownerUid)) {
-            targets.add(TargetUser(uid: ownerUid, name: "$groupName (Owner)"));
+            targets.add(TargetUser(uid: ownerUid, name: "$groupName ($roleLabel)"));
           }
         }
       }
