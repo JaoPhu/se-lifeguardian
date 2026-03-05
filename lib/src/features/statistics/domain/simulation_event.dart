@@ -13,6 +13,8 @@ class SimulationEvent {
   final double? confidence; // Verification confidence score
   final int? startTimeMs; // Precision start time
   final int? durationSeconds; // Precision duration
+  final double? latitude;
+  final double? longitude;
 
   SimulationEvent({
     required this.id,
@@ -29,6 +31,8 @@ class SimulationEvent {
     this.confidence,
     this.startTimeMs,
     this.durationSeconds,
+    this.latitude,
+    this.longitude,
   });
 
   String get thaiLabel {
@@ -69,6 +73,8 @@ class SimulationEvent {
     double? confidence,
     int? startTimeMs,
     int? durationSeconds,
+    double? latitude,
+    double? longitude,
   }) {
     return SimulationEvent(
       id: id ?? this.id,
@@ -85,6 +91,8 @@ class SimulationEvent {
       confidence: confidence ?? this.confidence,
       startTimeMs: startTimeMs ?? this.startTimeMs,
       durationSeconds: durationSeconds ?? this.durationSeconds,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
     );
   }
 
@@ -104,6 +112,8 @@ class SimulationEvent {
       'confidence': confidence,
       'startTimeMs': startTimeMs,
       'durationSeconds': durationSeconds,
+      'latitude': latitude,
+      'longitude': longitude,
     };
   }
 
@@ -123,6 +133,8 @@ class SimulationEvent {
       confidence: (json['confidence'] as num?)?.toDouble(),
       startTimeMs: json['startTimeMs'] as int?,
       durationSeconds: json['durationSeconds'] as int?,
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
     );
   }
 }

@@ -217,6 +217,11 @@ exports.onNotificationCreated = onDocumentCreated("users/{uid}/notifications/{no
             data: {
                 type: 'CRITICAL_EVENT',
                 userId: patientUid,
+                eventId: notiData.eventId || '',
+                latitude: (notiData.latitude || '').toString(),
+                longitude: (notiData.longitude || '').toString(),
+                imageUrl: notiData.imageUrl || '',
+                confidence: (notiData.confidence || '').toString(),
                 click_action: 'FLUTTER_NOTIFICATION_CLICK',
             },
             tokens: Array.from(caregiverTokens),

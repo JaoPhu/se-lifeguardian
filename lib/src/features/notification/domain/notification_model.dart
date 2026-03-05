@@ -6,6 +6,11 @@ class NotificationModel {
   final String message;
   final NotificationType type;
   final DateTime date;
+  final double? latitude;
+  final double? longitude;
+  final String? imageUrl;
+  final double? confidence;
+  final String? eventId;
 
   const NotificationModel({
     required this.id,
@@ -13,6 +18,11 @@ class NotificationModel {
     required this.message,
     required this.type,
     required this.date,
+    this.latitude,
+    this.longitude,
+    this.imageUrl,
+    this.confidence,
+    this.eventId,
   });
 
   Map<String, dynamic> toJson() {
@@ -22,6 +32,11 @@ class NotificationModel {
       'message': message,
       'type': type.name,
       'date': date.toIso8601String(),
+      'latitude': latitude,
+      'longitude': longitude,
+      'imageUrl': imageUrl,
+      'confidence': confidence,
+      'eventId': eventId,
     };
   }
 
@@ -35,6 +50,11 @@ class NotificationModel {
         orElse: () => NotificationType.warning,
       ),
       date: DateTime.parse(json['date'] as String),
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+      imageUrl: json['imageUrl'] as String?,
+      confidence: (json['confidence'] as num?)?.toDouble(),
+      eventId: json['eventId'] as String?,
     );
   }
 }
