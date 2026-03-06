@@ -14,10 +14,7 @@ import 'package:rxdart/rxdart.dart';
 final joinedGroupsProvider = StreamProvider<List<Group>>((ref) {
   final user = ref.watch(userProvider);
   
-  print('DEBUG: joinedGroupsProvider: user.id=${user.id}, joinedGroupIds=${user.joinedGroupIds}');
-  
   final streams = user.joinedGroupIds.map((id) {
-    print('DEBUG: joinedGroupsProvider: watching groupId=$id');
     final groupRef = FirebaseFirestore.instance.collection('groups').doc(id);
     final memberRef = groupRef.collection('members').doc(user.id);
     
@@ -26,25 +23,19 @@ final joinedGroupsProvider = StreamProvider<List<Group>>((ref) {
       groupRef.snapshots(),
       memberRef.snapshots(),
       (groupSnap, memberSnap) {
-        print('DEBUG: joinedGroupsProvider: groupId=$id groupExists=${groupSnap.exists}, memberExists=${memberSnap.exists}');
         if (!groupSnap.exists || !memberSnap.exists) return null;
         return Group.fromDoc(groupSnap);
       },
-    ).handleError((e) {
-      print('DEBUG: joinedGroupsProvider: error for groupId=$id: $e');
-      return null;
-    }); // Silent fail for indivual groups
+    ).handleError((_) => null); // Silent fail for indivual groups
   });
   
-  if (streams.isEmpty) {
-    print('DEBUG: joinedGroupsProvider: streams is empty');
-    return Stream.value([]);
-  }
+  if (streams.isEmpty) return Stream.value([]);
 
   return Rx.combineLatestList(streams).map((groups) {
-    final filtered = groups.where((g) => g != null).cast<Group>().toList();
-    print('DEBUG: joinedGroupsProvider SUCCESS: returning ${filtered.length} groups to UI: ${filtered.map((g) => g.name).toList()}');
-    return filtered;
+    return groups
+        .where((g) => g != null)
+        .cast<Group>()
+        .toList();
   });
 });
 
@@ -53,12 +44,10 @@ final groupStateInvalidatorProvider = Provider<void>((ref) {
   ref.listen(authStateProvider, (prev, next) {
     if (prev?.value?.uid != next?.value?.uid) {
       // Identity changed or logged out, kill all cached group states
-      ref.invalidate(groupRepoProvider);
       ref.invalidate(ownerGroupProvider);
       ref.invalidate(joinedGroupsProvider);
-      ref.invalidate(activeTargetUidProvider);
-      ref.invalidate(targetUsersProvider);
-      // Family providers will rebuild because they depend on groupRepoProvider
+      // We can't easily invalidate families globally, but they will 
+      // be rebuilt with new IDs from the active screen anyway.
     }
   });
 });
@@ -72,9 +61,6 @@ final _authProvider = Provider<FirebaseAuth>((ref) {
 });
 
 final groupRepoProvider = Provider<GroupRepository>((ref) {
-  // Watch auth state to force re-instantiation of repo on logout/login
-  ref.watch(authStateProvider);
-  
   return GroupRepository(
     db: ref.watch(_firestoreProvider),
     auth: ref.watch(_authProvider),
@@ -99,15 +85,11 @@ final ownerGroupProvider = StreamProvider<Group?>((ref) {
 
 final groupMembersProvider =
     StreamProvider.family<List<GroupMember>, String>((ref, groupId) {
-  // Ensure we rebuild if auth identity changes even if groupId is same
-  ref.watch(authStateProvider);
   return ref.watch(groupRepoProvider).watchMembers(groupId);
 });
 
 final joinRequestsProvider =
     StreamProvider.family<List<JoinRequest>, String>((ref, groupId) {
-  // Ensure we rebuild if auth identity changes even if groupId is same
-  ref.watch(authStateProvider);
   return ref.watch(groupRepoProvider).watchJoinRequests(groupId);
 });
 

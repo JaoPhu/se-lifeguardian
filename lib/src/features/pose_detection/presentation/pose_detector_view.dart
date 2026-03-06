@@ -20,6 +20,7 @@ import 'dart:async';
 import '../../dashboard/data/camera_provider.dart' as cam_provider;
 import '../../dashboard/domain/camera.dart' as cam_domain;
 import '../../statistics/domain/simulation_event.dart';
+import '../pose_providers.dart';
 
 
 class PoseDetectorView extends ConsumerStatefulWidget {
@@ -119,6 +120,8 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
       _initializeVideo();
     }
     
+    _poseService.logger = ref.read(poseDataLoggerProvider);
+
     // Reset health monitoring state for new analysis session
     Future.microtask(() {
       ref.read(healthStatusProvider.notifier).reset();
@@ -132,6 +135,12 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     _videoController?.dispose();
     _simTimer?.cancel();
     
+    // Stop AI Data Collection if running
+    if (ref.read(isRecordingPoseProvider)) {
+      ref.read(poseDataLoggerProvider).stopRecording();
+      ref.read(isRecordingPoseProvider.notifier).state = false;
+    }
+    
     _poseService.close();
     super.dispose();
   }
@@ -141,7 +150,6 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     try {
       await _videoController!.initialize();
       await _videoController!.setLooping(false); // Play once for demo
-      await _videoController!.setPlaybackSpeed(_playbackSpeed); // ✅ Apply speed multiplier to video
       
       setState(() {
         _imageSize = _videoController!.value.size;
@@ -206,9 +214,8 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
       if (_isPaused) return;
       
       setState(() {
-        // ✅ Incremental simulation time based on speed
-        // One second equals '_playbackSpeed' minutes simulation
-        _simTime = _simTime.add(Duration(seconds: (_playbackSpeed * 60).toInt()));
+        // One second equals 1 minute simulation
+        _simTime = _simTime.add(const Duration(minutes: 1));
       });
       
       // Update the HealthStatusNotifier with the new simulation time
@@ -219,8 +226,17 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
 
   void _onAnalysisComplete() {
     if (_isAnalysisComplete) return;
+    _isAnalysisLoopRunning = false;
+    _simTimer?.cancel();
     _videoController?.pause();
     _isAnalysisLoopRunning = false;
+
+    // Stop AI Data Collection if running
+    if (ref.read(isRecordingPoseProvider)) {
+      ref.read(poseDataLoggerProvider).stopRecording();
+      ref.read(isRecordingPoseProvider.notifier).state = false;
+      debugPrint("Auto-stopped AI Data Collection on Analysis Complete");
+    }
 
     if (_persons.length > 1 && _selectedPersonIndex == null) {
       setState(() {
@@ -298,7 +314,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
               landmarks: tp.smoothedLandmarks,
               color: personColors[tp.id % personColors.length],
               isLaying: _poseService.isLaying(tp.smoothedLandmarks),
-              isWalking: _poseService.isWalking(tp), // ✅ Pass person for velocity check
+              isWalking: _poseService.isWalking(tp.smoothedLandmarks),
               isFalling: _poseService.isFalling(tp),
             )));
           });
@@ -397,7 +413,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
           final isLaying = _poseService.isLaying(landmarks);
           final isSitting = _poseService.isSitting(landmarks);
           final isSlouching = _poseService.isSlouching(landmarks);
-          final isWalking = _poseService.isWalking(tp); // ✅ Pass person
+          final isWalking = _poseService.isWalking(landmarks);
           final isFalling = _poseService.isFalling(tp);
           
           detectedPersons.add(PersonPose(
@@ -738,6 +754,9 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                     ),
                   ),
                   const SizedBox(height: 16),
+
+                  // AI Data Collection Section (Only visible in Debug Mode)
+                  if (kDebugMode) _buildAIRecordingUI(),
 
                   const SizedBox(height: 32),
                 ],
@@ -1504,6 +1523,120 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     );
   }
 
+  final TextEditingController _labelController = TextEditingController(text: 'sitting_upright');
+
+  Widget _buildAIRecordingUI() {
+    final isRecording = ref.watch(isRecordingPoseProvider);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isRecording ? Colors.red.withValues(alpha: 0.5) : Colors.transparent,
+          width: 2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.psychology, 
+                color: isRecording ? Colors.red : const Color(0xFF0D9492),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'AI Data Collection (Phase 1)',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const Spacer(),
+              if (isRecording)
+                const _PulseIcon(),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Label the current posture to train the AI model.',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _labelController,
+            enabled: !isRecording,
+            decoration: InputDecoration(
+              labelText: 'Pose Label',
+              hintText: 'e.g. sitting_slouching',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              prefixIcon: const Icon(Icons.label_outline),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.clear, size: 18),
+                onPressed: () => _labelController.clear(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          const Text(
+            'Quick Presets:',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0D9492)),
+          ),
+          const SizedBox(height: 8),
+          
+          _buildLabelCategory('Normal', [
+            'standing_upright', 'walking_normal', 'sitting_straight', 'sitting_relaxed', 'lying_still_moving'
+          ], Colors.green),
+          
+          _buildLabelCategory('Warning', [
+            'sitting_slouching', 'sitting_leaning', 'neck_forward', 'near_fall_stumble'
+          ], Colors.orange),
+          
+          _buildLabelCategory('Emergency', [
+            'fall_impact', 'laying_unconscious', 'slumped_on_table'
+          ], Colors.red),
+          
+          _buildLabelCategory('Occluded', [
+            'sitting_table_occluded', 'walking_behind_furniture', 'laying_hidden', 'nap_on_bench'
+          ], Colors.blueGrey),
+          
+          const SizedBox(height: 8),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                final logger = ref.read(poseDataLoggerProvider);
+                if (isRecording) {
+                  logger.stopRecording();
+                  ref.read(isRecordingPoseProvider.notifier).state = false;
+                } else {
+                  if (_labelController.text.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please enter a label first')),
+                    );
+                    return;
+                  }
+                  logger.startRecording(_labelController.text);
+                  ref.read(isRecordingPoseProvider.notifier).state = true;
+                }
+              },
+              icon: Icon(isRecording ? Icons.stop : Icons.fiber_manual_record),
+              label: Text(isRecording ? 'Stop Recording' : 'Start Recording Frames'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: isRecording ? Colors.red : const Color(0xFF0D9492),
+                side: BorderSide(color: isRecording ? Colors.red : const Color(0xFF0D9492)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, "0");
     
@@ -1515,6 +1648,69 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     } else {
       return "$minutes:$seconds";
     }
+  }
+
+  Widget _buildLabelCategory(String title, List<String> labels, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Text(title, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.bold)),
+        ),
+        Wrap(
+          spacing: 6,
+          runSpacing: 0,
+          children: labels.map((label) {
+            return ActionChip(
+              padding: EdgeInsets.zero,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              label: Text(label, style: const TextStyle(fontSize: 10)),
+              onPressed: () {
+                _labelController.text = label;
+              },
+              backgroundColor: color.withValues(alpha: 0.05),
+              side: BorderSide(color: color.withValues(alpha: 0.2)),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 4),
+      ],
+    );
+  }
+}
+
+class _PulseIcon extends StatefulWidget {
+  const _PulseIcon();
+
+  @override
+  State<_PulseIcon> createState() => _PulseIconState();
+}
+
+class _PulseIconState extends State<_PulseIcon> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _controller,
+      child: const Icon(Icons.circle, color: Colors.red, size: 12),
+    );
   }
 }
 
