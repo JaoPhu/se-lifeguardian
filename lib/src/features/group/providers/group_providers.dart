@@ -14,7 +14,10 @@ import 'package:rxdart/rxdart.dart';
 final joinedGroupsProvider = StreamProvider<List<Group>>((ref) {
   final user = ref.watch(userProvider);
   
+  print('DEBUG: joinedGroupsProvider: user.id=${user.id}, joinedGroupIds=${user.joinedGroupIds}');
+  
   final streams = user.joinedGroupIds.map((id) {
+    print('DEBUG: joinedGroupsProvider: watching groupId=$id');
     final groupRef = FirebaseFirestore.instance.collection('groups').doc(id);
     final memberRef = groupRef.collection('members').doc(user.id);
     
@@ -23,19 +26,25 @@ final joinedGroupsProvider = StreamProvider<List<Group>>((ref) {
       groupRef.snapshots(),
       memberRef.snapshots(),
       (groupSnap, memberSnap) {
+        print('DEBUG: joinedGroupsProvider: groupId=$id groupExists=${groupSnap.exists}, memberExists=${memberSnap.exists}');
         if (!groupSnap.exists || !memberSnap.exists) return null;
         return Group.fromDoc(groupSnap);
       },
-    ).handleError((_) => null); // Silent fail for indivual groups
+    ).handleError((e) {
+      print('DEBUG: joinedGroupsProvider: error for groupId=$id: $e');
+      return null;
+    }); // Silent fail for indivual groups
   });
   
-  if (streams.isEmpty) return Stream.value([]);
+  if (streams.isEmpty) {
+    print('DEBUG: joinedGroupsProvider: streams is empty');
+    return Stream.value([]);
+  }
 
   return Rx.combineLatestList(streams).map((groups) {
-    return groups
-        .where((g) => g != null)
-        .cast<Group>()
-        .toList();
+    final filtered = groups.where((g) => g != null).cast<Group>().toList();
+    print('DEBUG: joinedGroupsProvider SUCCESS: returning ${filtered.length} groups to UI: ${filtered.map((g) => g.name).toList()}');
+    return filtered;
   });
 });
 
