@@ -7,6 +7,7 @@ import '../../events/data/event_repository.dart';
 import '../../statistics/domain/simulation_event.dart';
 import '../../profile/data/user_repository.dart';
 import '../../group/providers/group_providers.dart';
+import '../../../common_widgets/user_avatar.dart';
 
 class EventsScreen extends ConsumerStatefulWidget {
   final String cameraId;
@@ -22,6 +23,8 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(userProvider);
+    final selectedUid = ref.watch(resolvedTargetUidProvider);
+    final isOwner = selectedUid.isEmpty || selectedUid == user.id || selectedUid == 'demo_user';
     // final healthState = ref.watch(healthStatusProvider);
     final eventsStream = ref.watch(eventsStreamProvider);
     
@@ -70,18 +73,9 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                     const SizedBox(width: 16),
                     GestureDetector(
                       onTap: () => context.push('/profile'),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: isDark ? Colors.grey.shade900 : Colors.yellow.shade100,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                          image: DecorationImage(
-                            image: NetworkImage(user.avatarUrl),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
+                      child: UserAvatar(
+                        avatarUrl: user.avatarUrl,
+                        radius: 18,
                       ),
                     ),
                   ],
@@ -255,22 +249,53 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                             ],
                           ),
                           const SizedBox(height: 16),
-                          events.isEmpty
-                            ? const SizedBox(
-                                height: 100,
-                                child: Center(child: Text('No events detected yet.', style: TextStyle(color: Colors.grey)))
-                              )
-                            : ListView.separated(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                padding: EdgeInsets.zero,
-                                itemCount: events.length,
-                                separatorBuilder: (context, index) => const Divider(height: 1, color: Colors.black12),
-                                itemBuilder: (context, index) {
-                                  final event = events[index];
-                                  return _buildEventListItem(context, event);
-                                },
-                              ),
+                           Builder(builder: (context) {
+                             if (events.isEmpty && !isOwner) {
+                               // Show Mock Data for Caregivers if no real data exists
+                               final mockEvent = SimulationEvent(
+                                  id: 'mock_1',
+                                  cameraId: cameraName,
+                                  type: 'falling',
+                                  timestamp: '10:00',
+                                  date: '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}',
+                                  isCritical: true,
+                                  snapshotUrl: 'assets/images/google_logo.png', // Fallback local image
+                                  startTimeMs: DateTime.now().subtract(const Duration(minutes: 5)).millisecondsSinceEpoch,
+                                  durationSeconds: 15,
+                                  duration: "0.00 hr",
+                                  description: 'CRITICAL: Sudden impact detected. Check subject! (Mock Data)',
+                                  isVerified: false,
+                                );
+                               return Column(
+                                 children: [
+                                   const Padding(
+                                     padding: EdgeInsets.only(bottom: 8.0),
+                                     child: Text('Viewing Demo Data (No real events)', style: TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic)),
+                                   ),
+                                   _buildEventListItem(context, mockEvent),
+                                 ],
+                               );
+                             }
+
+                             if (events.isEmpty) {
+                               return const SizedBox(
+                                 height: 100,
+                                 child: Center(child: Text('No events detected yet.', style: TextStyle(color: Colors.grey)))
+                               );
+                             }
+
+                             return ListView.separated(
+                               shrinkWrap: true,
+                               physics: const NeverScrollableScrollPhysics(),
+                               padding: EdgeInsets.zero,
+                               itemCount: events.length,
+                               separatorBuilder: (context, index) => const Divider(height: 1, color: Colors.black12),
+                               itemBuilder: (context, index) {
+                                 final event = events[index];
+                                 return _buildEventListItem(context, event);
+                               },
+                             );
+                           }),
                         ],
                       );
                     },

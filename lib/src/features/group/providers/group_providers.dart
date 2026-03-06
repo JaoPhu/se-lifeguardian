@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -12,29 +13,42 @@ import 'package:rxdart/rxdart.dart';
 
 final joinedGroupsProvider = StreamProvider<List<Group>>((ref) {
   final user = ref.watch(userProvider);
-  if (user.joinedGroupIds.isEmpty) return Stream.value([]);
-  
-  // We need to double-check membership for each group in joinedGroupIds
-  // because some might be "Pending" (requested but not approved).
-  // We watch the group documents AND our member document in each.
   
   final streams = user.joinedGroupIds.map((id) {
-    return FirebaseFirestore.instance.collection('groups').doc(id).snapshots().asyncMap((groupDoc) async {
-       if (!groupDoc.exists) return null;
-       
-       // Verify we are actually in the members subcollection
-       final memberDoc = await groupDoc.reference.collection('members').doc(user.id).get();
-       if (!memberDoc.exists) return null; // Not approved yet
-       
-       return Group.fromDoc(groupDoc);
-    });
+    final groupRef = FirebaseFirestore.instance.collection('groups').doc(id);
+    final memberRef = groupRef.collection('members').doc(user.id);
+    
+    // Watch BOTH group doc and member doc snapshots in real-time
+    return Rx.combineLatest2(
+      groupRef.snapshots(),
+      memberRef.snapshots(),
+      (groupSnap, memberSnap) {
+        if (!groupSnap.exists || !memberSnap.exists) return null;
+        return Group.fromDoc(groupSnap);
+      },
+    ).handleError((_) => null); // Silent fail for indivual groups
   });
   
+  if (streams.isEmpty) return Stream.value([]);
+
   return Rx.combineLatestList(streams).map((groups) {
     return groups
         .where((g) => g != null)
         .cast<Group>()
         .toList();
+  });
+});
+
+// ✅ Added: A global listener to force-refresh group state when auth changes
+final groupStateInvalidatorProvider = Provider<void>((ref) {
+  ref.listen(authStateProvider, (prev, next) {
+    if (prev?.value?.uid != next?.value?.uid) {
+      // Identity changed or logged out, kill all cached group states
+      ref.invalidate(ownerGroupProvider);
+      ref.invalidate(joinedGroupsProvider);
+      // We can't easily invalidate families globally, but they will 
+      // be rebuilt with new IDs from the active screen anyway.
+    }
   });
 });
 

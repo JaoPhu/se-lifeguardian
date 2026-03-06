@@ -79,6 +79,20 @@ class NotificationService {
       },
     );
 
+    // 2.2 Create Android Notification Channel
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      'high_importance_channel', // id
+      'High Importance Notifications', // title
+      description: 'This channel is used for critical medical alerts.', // description
+      importance: Importance.max,
+    );
+
+    final platform = _localNotifications.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    if (platform != null) {
+      await platform.createNotificationChannel(channel);
+    }
+
     // 2.5 Handle Background/Terminated Click
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       debugPrint('Notification opened from background: ${message.data}');
@@ -139,6 +153,37 @@ class NotificationService {
       message.notification?.body,
       platformChannelSpecifics,
       payload: message.data['type'],
+    );
+  }
+
+  /// Manually trigger a local notification from within the app
+  /// Useful for Simulation or Demo mode where we don't rely on FCM pushes.
+  Future<void> showLocalAppNotification({
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'high_importance_channel',
+      'High Importance Notifications',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+    const DarwinNotificationDetails iOSPlatformChannelSpecifics =
+        DarwinNotificationDetails();
+    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+      iOS: iOSPlatformChannelSpecifics,
+    );
+
+    // Using current timestamp hashcode to avoid overwriting stacked notifications
+    await _localNotifications.show(
+      DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title,
+      body,
+      platformChannelSpecifics,
+      payload: payload,
     );
   }
 }

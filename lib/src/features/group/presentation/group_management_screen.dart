@@ -506,11 +506,23 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final user = ref.watch(userProvider);
+    
+    // ✅ Keep this alive to ensure we reset on logout
+    ref.watch(groupStateInvalidatorProvider);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      body: Column(
-        children: [
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(userProvider);
+          ref.invalidate(ownerGroupProvider);
+          ref.invalidate(joinedGroupsProvider);
+          // Wait a bit for providers to cycle
+          await Future.delayed(const Duration(milliseconds: 500));
+        },
+        color: const Color(0xFF0D9488),
+        child: Column(
+          children: [
           // Header
           Container(
             padding: const EdgeInsets.only(top: 56, bottom: 24, left: 24, right: 24),
@@ -629,11 +641,15 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
           ),
 
           Expanded(
-            child: _activeTab == 'my-group' ? _buildMyGroupContent() : _buildJoinGroupContent(),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: _activeTab == 'my-group' ? _buildMyGroupContent() : _buildJoinGroupContent(),
+            ),
           ),
-        ],
-      ),
-    );
+        ], // Column children
+      ), // Column
+    ), // RefreshIndicator
+    ); // Scaffold
   }
 
   // ---------- MY GROUP ----------
@@ -790,9 +806,12 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                     'Group members (...)',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0D9488)),
                   ),
-                  error: (e, _) => Text(
-                    'Group members (error)',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0D9488)),
+                  error: (e, _) => InkWell(
+                    onTap: () => ref.invalidate(ownerGroupProvider),
+                    child: Text(
+                      'Group members (error - tap to retry)',
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.red),
+                    ),
                   ),
                   data: (members) => Row(
                     children: [
@@ -904,7 +923,13 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0D9488)),
                 ),
                 loading: () => const Text('(...)'),
-                error: (e, _) => const Text('(err)'),
+                error: (e, _) {
+                  final errStr = e.toString().toLowerCase();
+                  if (errStr.contains('permission-denied') || errStr.contains('permissiondenied')) {
+                    return const Text('(Pending)', style: TextStyle(color: Colors.orange, fontSize: 13, fontWeight: FontWeight.bold));
+                  }
+                  return const Text('(err)');
+                },
               ),
             ],
           ),

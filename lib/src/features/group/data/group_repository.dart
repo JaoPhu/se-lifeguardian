@@ -53,11 +53,12 @@ class GroupRepository {
 
   // ---------- GROUP ----------
   Stream<Group?> watchMyOwnerGroup(String uid) {
-    return watchOwnerGroupId(uid).asyncMap((groupId) async {
-      if (groupId == null) return null;
-      final doc = await _groupRef(groupId).get();
-      if (!doc.exists) return null;
-      return Group.fromDoc(doc);
+    return watchOwnerGroupId(uid).switchMap((groupId) {
+      if (groupId == null) return Stream.value(null);
+      return _groupRef(groupId).snapshots().map((doc) {
+        if (!doc.exists) return null;
+        return Group.fromDoc(doc);
+      });
     });
   }
 

@@ -247,10 +247,14 @@ class PoseDetectionService {
     final width = xValues.reduce(math.max) - xValues.reduce(math.min);
     final height = yValues.reduce(math.max) - yValues.reduce(math.min);
     
-    // Prototype check: torso < 25 or isFlat (horizontal aspect ratio)
-    final isFlat = width > height * 1.4;
+    // Relaxed isFlat constraint from 1.2 to 0.85 to catch overhead camera poses
+    // Top-down lay-down bounding boxes are often squarish rather than fully wide
+    final isFlat = width > height * 0.85;
 
-    return torsoAngle < 25 || isFlat;
+    // A person is likely laying down if their torso is very horizontal (< 30)
+    // OR they are flat on the ground
+    // OR their torso is somewhat horizontal (< 50) AND their bounding box is wider than tall (scrunched)
+    return torsoAngle < 30 || isFlat || (torsoAngle < 50 && width > height * 0.9);
   }
 
   bool isSlouching(Map<PoseLandmarkType, PoseLandmark> landmarks) {
