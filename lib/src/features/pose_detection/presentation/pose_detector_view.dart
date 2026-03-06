@@ -30,6 +30,7 @@ class PoseDetectorView extends ConsumerStatefulWidget {
   final String? displayCameraName;
   final TimeOfDay? startTime;
   final DateTime? date;
+  final double? speed;
 
   const PoseDetectorView({
     super.key, 
@@ -38,6 +39,7 @@ class PoseDetectorView extends ConsumerStatefulWidget {
     this.displayCameraName,
     this.startTime,
     this.date,
+    this.speed,
   });
  
   @override
@@ -55,7 +57,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   Size? _imageSize;
   InputImageRotation? _imageRotation;
   bool _isLoading = true;
-  final double _playbackSpeed = 1.0;
+  late final double _playbackSpeed;
   DateTime _simTime = DateTime.now();
   bool _isAnalysisComplete = false;
   bool _isAnalyzing = false;
@@ -93,6 +95,8 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   @override
   void initState() {
     super.initState();
+    _playbackSpeed = widget.speed ?? 1.0;
+    
     _loadingController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -951,8 +955,14 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('00:05', style: TextStyle(color: Colors.grey.shade400, fontSize: 12, fontWeight: FontWeight.bold)),
-                Text('00:20', style: TextStyle(color: Colors.grey.shade400, fontSize: 12, fontWeight: FontWeight.bold)),
+                Text(
+                  _formatDuration(_videoController!.value.position), 
+                  style: TextStyle(color: Colors.grey.shade400, fontSize: 12, fontWeight: FontWeight.bold)
+                ),
+                Text(
+                  _formatDuration(_videoController!.value.duration), 
+                  style: TextStyle(color: Colors.grey.shade400, fontSize: 12, fontWeight: FontWeight.bold)
+                ),
               ],
             ),
           ),
@@ -1561,8 +1571,37 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
               hintText: 'e.g. sitting_slouching',
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               prefixIcon: const Icon(Icons.label_outline),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.clear, size: 18),
+                onPressed: () => _labelController.clear(),
+              ),
             ),
           ),
+          const SizedBox(height: 16),
+          
+          const Text(
+            'Quick Presets:',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0D9492)),
+          ),
+          const SizedBox(height: 8),
+          
+          _buildLabelCategory('Normal', [
+            'standing_upright', 'walking_normal', 'sitting_straight', 'sitting_relaxed', 'lying_still_moving'
+          ], Colors.green),
+          
+          _buildLabelCategory('Warning', [
+            'sitting_slouching', 'sitting_leaning', 'neck_forward', 'near_fall_stumble'
+          ], Colors.orange),
+          
+          _buildLabelCategory('Emergency', [
+            'fall_impact', 'laying_unconscious', 'slumped_on_table'
+          ], Colors.red),
+          
+          _buildLabelCategory('Occluded', [
+            'sitting_table_occluded', 'walking_behind_furniture', 'laying_hidden', 'nap_on_bench'
+          ], Colors.blueGrey),
+          
+          const SizedBox(height: 8),
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
@@ -1595,6 +1634,48 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
           ),
         ],
       ),
+    );
+  }
+
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, "0");
+    
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    
+    if (duration.inHours > 0) {
+      return "${twoDigits(duration.inHours)}:$minutes:$seconds";
+    } else {
+      return "$minutes:$seconds";
+    }
+  }
+
+  Widget _buildLabelCategory(String title, List<String> labels, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Text(title, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.bold)),
+        ),
+        Wrap(
+          spacing: 6,
+          runSpacing: 0,
+          children: labels.map((label) {
+            return ActionChip(
+              padding: EdgeInsets.zero,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              label: Text(label, style: const TextStyle(fontSize: 10)),
+              onPressed: () {
+                _labelController.text = label;
+              },
+              backgroundColor: color.withValues(alpha: 0.05),
+              side: BorderSide(color: color.withValues(alpha: 0.2)),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 4),
+      ],
     );
   }
 }

@@ -145,56 +145,68 @@ class OverviewScreen extends ConsumerWidget {
                   
                   const SizedBox(height: 24),
                   
-                  // Try Demo Button
-                  Center(
-                    child: SizedBox(
-                      width: 240,
-                      height: 56,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF0D9488).withValues(alpha: 0.3),
-                              blurRadius: 15,
-                              offset: const Offset(0, 8),
+                  // Try Demo Button (Only show if viewing own dashboard)
+                  Consumer(
+                    builder: (context, ref, child) {
+                      final selectedUid = ref.watch(resolvedTargetUidProvider);
+                      // selectedUid is the currently viewed ID. 
+                      // If it matches the logged in user, or is empty/null, or is the dummy demo user, they are viewing their own stuff.
+                      final isOwner = selectedUid.isEmpty || selectedUid == user.id || selectedUid == 'demo_user';
+
+                      if (!isOwner) return const SizedBox.shrink();
+
+                      return Center(
+                        child: SizedBox(
+                          width: 240,
+                          height: 56,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF0D9488).withValues(alpha: 0.3),
+                                  blurRadius: 15,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                    child: ElevatedButton(
-                      onPressed: () {
-                        // Switch view back to self when testing demo
-                        ref.read(activeTargetUidProvider.notifier).state = null; 
-                        context.push('/demo-setup');
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0D9488),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 32),
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.play_circle_fill, color: Colors.white),
-                          SizedBox(width: 12),
-                          Text(
-                            'Try Demo',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.5,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                // Switch view back to self when testing demo
+                                ref.read(activeTargetUidProvider.notifier).state = null; 
+                                context.push('/demo-setup');
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0D9488),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(horizontal: 32),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.play_circle_fill, color: Colors.white),
+                                  SizedBox(width: 12),
+                                  Text(
+                                    'Try Demo',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                      ),
-                    ),
+                        ),
+                      );
+                    },
                   ),
+
                   const SizedBox(height: 120),
                 ],
               ),
@@ -366,10 +378,8 @@ class OverviewScreen extends ConsumerWidget {
                       final cameraEvents = healthState.events.where((e) => e.cameraId == camera.id).toList();
                       final latestEvent = cameraEvents.isNotEmpty ? cameraEvents.first : null;
 
-                      if (configThumbnail != null) {
-                        return _buildImageWrapper(File(configThumbnail).existsSync() 
-                            ? Image.file(File(configThumbnail), fit: BoxFit.fitHeight) 
-                            : null);
+                      if (configThumbnail != null && File(configThumbnail).existsSync()) {
+                        return _buildImageWrapper(Image.file(File(configThumbnail), fit: BoxFit.fitHeight));
                       } else if (latestEvent != null) {
                         if (latestEvent.remoteImageUrl != null) {
                           return _buildImageWrapper(
@@ -402,12 +412,17 @@ class OverviewScreen extends ConsumerWidget {
                       return const SizedBox();
                     }
                     
-                    final dates = cameraEvents
-                        .map((e) => e.date)
-                        .whereType<String>()
-                        .toSet()
-                        .toList();
-                    dates.sort();
+                    final Set<String> datesSet = {};
+                    for (var event in cameraEvents) {
+                      if (event.date != null) datesSet.add(event.date!);
+                      // Calculate the end date using startTimeMs and duration
+                      if (event.startTimeMs != null && event.durationSeconds != null && event.durationSeconds! > 0) {
+                        final endTime = DateTime.fromMillisecondsSinceEpoch(event.startTimeMs! + event.durationSeconds! * 1000);
+                        final endDateStr = "${endTime.year}-${endTime.month.toString().padLeft(2, '0')}-${endTime.day.toString().padLeft(2, '0')}";
+                        datesSet.add(endDateStr);
+                      }
+                    }
+                    final dates = datesSet.toList()..sort();
                     
                     if (dates.isEmpty) return const SizedBox();
                     

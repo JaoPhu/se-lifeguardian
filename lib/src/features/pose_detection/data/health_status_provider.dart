@@ -14,6 +14,7 @@ import '../../authentication/providers/auth_providers.dart';
 import '../../group/providers/group_providers.dart';
 import '../../notification/data/notification_repository.dart';
 import '../../notification/domain/notification_model.dart';
+import '../../notification/data/notification_service.dart';
 
 enum HealthStatus { normal, warning, emergency, none }
 
@@ -491,15 +492,59 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
     if (updatedEvents.isNotEmpty) {
       final activeEvent = updatedEvents.first;
       if (activeEvent.startTimeMs != null && activeEvent.type == state.currentActivity) {
-        final durationSec = (_currentTime.millisecondsSinceEpoch - activeEvent.startTimeMs!) ~/ 1000;
-        // Only update if changes to avoid rebuild spam if not needed? 
-        // Actually we need rebuilds for UI counters if displayed.
-        final durationHrs = (durationSec / 3600).toStringAsFixed(2);
+        final startDateTime = DateTime.fromMillisecondsSinceEpoch(activeEvent.startTimeMs!);
         
-        updatedEvents[0] = activeEvent.copyWith(
-          durationSeconds: durationSec,
-          duration: "$durationHrs hr",
-        );
+        // Handle Session Splitting (midnight crossing)
+        if (startDateTime.day != _currentTime.day || startDateTime.month != _currentTime.month || startDateTime.year != _currentTime.year) {
+           // We crossed midnight! Cap current event to 23:59:59 of start day
+           final endOfDay = DateTime(startDateTime.year, startDateTime.month, startDateTime.day, 23, 59, 59, 999);
+           final capDurationSec = (endOfDay.millisecondsSinceEpoch - activeEvent.startTimeMs!) ~/ 1000;
+           final capDurationHrs = (capDurationSec / 3600).toStringAsFixed(2);
+           
+           // Update and save the OLD event
+           final cappedEvent = activeEvent.copyWith(
+             durationSeconds: capDurationSec,
+             duration: "$capDurationHrs hr",
+           );
+           updatedEvents[0] = cappedEvent;
+           _eventRepository.syncEvent(cappedEvent);
+           
+           // Create a NEW event starting precisely at midnight of the new day
+           final midnightNewDay = DateTime(_currentTime.year, _currentTime.month, _currentTime.day, 0, 0, 0);
+           final newDurationSec = (_currentTime.millisecondsSinceEpoch - midnightNewDay.millisecondsSinceEpoch) ~/ 1000;
+           final newDurationHrs = (newDurationSec / 3600).toStringAsFixed(2);
+           
+           final timestamp = "${midnightNewDay.hour.toString().padLeft(2, '0')}:${midnightNewDay.minute.toString().padLeft(2, '0')}";
+           final dateStr = "${midnightNewDay.year}-${midnightNewDay.month.toString().padLeft(2, '0')}-${midnightNewDay.day.toString().padLeft(2, '0')}";
+
+           final newEvent = SimulationEvent(
+             id: midnightNewDay.millisecondsSinceEpoch.toString(), // new unique ID
+             cameraId: activeEvent.cameraId,
+             type: activeEvent.type,
+             timestamp: timestamp,
+             date: dateStr,
+             isCritical: activeEvent.isCritical,
+             snapshotUrl: activeEvent.snapshotUrl, // Keep last snapshot
+             startTimeMs: midnightNewDay.millisecondsSinceEpoch,
+             durationSeconds: newDurationSec,
+             duration: "$newDurationHrs hr",
+             description: activeEvent.description,
+             latitude: activeEvent.latitude,
+             longitude: activeEvent.longitude,
+           );
+           
+           updatedEvents.insert(0, newEvent);
+           _eventRepository.syncEvent(newEvent);
+        } else {
+           // Normal tick processing
+           final durationSec = (_currentTime.millisecondsSinceEpoch - activeEvent.startTimeMs!) ~/ 1000;
+           final durationHrs = (durationSec / 3600).toStringAsFixed(2);
+           
+           updatedEvents[0] = activeEvent.copyWith(
+             durationSeconds: durationSec,
+             duration: "$durationHrs hr",
+           );
+        }
       }
     }
 
@@ -522,13 +567,16 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       // Periodically sync active event to Firestore (every 5 simulation minutes = approx 5 seconds)
       if (durationChanged && updatedEvents.first.durationSeconds != null) {
         final duration = updatedEvents.first.durationSeconds!;
+        final previousDuration = state.events.first.durationSeconds ?? 0;
         
-        // Trigger history notification at 1 minute sitting (60 sim-seconds ≈ 1 real second at 60x)
-        if (updatedEvents.first.type == 'sitting' && duration == 60) {
+        // Trigger sitting notification if they have been sitting for 1 hour (3600 sim-seconds)
+        // Check if we just crossed the 3600 threshold to prevent missing it when simulation jumps time
+        if (updatedEvents.first.type == 'sitting' && previousDuration < 3600 && duration >= 3600) {
            _triggerSittingNotification(updatedEvents.first);
         }
 
-        if (duration % 300 == 0) {
+        // Periodically sync active event to Firestore (every 5 simulation minutes = 300 seconds)
+        if ((duration ~/ 300) > (previousDuration ~/ 300)) {
           _eventRepository.syncEvent(updatedEvents.first);
         }
       }
@@ -566,6 +614,17 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
       // Save to user's notifications collection
       await _notificationRepository.addNotification(notification, targetUid: uid);
+      
+      // Locally show the banner so the user testing the Demo immediately sees it
+      try {
+        await _ref.read(notificationServiceProvider).showLocalAppNotification(
+          title: notification.title,
+          body: notification.message,
+        );
+      } catch (e) {
+        debugPrint("Error showing local app notification: $e");
+      }
+
       debugPrint("Logged critical notification with GPS for $uid");
     } catch (e) {
       debugPrint("Error triggering notification: $e");
@@ -586,6 +645,17 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       );
 
       await _notificationRepository.addNotification(notification, targetUid: uid);
+      
+      // Locally show the banner so the user testing the Demo immediately sees it
+      try {
+        await _ref.read(notificationServiceProvider).showLocalAppNotification(
+          title: notification.title,
+          body: notification.message,
+        );
+      } catch (e) {
+        debugPrint("Error showing local app notification: $e");
+      }
+
       debugPrint("Logged sitting notification for $uid");
     } catch (e) {
       debugPrint("Error triggering sitting notification: $e");

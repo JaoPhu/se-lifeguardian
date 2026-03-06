@@ -18,6 +18,8 @@ class SettingsScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
     final user = ref.watch(userProvider);
+    final firebaseUser = ref.read(firebaseAuthProvider).currentUser;
+    final isEmailUser = firebaseUser?.providerData.any((p) => p.providerId == 'password') ?? false;
     
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -238,28 +240,30 @@ class SettingsScreen extends ConsumerWidget {
                       child: Column(
                         children: [
 
-                          // Change Password
-                          ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
-                            title: Text(
-                              'Change Password',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: theme.textTheme.bodyLarge?.color,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            trailing: const Icon(LucideIcons.chevronRight, size: 20, color: Colors.grey),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const ChangePasswordScreen(),
+                          // Change Password (Only for email/password users)
+                          if (isEmailUser) ...[
+                            ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
+                              title: Text(
+                                'Change Password',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: theme.textTheme.bodyLarge?.color,
+                                  fontWeight: FontWeight.w500,
                                 ),
-                              );
-                            },
-                          ),
-                          Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
+                              ),
+                              trailing: const Icon(LucideIcons.chevronRight, size: 20, color: Colors.grey),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const ChangePasswordScreen(),
+                                  ),
+                                );
+                              },
+                            ),
+                            Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
+                          ],
 
                           // Logout
                           ListTile(

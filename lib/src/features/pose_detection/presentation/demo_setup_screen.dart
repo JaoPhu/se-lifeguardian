@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
@@ -251,18 +252,63 @@ class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
                              '${_speed.toString().replaceAll(RegExp(r"([.]*0)(?!.*\d)"), "")}x', 
                              Icons.speed, 
                              () {
-                               // Simple cycle through speeds
-                               setState(() {
-                                 if (_speed == 1.0) {
-                                   _speed = 2.0;
-                                 } else if (_speed == 2.0) {
-                                   _speed = 4.0;
-                                 } else if (_speed == 4.0) {
-                                   _speed = 0.5;
-                                 } else {
-                                   _speed = 1.0;
-                                 }
-                               });
+                               final List<double> speeds = [0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0];
+                               int initialIndex = speeds.indexOf(_speed);
+                               if (initialIndex == -1) initialIndex = 1; // Default to 1.0x
+
+                               showDialog(
+                                 context: context,
+                                 builder: (BuildContext builderContext) {
+                                   return Dialog(
+                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                     child: Container(
+                                       height: 300,
+                                       padding: const EdgeInsets.all(16),
+                                       decoration: BoxDecoration(
+                                         color: Theme.of(context).cardColor,
+                                         borderRadius: BorderRadius.circular(20),
+                                       ),
+                                       child: Column(
+                                         children: [
+                                           Row(
+                                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                             children: [
+                                               TextButton(
+                                                 onPressed: () => Navigator.pop(builderContext),
+                                                 child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                                               ),
+                                               const Text('Select Speed', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                               TextButton(
+                                                 onPressed: () => Navigator.pop(builderContext),
+                                                 child: const Text('Done', style: TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.bold)),
+                                               ),
+                                            ],
+                                           ),
+                                           const SizedBox(height: 16),
+                                           Expanded(
+                                             child: CupertinoPicker(
+                                               scrollController: FixedExtentScrollController(initialItem: initialIndex),
+                                               itemExtent: 40.0,
+                                               onSelectedItemChanged: (int index) {
+                                                 setState(() {
+                                                   _speed = speeds[index];
+                                                 });
+                                               },
+                                               children: speeds.map((s) => Center(
+                                                 child: Text('${s.toString().replaceAll(RegExp(r"([.]*0)(?!.*\d)"), "")}x',
+                                                   style: TextStyle(
+                                                     color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black87,
+                                                   ),
+                                                 ),
+                                               )).toList(),
+                                             ),
+                                           ),
+                                         ],
+                                       ),
+                                     ),
+                                   );
+                                 },
+                               );
                              }
                            ),
                         ],
@@ -309,6 +355,7 @@ class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
                         'cameraName': _cameraNameController.text,
                         'startTime': _startTime, // Pass TimeOfDay
                         'date': _date, // Pass DateTime
+                        'speed': _speed, // Pass the selected playback speed
                       });
                     } : null, // Disabled if no video
                     style: ElevatedButton.styleFrom(
@@ -378,17 +425,22 @@ class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              text,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : const Color(0xFF374151),
-                fontSize: 13,
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  text,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : const Color(0xFF374151),
+                    fontSize: 13,
+                  ),
+                ),
               ),
             ),
             if (icon != null) ...[
-              const SizedBox(width: 6),
-              Icon(icon, size: 16, color: const Color(0xFF0D9488)),
+              const SizedBox(width: 4),
+              Icon(icon, size: 14, color: const Color(0xFF0D9488)),
             ],
           ],
         ),
