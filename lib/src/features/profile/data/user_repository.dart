@@ -251,6 +251,22 @@ class UserNotifier extends StateNotifier<User> {
     
     if (firebaseUser != null) {
       final uid = firebaseUser.uid;
+
+      // ✅ CRITICAL FIX for Cross-Account Switching:
+      // If the UID has changed, synchronously reset the state to empty immediately
+      // before performing any async fetch. This prevents downstream providers from 
+      // seeing "stale" IDs from the previous user during account transitions.
+      if (state.id.isNotEmpty && state.id != uid) {
+        debugPrint('UserNotifier: UID Change detected (${state.id} -> $uid). Synchronously resetting state.');
+        _currentSessionId = null;
+        _sessionSubscription?.cancel();
+        _sessionSubscription = null;
+        state = const User(
+          id: '', name: '', username: '', email: '', phoneNumber: '', avatarUrl: '', 
+          birthDate: '', age: '', gender: '', bloodType: '', height: '', weight: '', 
+          medicalCondition: '', currentMedications: '', drugAllergies: '', foodAllergies: '');
+      }
+
       try {
         final user = await _repo.fetchUser(uid);
         
