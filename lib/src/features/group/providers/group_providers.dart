@@ -53,10 +53,12 @@ final groupStateInvalidatorProvider = Provider<void>((ref) {
   ref.listen(authStateProvider, (prev, next) {
     if (prev?.value?.uid != next?.value?.uid) {
       // Identity changed or logged out, kill all cached group states
+      ref.invalidate(groupRepoProvider);
       ref.invalidate(ownerGroupProvider);
       ref.invalidate(joinedGroupsProvider);
-      // We can't easily invalidate families globally, but they will 
-      // be rebuilt with new IDs from the active screen anyway.
+      ref.invalidate(activeTargetUidProvider);
+      ref.invalidate(targetUsersProvider);
+      // Family providers will rebuild because they depend on groupRepoProvider
     }
   });
 });
@@ -70,6 +72,9 @@ final _authProvider = Provider<FirebaseAuth>((ref) {
 });
 
 final groupRepoProvider = Provider<GroupRepository>((ref) {
+  // Watch auth state to force re-instantiation of repo on logout/login
+  ref.watch(authStateProvider);
+  
   return GroupRepository(
     db: ref.watch(_firestoreProvider),
     auth: ref.watch(_authProvider),
@@ -94,11 +99,15 @@ final ownerGroupProvider = StreamProvider<Group?>((ref) {
 
 final groupMembersProvider =
     StreamProvider.family<List<GroupMember>, String>((ref, groupId) {
+  // Ensure we rebuild if auth identity changes even if groupId is same
+  ref.watch(authStateProvider);
   return ref.watch(groupRepoProvider).watchMembers(groupId);
 });
 
 final joinRequestsProvider =
     StreamProvider.family<List<JoinRequest>, String>((ref, groupId) {
+  // Ensure we rebuild if auth identity changes even if groupId is same
+  ref.watch(authStateProvider);
   return ref.watch(groupRepoProvider).watchJoinRequests(groupId);
 });
 
