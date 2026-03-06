@@ -46,11 +46,11 @@ service cloud.firestore {
 
     // Groups Collection
     match /groups/{groupId} {
-      allow read, write: if isAuthenticated();
+      allow read, write, list: if isAuthenticated();
       
       // Subcollections
       match /{allSubcollections=**} {
-        allow read, write: if isAuthenticated();
+        allow read, write, list: if isAuthenticated();
       }
     }
     
