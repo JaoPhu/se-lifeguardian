@@ -415,8 +415,8 @@ Future<void> _ensureUserDocAfterAuth() async {
                   Expanded(
                     child: SocialButton(
                       label: 'Google',
-                      icon: Image.network(
-                        'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/480px-Google_%22G%22_logo.svg.png',
+                      icon: Image.asset(
+                        'assets/images/google_logo.png',
                         height: 24,
                         width: 24,
                       ),
