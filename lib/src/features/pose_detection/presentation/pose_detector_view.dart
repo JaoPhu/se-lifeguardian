@@ -1586,19 +1586,23 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
           const SizedBox(height: 8),
           
           _buildLabelCategory('Normal', [
-            'standing_upright', 'walking_normal', 'sitting_straight', 'sitting_relaxed', 'lying_still_moving'
+            'standing_upright', 'walking_normal', 'walking_stairs', 'running', 'jumping', 'sitting_chair', 'sitting_floor', 'squatting', 'lying_relaxed'
           ], Colors.green),
           
+          _buildLabelCategory('Transitions', [
+            'stand_to_sit', 'sit_to_stand', 'bending_down'
+          ], Colors.blue),
+          
           _buildLabelCategory('Warning', [
-            'sitting_slouching', 'sitting_leaning', 'neck_forward', 'near_fall_stumble'
+            'stumbling_near_fall', 'head_down_slouching', 'dizziness_holding'
           ], Colors.orange),
           
           _buildLabelCategory('Emergency', [
-            'fall_impact', 'laying_unconscious', 'slumped_on_table'
+            'falling_forward', 'falling_backward', 'falling_sideways', 'lying_unconscious', 'slumped_on_table'
           ], Colors.red),
           
           _buildLabelCategory('Occluded', [
-            'sitting_table_occluded', 'walking_behind_furniture', 'laying_hidden', 'nap_on_bench'
+            'sitting_half_body', 'walking_occluded', 'squatting_hidden', 'fallen_occluded'
           ], Colors.blueGrey),
           
           const SizedBox(height: 8),
