@@ -2,8 +2,6 @@ import 'dart:math' as math;
 
 import 'dart:typed_data';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart' as ml_kit;
-import 'pose_data_logger.dart';
-
 import 'pose_models.dart';
 import '../logic/kalman_filter.dart';
 import '../logic/physics_engine.dart';
@@ -101,7 +99,6 @@ class TrackedPerson {
 
 class PoseDetectionService {
   final ml_kit.PoseDetector _poseDetector = ml_kit.PoseDetector(options: ml_kit.PoseDetectorOptions());
-  PoseDataLogger? logger;
   
   final List<TrackedPerson> _activeTracks = [];
 
@@ -145,11 +142,6 @@ class PoseDetectionService {
       // Update existing track (always ID 0)
       _activeTracks.first.update(landmarks, 0.6); // 0.6 smoothing factor
       _activeTracks.first.missedCount = 0;
-    }
-
-    // Capture frame for AI Training if logger is active
-    if (logger != null && logger!.isRecording) {
-      logger!.addFrame(_activeTracks.first.smoothedLandmarks);
     }
 
     // 4. Post-Process Analysis
@@ -254,7 +246,7 @@ class PoseDetectionService {
     // A person is likely laying down if their torso is very horizontal (< 30)
     // OR they are flat on the ground
     // OR their torso is somewhat horizontal (< 50) AND their bounding box is wider than tall (scrunched)
-    return torsoAngle < 30 || isFlat || (torsoAngle < 50 && width > height * 0.9);
+    return torsoAngle < 35 || isFlat || (torsoAngle < 55 && width > height * 0.9);
   }
 
   bool isSlouching(Map<PoseLandmarkType, PoseLandmark> landmarks) {
@@ -271,7 +263,8 @@ class PoseDetectionService {
     
     final legBend = getLegStraightness(landmarks);
     // Knees bent significantly (> 70 degrees typically)
-    return legBend > 65;
+    // Refined: Sitting usually has more pronounced leg bend than just active walking
+    return legBend > 60;
   }
 
   bool isStanding(Map<PoseLandmarkType, PoseLandmark> landmarks) {
@@ -283,14 +276,28 @@ class PoseDetectionService {
      return legBend < 25; // Very straight legs
   }
 
-  bool isWalking(Map<PoseLandmarkType, PoseLandmark> landmarks) {
+  bool isWalking(TrackedPerson person) {
+    final landmarks = person.smoothedLandmarks;
     if (landmarks.isEmpty) return false;
     final torsoAngle = getTorsoAngle(landmarks);
-    if (torsoAngle < 60) return false;
+    if (torsoAngle < 50) return false;
     
     final legBend = getLegStraightness(landmarks);
-    // Leg is partially bent (walking motion)
-    return legBend >= 25 && legBend <= 65;
+    
+    // Check for active movement using physics engine
+    double maxVel = 0;
+    for (var physics in person.landmarkPhysics.values) {
+      final speed = math.sqrt(physics.vx * physics.vx + physics.vy * physics.vy);
+      if (speed > maxVel) maxVel = speed;
+    }
+
+    final height = _getBodyHeight(landmarks);
+    // Movement threshold: at least 0.2 body heights per second
+    final isMoving = maxVel > (height * 0.2);
+
+    // Leg is partially bent (walking motion) 
+    // Refined: 20-70 range for walking, but MUST be moving
+    return isMoving && legBend >= 20 && legBend <= 70;
   }
 
   bool isFalling(TrackedPerson person) {
