@@ -83,6 +83,7 @@ For security reasons, sensitive configuration files are excluded from version co
 
 ### 1. Project Configuration
 - Place your `GoogleService-Info.plist` (iOS) and `google-services.json` (Android) in their respective platform directories.
+- Copy `.env.example` to `.env` and fill in your specific API keys if required by your setup.
 
 ### 2. Admin SDK (Backend/Scripts)
 If you need to run local administrative scripts or modify Cloud Functions:
@@ -91,14 +92,30 @@ If you need to run local administrative scripts or modify Cloud Functions:
 - Place it in the `functions/` directory.
 - **NEVER** commit this file. It is already ignored by Git to prevent security leaks.
 
-### ⚠️ Database Support & Self-Hosting
-- **Current Database**: The default Firebase project connected to this repository is intended for demonstration purposes. **Access to this database will be maintained for a limited time and will eventually be closed.**
-- **Taking it Further**: If you plan to fork this project or use it long-term, we strongly recommend setting up your own Firebase environment:
-    1. Create a new project on the [Firebase Console](https://console.firebase.google.com/).
-    2. Enable **Firestore**, **Authentication**, **Storage**, and **Functions** (Blaze Plan).
-    3. Update the `google-services.json` and `GoogleService-Info.plist` with your new project's credentials.
-    4. **Email Service (OTP)**: The default registration uses a hardcoded Gmail transporter in Cloud Functions. If you set up your own project, you **must** update the `transporter` config in `functions/index.js` with your own SMTP/API credentials (e.g., SendGrid, Mailgun, or another Gmail app password).
-    5. Deploy the existing rules and functions using `firebase deploy`.
+---
+
+## 🧠 Machine Learning (AI Pose Detection) Pipeline
+
+The AI model running in the app is converted into Dart code for performance (`pose_classifier.dart`). The raw training data (CSVs) is intentionally excluded from the repository to save space. To train or modify the AI:
+
+### 1. Collect Data
+Use the provided Python script to generate pose data from videos:
+```bash
+python3 ml/scripts/collect_pose_data.py --video path/to/video.mp4 --label your_label
+```
+
+### 2. Prepare & Train
+```bash
+python3 ml/scripts/prepare_data.py
+python3 ml/scripts/train_model.py
+```
+
+### 3. Export to Flutter
+Export the trained Python model into Dart code:
+```bash
+python3 ml/scripts/export_model.py
+```
+This automatically updates `lib/src/features/pose_detection/data/pose_classifier.dart`.
 
 ---
 
@@ -118,17 +135,18 @@ lib/
 │   ├── common_widgets/# Shared UI components
 │   ├── routing/       # App routing (GoRouter) & Scaffold with Navbar
 │   └── main.dart      # Entry point
+ml/
+├── scripts/           # Python scripts for data collection and ML training
 assets/
 ├── icon/              # App branding & Splash assets
 └── images/            # UI background and illustration assets
 ```
 
 ## 💡 Key Features & Recent Improvements
+- **Embedded AI**: The Random Forest model is pre-compiled into Dart, requiring no heavy loading or external API calls.
+- **Secure Repository**: All Git history has been scrubbed of Firebase keys to allow public collaboration safely.
 - **Unified Onboarding Flow**: Streamlined registration process that guides all new users (Email & Social) to a mandatory information-gathering step before accessing the dashboard.
 - **Consolidated Architecture**: Streamlined project by removing redundant folders and standardizing on modern implementations.
-- **CI/CD Ready**: Zero analysis issues, ensuring reliable builds on every commit.
-- **Secure Password Reset (Backend)**: Custom-built 2nd Gen Firebase Cloud Functions for secure server-side password updates via Admin SDK.
-- **Stale Session Fix**: Automatic Google/Apple sign-out during account deletion to prevent "Loading Loop" issues for returning users.
 
 ---
 
