@@ -8,6 +8,7 @@ import '../../authentication/controllers/auth_controller.dart';
 import '../../authentication/providers/auth_providers.dart';
 import '../../../common_widgets/user_avatar.dart';
 import '../../notification/presentation/notification_bell.dart';
+import '../../pose_detection/data/health_status_provider.dart';
 import 'change_password_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -264,6 +265,50 @@ class SettingsScreen extends ConsumerWidget {
                             ),
                             Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
                           ],
+
+                          // Clear Data
+                          ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
+                            title: const Text(
+                              'Clear Data',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Color(0xFFF59E0B), // Orange/Amber
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            trailing: const Icon(LucideIcons.chevronRight, size: 20, color: Colors.grey),
+                            onTap: () {
+                              showDialog(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                  title: const Text('ล้างข้อมูลการทดสอบ?', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  content: const Text('ข้อมูลเหตุการณ์และสถิติทั้งหมดจะถูกลบถาวรเพื่อให้คุณสามารถเริ่มใช้งานใหม่ได้ทันทีครับ'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey)),
+                                    ),
+                                    TextButton(
+                                      onPressed: () {
+                                        ref.read(healthStatusProvider.notifier).clearAllData();
+                                        Navigator.pop(context);
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('ล้างข้อมูลสำเร็จแล้วครับ!'),
+                                            backgroundColor: Color(0xFF0D9492),
+                                          ),
+                                        );
+                                      },
+                                      child: const Text('ยืนยันลบข้อมูล', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold)),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                          Divider(height: 1, indent: 20, endIndent: 20, color: theme.dividerColor),
 
                           // Logout
                           ListTile(

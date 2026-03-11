@@ -376,6 +376,19 @@ class UserNotifier extends StateNotifier<User> {
         if (state != newUser) {
           state = newUser;
         }
+      } else {
+        // ✅ [Session Guard] Document doesn't exist (e.g., manually deleted from Firebase Console)
+        // If we are currently "logged in" but the doc disappears, force a logout.
+        if (state.id.isNotEmpty) {
+          debugPrint('UserNotifier: Session Guard - User document deleted! Forcing logout for UID: $uid');
+          await _auth.signOut();
+          
+          // Reset state to empty
+          state = const User(
+            id: '', name: '', username: '', email: '', phoneNumber: '', avatarUrl: '', 
+            birthDate: '', age: '', gender: '', bloodType: '', height: '', weight: '', 
+            medicalCondition: '', currentMedications: '', drugAllergies: '', foodAllergies: '');
+        }
       }
     });
   }

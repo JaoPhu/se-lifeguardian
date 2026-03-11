@@ -101,6 +101,60 @@ class EventRepository {
       print('Error deleting camera events: $e');
     }
   }
+
+  Future<void> deleteAllDataForUser() async {
+    final uid = currentUserId;
+    if (uid == null) return;
+
+    try {
+      // 1. Delete all in 'events' subcollection
+      final events = await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('events')
+          .get();
+
+      final batch = _firestore.batch();
+      for (var doc in events.docs) {
+        batch.delete(doc.reference);
+      }
+
+      // 2. Delete all in 'history' subcollection
+      final history = await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('history')
+          .get();
+      
+      for (var doc in history.docs) {
+        batch.delete(doc.reference);
+      }
+      
+      // 3. Delete all in 'cameras' subcollection
+      final cameras = await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('cameras')
+          .get();
+      
+      for (var doc in cameras.docs) {
+        batch.delete(doc.reference);
+      }
+
+      // 3. Reset root level health fields
+      batch.set(_firestore.collection('users').doc(uid), {
+        'health_score': 1000,
+        'health_status': 0, // HealthStatus.normal enum index
+        'last_activity': 'standing',
+        'last_updated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      await batch.commit();
+      debugPrint('EventRepository: All user health data wiped successfully.');
+    } catch (e) {
+      debugPrint('Error wiping user data: $e');
+    }
+  }
 }
 
 final eventRepositoryProvider = Provider<EventRepository>((ref) => EventRepository());

@@ -255,7 +255,7 @@ class OverviewScreen extends ConsumerWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (camera.status != CameraStatus.offline)
+                if (camera.status != CameraStatus.offline && (ref.watch(resolvedTargetUidProvider) == ref.watch(userProvider).id))
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert, color: Colors.grey),
                     onSelected: (value) async {

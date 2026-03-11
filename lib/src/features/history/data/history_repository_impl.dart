@@ -14,17 +14,24 @@ class HistoryRepositoryImpl implements HistoryRepository {
   HistoryRepositoryImpl(this._firestore, this._auth);
 
   @override
-  Future<List<DailyHistory>> fetchHistory() async {
-     // TODO: Implement full history list flow if needed
-     // For now return empty or keep mock if strictly required for other screens
-     // But user asked for Weekly Chart real data.
-     return []; 
+  Future<List<DailyHistory>> fetchHistory({String? uid}) async {
+    final effectiveUid = uid ?? _auth.currentUser?.uid;
+    if (effectiveUid == null) return [];
+
+    final snapshot = await _firestore
+        .collection('users')
+        .doc(effectiveUid)
+        .collection('history')
+        .orderBy('date', descending: true)
+        .get();
+
+    return snapshot.docs.map((doc) => DailyHistory.fromDoc(doc)).toList().cast<DailyHistory>();
   }
 
   @override
-  Future<DailyStatsModel> getDailyStats(DateTime date) async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return _emptyDailyStats(date);
+  Future<DailyStatsModel> getDailyStats(DateTime date, {String? uid}) async {
+    final effectiveUid = uid ?? _auth.currentUser?.uid;
+    if (effectiveUid == null) return _emptyDailyStats(date);
 
     final startOfDay = DateTime(date.year, date.month, date.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
@@ -32,7 +39,7 @@ class HistoryRepositoryImpl implements HistoryRepository {
     try {
       final snapshot = await _firestore
           .collection('users')
-          .doc(uid)
+          .doc(effectiveUid)
           .collection('events')
           .where('startTimeMs', isGreaterThanOrEqualTo: startOfDay.millisecondsSinceEpoch)
           .where('startTimeMs', isLessThan: endOfDay.millisecondsSinceEpoch)
@@ -47,20 +54,17 @@ class HistoryRepositoryImpl implements HistoryRepository {
   }
 
   @override
-  Future<WeeklyStatsModel> getWeeklyStats(DateTime startDate) async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return WeeklyStatsModel(dailyStats: []);
+  Future<WeeklyStatsModel> getWeeklyStats(DateTime startDate, {String? uid}) async {
+    final effectiveUid = uid ?? _auth.currentUser?.uid;
+    if (effectiveUid == null) return WeeklyStatsModel(dailyStats: []);
 
-    // Ensure we cover the full range from requested start date (Monday?) to end of week
-    // User chart usually shows Mon-Sun or past 7 days.
-    // Let's assume startDate is the first day (e.g. Mon).
     final startRange = DateTime(startDate.year, startDate.month, startDate.day);
     final endRange = startRange.add(const Duration(days: 7));
 
     try {
       final snapshot = await _firestore
           .collection('users')
-          .doc(uid)
+          .doc(effectiveUid)
           .collection('events')
           .where('startTimeMs', isGreaterThanOrEqualTo: startRange.millisecondsSinceEpoch)
           .where('startTimeMs', isLessThan: endRange.millisecondsSinceEpoch)
@@ -71,7 +75,6 @@ class HistoryRepositoryImpl implements HistoryRepository {
       final List<DailyStatsModel> weeklyStats = [];
       for (int i = 0; i < 7; i++) {
         final currentDay = startRange.add(Duration(days: i));
-        // Filter events for this specific day
         final dayEvents = allEvents.where((e) {
           if (e.startTimeMs == null) return false;
           final eDate = DateTime.fromMillisecondsSinceEpoch(e.startTimeMs!);
@@ -84,10 +87,34 @@ class HistoryRepositoryImpl implements HistoryRepository {
       }
 
       return WeeklyStatsModel(dailyStats: weeklyStats);
-
     } catch (e) {
       print('Error fetching weekly stats: $e');
       return WeeklyStatsModel(dailyStats: []);
+    }
+  }
+
+  @override
+  Future<List<SimulationEvent>> fetchEventsForDay(DateTime date, {String? uid}) async {
+    final effectiveUid = uid ?? _auth.currentUser?.uid;
+    if (effectiveUid == null) return [];
+
+    final startOfDay = DateTime(date.year, date.month, date.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(effectiveUid)
+          .collection('events')
+          .where('startTimeMs', isGreaterThanOrEqualTo: startOfDay.millisecondsSinceEpoch)
+          .where('startTimeMs', isLessThan: endOfDay.millisecondsSinceEpoch)
+          .orderBy('startTimeMs', descending: true)
+          .get();
+
+      return snapshot.docs.map((doc) => SimulationEvent.fromJson(doc.data())).toList();
+    } catch (e) {
+      print('Error fetching events for day: $e');
+      return [];
     }
   }
 
@@ -99,7 +126,6 @@ class HistoryRepositoryImpl implements HistoryRepository {
 
     for (var event in events) {
       final type = event.type.toLowerCase();
-      // Use seconds if available
       final durationHrs = (event.durationSeconds ?? 0) / 3600.0;
       
       if (type == 'sitting' || type == 'laying' || type == 'relax') {
@@ -110,7 +136,7 @@ class HistoryRepositoryImpl implements HistoryRepository {
         walk += durationHrs;
       }
 
-      if (event.isCritical || type == 'falling' || type == 'fall') {
+      if (event.isCritical || type.contains('fall')) {
         falls++;
       }
     }

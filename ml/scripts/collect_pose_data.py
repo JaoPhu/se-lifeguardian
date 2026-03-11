@@ -1,0 +1,82 @@
+import cv2
+import mediapipe as mp
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
+from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions, PoseLandmarkerResult
+import pandas as pd
+import numpy as np
+import argparse
+import os
+
+def collect_data(video_path, label):
+    model_path = 'ml/models/pose_landmarker.task'
+    if not os.path.exists(model_path):
+        print(f"Error: Model file {model_path} not found.")
+        print("Please ensure you've downloaded the task model.")
+        return
+
+    # Initialize MediaPipe Tasks Pose Landmarker
+    base_options = python.BaseOptions(model_asset_path=model_path)
+    options = PoseLandmarkerOptions(
+        base_options=base_options,
+        running_mode=python.vision.RunningMode.VIDEO
+    )
+    
+    data = []
+    
+    with PoseLandmarker.create_from_options(options) as landmarker:
+        cap = cv2.VideoCapture(video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        if fps <= 0: fps = 30
+        
+        frame_timestamp_ms = 0
+        print(f"Processing {video_path} for label: {label}...")
+        
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+                
+            # Convert to RGB for MediaPipe
+            image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_rgb)
+            
+            # Detect landmarks
+            detection_result = landmarker.detect_for_video(mp_image, int(frame_timestamp_ms))
+            frame_timestamp_ms += 1000 / fps
+            
+            if detection_result.pose_landmarks:
+                # Take the first detected person
+                landmarks = detection_result.pose_landmarks[0]
+                row = []
+                for lm in landmarks:
+                    row.extend([lm.x, lm.y, lm.z, lm.visibility or 0.0])
+                
+                data.append(row)
+                
+        cap.release()
+    
+    if not data:
+        print("No pose detected in video.")
+        return
+        
+    # Save to CSV
+    os.makedirs('ml/data/raw', exist_ok=True)
+    df = pd.DataFrame(data)
+    output_path = f'ml/data/raw/{label}.csv'
+    
+    # Append if exists, else write new
+    if os.path.exists(output_path):
+        df.to_csv(output_path, mode='a', header=False, index=False)
+    else:
+        df.to_csv(output_path, index=False)
+        
+    print(f"Saved {len(data)} frames to {output_path}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--video", required=True, help="Path to video file")
+    parser.add_argument("--label", required=True, help="Label for the pose (e.g., sitting, walking)")
+    args = parser.parse_args()
+    
+    collect_data(args.video, args.label)

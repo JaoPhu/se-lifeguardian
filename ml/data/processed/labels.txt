@@ -1,0 +1,2 @@
+0:sitting_floor
+1:walking_normal

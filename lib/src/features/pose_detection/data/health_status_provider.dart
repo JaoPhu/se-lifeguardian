@@ -15,6 +15,7 @@ import '../../group/providers/group_providers.dart';
 import '../../notification/data/notification_repository.dart';
 import '../../notification/domain/notification_model.dart';
 import '../../notification/data/notification_service.dart';
+import '../../history/data/history_repository_provider.dart';
 
 enum HealthStatus { normal, warning, emergency, none }
 
@@ -34,21 +35,12 @@ class HealthState {
   });
 
   factory HealthState.initial() {
-    final now = DateTime.now();
-    final mockScores = <String, double>{};
-    // Initialize with some mock data for the week
-    for (int i = 7; i >= 1; i--) {
-      final date = now.subtract(Duration(days: i));
-      final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
-      mockScores[dateStr] = 700.0 + (i * 20); // Variety in scores
-    }
-
     return HealthState(
       score: 1000,
       status: HealthStatus.none,
       currentActivity: 'standing',
       events: [],
-      dailyScores: mockScores,
+      dailyScores: {},
     );
   }
 
@@ -249,7 +241,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
   }
 
   Future<void> clearAllData({String? cameraId}) async {
-    // 1. Physically delete matching snapshot files
+    // 1. Physically delete matching snapshot files (Local files only)
     final List<SimulationEvent> remainingEvents = [];
     
     for (var event in state.events) {
@@ -259,7 +251,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
             final file = File(event.snapshotUrl!);
             if (await file.exists()) {
               await file.delete();
-              debugPrint("Deleted snapshot: ${event.snapshotUrl}");
+              debugPrint("Deleted local snapshot: ${event.snapshotUrl}");
             }
           } catch (e) {
             debugPrint("Error deleting snapshot: $e");
@@ -270,18 +262,47 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       }
     }
 
-    // 2. Clear cloud events if cameraId is provided
-    if (cameraId != null) {
-      await _eventRepository.deleteEventsForCamera(cameraId);
-    }
+      // 2. Clear cloud events
+      if (cameraId != null) {
+        await _eventRepository.deleteEventsForCamera(cameraId);
+      } else {
+        // Global cleanup: UI Wipe + Cloud Wipe + Local Cache Wipe
+        await _eventRepository.deleteAllDataForUser();
+        
+        // Clear local SharedPreferences cache for this specific user
+        try {
+          final targetUid = _ref.read(resolvedTargetUidProvider);
+          if (targetUid.isNotEmpty) {
+             final prefs = await SharedPreferences.getInstance();
+             final key = '${_storageKey}_$targetUid';
+             await prefs.remove(key);
+             debugPrint("SharedPreferences cleared for $targetUid");
+          }
+        } catch (e) {
+          debugPrint("Error clearing SharedPreferences: $e");
+        }
+
+        // 2.1 Invalidate history/statistics providers to force UI refresh
+        _ref.invalidate(dailyStatsProvider);
+        _ref.invalidate(weeklyStatsProvider);
+        _ref.invalidate(dailyEventsProvider);
+      }
     
-    // 3. Update state to only include non-deleted events
+    // 3. Update active state
     if (cameraId == null) {
+      // reset() also saves to state, but we want to be explicit here
       state = HealthState.initial();
+      _currentTime = DateTime.now();
+      _isSimulation = false;
     } else {
-      state = state.copyWith(events: remainingEvents);
+      // Local cleanup for specific camera
+      state = state.copyWith(
+        events: remainingEvents,
+        status: HealthStatus.none, // ✅ Reset status when a camera is deleted/cleared
+        score: 1000,              // ✅ Reset score
+      );
+      await _saveState();
     }
-    await _saveState();
   }
 
   void updateActivity(String activity, {String? snapshotPath, String? cameraId, DateTime? customTime, bool forceSync = false}) {

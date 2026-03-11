@@ -56,5 +56,9 @@ serviceAccountKey.json
 *.jks
 *.keystore
 .env*
+google-services.json
+GoogleService-Info.plist
+firebase_keys_to_share.txt
+/Users/phu/se/firebase_keys_shared/
 
 ios/build/
