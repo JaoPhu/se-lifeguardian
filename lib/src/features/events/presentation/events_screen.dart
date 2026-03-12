@@ -25,7 +25,6 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     final user = ref.watch(userProvider);
     final selectedUid = ref.watch(resolvedTargetUidProvider);
     final isOwner = selectedUid.isEmpty || selectedUid == user.id || selectedUid == 'demo_user';
-    // final healthState = ref.watch(healthStatusProvider);
     final eventsStream = ref.watch(eventsStreamProvider);
     
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -98,7 +97,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                 children: [
-                                   eventsStream.when(
+                  eventsStream.when(
                     data: (allEvents) {
                       final events = allEvents.where((e) => e.cameraId == widget.cameraId).toList();
                       
@@ -142,7 +141,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                                         decoration: BoxDecoration(
                                           color: Theme.of(context).cardColor,
                                           borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: const Color(0xFF0D9488).withValues(alpha: 0.3)),
+                                          border: Border.all(color: const Color(0xFF0D9488).withOpacity(0.3)),
                                         ),
                                         child: DropdownButtonHideUnderline(
                                           child: DropdownButton<String>(
@@ -237,64 +236,63 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                               Row(
                                 children: [
                                   if (events.isNotEmpty)
-                                    // Hidden as requested
                                     const SizedBox.shrink(),
                                   const SizedBox(width: 8),
                                   Text(
                                     'Total: ${events.length}',
-                                    style: TextStyle(fontSize: 12, color: Colors.grey.withValues(alpha: 0.6)),
+                                    style: TextStyle(fontSize: 12, color: Colors.grey.withOpacity(0.6)),
                                   ),
                                 ],
                               ),
                             ],
                           ),
                           const SizedBox(height: 16),
-                           Builder(builder: (context) {
-                             if (events.isEmpty && !isOwner) {
-                               // Show Mock Data for Caregivers if no real data exists
-                                  id: 'mock_1',
-                                  cameraId: cameraName,
-                                  type: 'falling',
-                                  timestamp: '10:00',
-                                  date: '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}',
-                                  isCritical: true,
-                                  snapshotUrl: 'assets/images/google_logo.png', // Fallback local image
-                                  startTimeMs: DateTime.now().subtract(const Duration(minutes: 5)).millisecondsSinceEpoch,
-                                  durationSeconds: 15,
-                                  duration: "0.00 h",
-                                  description: 'CRITICAL: Sudden impact detected. Check subject! (Mock Data)',
-                                  isVerified: false,
-                                );
-                               return Column(
-                                 children: [
-                                   const Padding(
-                                     padding: EdgeInsets.only(bottom: 8.0),
-                                     child: Text('Viewing Demo Data (No real events)', style: TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic)),
-                                   ),
-                                   _buildEventListItem(context, mockEvent),
-                                 ],
-                               );
-                             }
+                          Builder(builder: (context) {
+                            if (events.isEmpty && !isOwner) {
+                              final mockEvent = SimulationEvent(
+                                id: 'mock_1',
+                                cameraId: cameraName,
+                                type: 'falling',
+                                timestamp: '10:00',
+                                date: '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}',
+                                isCritical: true,
+                                snapshotUrl: 'assets/images/google_logo.png',
+                                startTimeMs: DateTime.now().subtract(const Duration(minutes: 5)).millisecondsSinceEpoch,
+                                durationSeconds: 15,
+                                duration: "0.00 h",
+                                description: 'CRITICAL: Sudden impact detected. Check subject! (Mock Data)',
+                                isVerified: false,
+                              );
+                              return Column(
+                                children: [
+                                  const Padding(
+                                    padding: EdgeInsets.only(bottom: 8.0),
+                                    child: Text('Viewing Demo Data (No real events)', style: TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic)),
+                                  ),
+                                  _buildEventListItem(context, mockEvent),
+                                ],
+                              );
+                            }
 
-                             if (events.isEmpty) {
-                               return const SizedBox(
-                                 height: 100,
-                                 child: Center(child: Text('No events detected yet.', style: TextStyle(color: Colors.grey)))
-                               );
-                             }
+                            if (events.isEmpty) {
+                              return const SizedBox(
+                                height: 100,
+                                child: Center(child: Text('No events detected yet.', style: TextStyle(color: Colors.grey))),
+                              );
+                            }
 
-                             return ListView.separated(
-                               shrinkWrap: true,
-                               physics: const NeverScrollableScrollPhysics(),
-                               padding: EdgeInsets.zero,
-                               itemCount: events.length,
-                               separatorBuilder: (context, index) => const Divider(height: 1, color: Colors.black12),
-                               itemBuilder: (context, index) {
-                                 final event = events[index];
-                                 return _buildEventListItem(context, event);
-                               },
-                             );
-                           }),
+                            return ListView.separated(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              padding: EdgeInsets.zero,
+                              itemCount: events.length,
+                              separatorBuilder: (context, index) => const Divider(height: 1, color: Colors.black12),
+                              itemBuilder: (context, index) {
+                                final event = events[index];
+                                return _buildEventListItem(context, event);
+                              },
+                            );
+                          }),
                         ],
                       );
                     },
@@ -443,7 +441,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "Duration: ${event.duration ?? "0.32 h"}",
+                  "Duration: ${event.duration ?? "0.00 h"}",
                   style: const TextStyle(
                     fontSize: 14, 
                     color: Color(0xFF0D9488),
