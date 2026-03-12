@@ -446,7 +446,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       snapshotUrl: snapshotPath,
       startTimeMs: _currentTime.millisecondsSinceEpoch, // Start tracking time
       durationSeconds: 0, // Initial duration
-      duration: "0.00 h", 
+      duration: "0s", 
       description: _getActivityDescription(activity),
       latitude: position?.latitude,
       longitude: position?.longitude,
@@ -470,7 +470,11 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         events: [newEvent, ...updatedEvents],
       );
       
-      // Additional logic for critical events
+      // Universal logic for all events: Sync to cloud and upload snapshot if available
+      // UPLOAD FIRST so we have the remote URL for the notification
+      await _syncAndUploadSnapshot(newEvent);
+
+      // Additional logic for critical events (Now has remote snapshot URL if successful)
       _triggerCriticalNotification(activity, newEvent, position: position);
     } else {
       state = state.copyWith(
@@ -478,10 +482,9 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         events: [newEvent, ...updatedEvents],
         status: state.status == HealthStatus.none ? HealthStatus.normal : state.status,
       );
+      // Still sync regular events
+      _syncAndUploadSnapshot(newEvent);
     }
-    
-    // Universal logic for all events: Sync to cloud and upload snapshot if available
-    _syncAndUploadSnapshot(newEvent);
 
     // NEW: Immediate Exercise Notification
     if (activity == 'exercise') {
@@ -861,8 +864,9 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
   }
 
   String _formatDurationLabel(int seconds) {
-    if (seconds < 60) return "${seconds}s";
-    if (seconds < 3600) return "${seconds ~/ 60}m";
+    if (seconds < 60) return "${seconds}s"; 
+    final minutes = seconds / 60;
+    if (minutes < 60) return "${minutes.truncate()}m";
     return "${(seconds / 3600).toStringAsFixed(2)}h";
   }
 
