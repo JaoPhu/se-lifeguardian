@@ -305,6 +305,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
   }
 
   void startMonitoring() {
+    _currentTime = DateTime.now();
     state = state.copyWith(status: HealthStatus.normal);
   }
 
@@ -455,15 +456,28 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       final lastEvent = updatedEvents.first;
       
       if (lastEvent.startTimeMs != null) {
-        final durationSec = (now.millisecondsSinceEpoch - lastEvent.startTimeMs!) ~/ 1000;
+        final nowMs = now.millisecondsSinceEpoch;
+        final startMs = lastEvent.startTimeMs!;
         
-        updatedEvents[0] = lastEvent.copyWith(
-          durationSeconds: durationSec,
-          duration: _formatDurationLabel(durationSec),
-        );
-        
-        // AWAIT sync to ensure closure is recorded before opening new one
-        await _eventRepository.syncEvent(updatedEvents[0]);
+        // FUTURE GUARD: If the existing event is from the "future" (stale simulation), 
+        // don't try to calculate a negative duration. Just start fresh.
+        if (nowMs >= startMs) {
+          final durationSec = (nowMs - startMs) ~/ 1000;
+          updatedEvents[0] = lastEvent.copyWith(
+            durationSeconds: durationSec,
+            duration: _formatDurationLabel(durationSec),
+          );
+          
+          await _eventRepository.syncEvent(updatedEvents[0]);
+        } else {
+          debugPrint("Discarding negative duration: last event started in future (${startMs - nowMs}ms ahead).");
+          // Optionally close it with 0 duration
+           updatedEvents[0] = lastEvent.copyWith(
+            durationSeconds: 0,
+            duration: _formatDurationLabel(0),
+          );
+          await _eventRepository.syncEvent(updatedEvents[0]);
+        }
       }
     }
 

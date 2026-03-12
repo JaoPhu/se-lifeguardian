@@ -163,13 +163,20 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
       if (!mounted) return;
 
       // Capture first frame for Thumbnail
-      await Future.delayed(const Duration(milliseconds: 1500)); // Increased wait for reliability
-      final uint8list = await _screenshotController.capture(pixelRatio: 2.0); // 2.0 = Extra sharp (Retina)
-      if (uint8list != null) {
-        final directory = await getTemporaryDirectory();
-        final path = '${directory.path}/thumb_${DateTime.now().millisecondsSinceEpoch}.png';
-        await File(path).writeAsBytes(uint8list);
-        _firstFramePath = path;
+      await Future.delayed(const Duration(milliseconds: 3500)); // Increased wait for reliability (3.5s)
+      try {
+        final uint8list = await _screenshotController.capture(pixelRatio: 1.5); // Slightly lower ratio to speed up upload
+        if (uint8list != null) {
+          final directory = await getTemporaryDirectory();
+          final path = '${directory.path}/thumb_${DateTime.now().millisecondsSinceEpoch}.png';
+          await File(path).writeAsBytes(uint8list);
+          _firstFramePath = path;
+          debugPrint("✅ Thumbnail captured successfully at: $_firstFramePath");
+        } else {
+          debugPrint("⚠️ Thumbnail capture returned NULL - Video might not be rendered yet.");
+        }
+      } catch (e) {
+        debugPrint("❌ Error capturing thumbnail: $e");
       }
 
       // Register camera with name and thumbnail
