@@ -354,12 +354,13 @@ exports.onNotificationCreated = onDocumentCreated("users/{uid}/notifications/{no
     const patientUid = event.params.uid;
 
     // ส่งเฉพาะ notification ประเภท 'danger' (การล้ม) เท่านั้น
-    if (notiData.type !== 'danger') {
-        console.log(`Skipping non-emergency notification: ${notiData.type}`);
+    if (notiData.type !== 'danger' && notiData.type !== 'emergency') {
+        console.log(`Skipping non-emergency notification: ${notiData.type}. Full data:`, JSON.stringify(notiData));
         return;
     }
 
-    console.log(`🚨 Fall detected for patient ${patientUid}: ${notiData.title}`);
+    console.log(`🚨 Emergency detected for patient ${patientUid}: ${notiData.title}`);
+    console.log(`📝 Notification data:`, JSON.stringify(notiData));
 
     try {
         // --- [AI/Standard Logic] FCM Broadcast to Caregivers ---
@@ -378,6 +379,7 @@ exports.onNotificationCreated = onDocumentCreated("users/{uid}/notifications/{no
                     const caregiverDoc = await db.collection('users').doc(memberUid).get();
                     if (caregiverDoc.exists) {
                         const tokens = caregiverDoc.data().fcm_tokens || [];
+                        console.log(`Adding ${tokens.length} tokens for caregiver ${memberUid}`);
                         tokens.forEach(t => caregiverTokens.add(t));
                     }
                 }
@@ -412,6 +414,9 @@ exports.onNotificationCreated = onDocumentCreated("users/{uid}/notifications/{no
         
         if (configDoc.exists) {
             emergencyLineId = configDoc.data().emergencyContactLineId;
+            console.log(`Found config doc. Line ID: ${emergencyLineId}`);
+        } else {
+            console.log(`Config doc app_config/line_settings not found`);
         }
 
         if (!emergencyLineId) {
@@ -435,7 +440,10 @@ exports.onNotificationCreated = onDocumentCreated("users/{uid}/notifications/{no
             ...notiData,
             patientName,
             cameraId: notiData.cameraId || 'ไม่ทราบกล้อง',
+            imageUrl: notiData.imageUrl || notiData.remoteImageUrl || '',
         };
+
+        console.log(`Attempting to send LINE alert to: ${emergencyLineId}`);
 
         const success = await sendLineEmergencyAlert(emergencyLineId, enrichedNotiData);
         

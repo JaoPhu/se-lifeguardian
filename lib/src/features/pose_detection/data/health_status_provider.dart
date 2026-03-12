@@ -639,7 +639,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
              snapshotUrl: activeEvent.snapshotUrl, // Keep last snapshot
              startTimeMs: midnightNewDay.millisecondsSinceEpoch,
              durationSeconds: newDurationSec,
-             duration: "$newDurationHrs h",
+             duration: _formatDurationLabel(newDurationSec),
              description: activeEvent.description,
              latitude: activeEvent.latitude,
              longitude: activeEvent.longitude,
@@ -654,7 +654,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
            
            updatedEvents[0] = activeEvent.copyWith(
              durationSeconds: durationSec,
-             duration: "$durationHrs h",
+             duration: _formatDurationLabel(durationSec),
            );
         }
       }
@@ -684,8 +684,8 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         // NEW: Suppress minor notifications if in Emergency state or very high simulation jump
         final isEmergency = state.status == HealthStatus.emergency;
         
-        // Trigger sitting notification if they have been sitting for 2 minutes (120 sim-seconds)
-        if (!isEmergency && updatedEvents.first.type == 'sitting' && previousDuration < 120 && duration >= 120) {
+        // Trigger sitting notification if they have been sitting for 1 hour (3600 sim-seconds)
+        if (!isEmergency && updatedEvents.first.type == 'sitting' && previousDuration < 3600 && duration >= 3600) {
            _triggerSittingNotification(updatedEvents.first);
         }
 
@@ -858,6 +858,12 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
     if (score < 500) return HealthStatus.emergency;
     if (score < 800) return HealthStatus.warning;
     return HealthStatus.normal;
+  }
+
+  String _formatDurationLabel(int seconds) {
+    if (seconds < 60) return "${seconds}s";
+    if (seconds < 3600) return "${seconds ~/ 60}m";
+    return "${(seconds / 3600).toStringAsFixed(2)}h";
   }
 
   @override
