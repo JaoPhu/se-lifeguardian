@@ -166,7 +166,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               displayCameraName: extra['cameraName'] as String?,
               startTime: extra['startTime'] as TimeOfDay?,
               date: extra['date'] as DateTime?,
-              speed: extra['speed'] as double?,
+              videoSpeed: extra['videoSpeed'] as double?,
+              simMultiplier: extra['simMultiplier'] as double?,
             );
           }
           return const PoseDetectorView();

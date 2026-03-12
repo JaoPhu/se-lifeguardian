@@ -68,7 +68,8 @@ class DemoSetupScreen extends ConsumerStatefulWidget {
 class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
   final _cameraNameController = TextEditingController(text: 'Camera view : Desk');
   TimeOfDay _startTime = const TimeOfDay(hour: 8, minute: 0);
-  double _speed = 1.0;
+  double _videoSpeed = 1.0;
+  double _simMultiplier = 60.0; // 1s video = 1m sim
   DateTime _date = DateTime.now();
   String? _videoPath;
   final ImagePicker _picker = ImagePicker();
@@ -247,68 +248,15 @@ class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildLabel('Speed'),
+                          _buildLabel('Video Speed'),
                            _buildButton(
-                             '${_speed.toString().replaceAll(RegExp(r"([.]*0)(?!.*\d)"), "")}x', 
+                             '${_videoSpeed.toString().replaceAll(RegExp(r"([.]*0)(?!.*\d)"), "")}x', 
                              Icons.speed, 
                              () {
-                               final List<double> speeds = [0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0];
-                               int initialIndex = speeds.indexOf(_speed);
-                               if (initialIndex == -1) initialIndex = 1; // Default to 1.0x
-
-                               showDialog(
-                                 context: context,
-                                 builder: (BuildContext builderContext) {
-                                   return Dialog(
-                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                     child: Container(
-                                       height: 300,
-                                       padding: const EdgeInsets.all(16),
-                                       decoration: BoxDecoration(
-                                         color: Theme.of(context).cardColor,
-                                         borderRadius: BorderRadius.circular(20),
-                                       ),
-                                       child: Column(
-                                         children: [
-                                           Row(
-                                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                             children: [
-                                               TextButton(
-                                                 onPressed: () => Navigator.pop(builderContext),
-                                                 child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-                                               ),
-                                               const Text('Select Speed', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                               TextButton(
-                                                 onPressed: () => Navigator.pop(builderContext),
-                                                 child: const Text('Done', style: TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.bold)),
-                                               ),
-                                            ],
-                                           ),
-                                           const SizedBox(height: 16),
-                                           Expanded(
-                                             child: CupertinoPicker(
-                                               scrollController: FixedExtentScrollController(initialItem: initialIndex),
-                                               itemExtent: 40.0,
-                                               onSelectedItemChanged: (int index) {
-                                                 setState(() {
-                                                   _speed = speeds[index];
-                                                 });
-                                               },
-                                               children: speeds.map((s) => Center(
-                                                 child: Text('${s.toString().replaceAll(RegExp(r"([.]*0)(?!.*\d)"), "")}x',
-                                                   style: TextStyle(
-                                                     color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black87,
-                                                   ),
-                                                 ),
-                                               )).toList(),
-                                             ),
-                                           ),
-                                         ],
-                                       ),
-                                     ),
-                                   );
-                                 },
-                               );
+                               final List<double> speeds = [0.5, 1.0, 1.5, 2.0];
+                               _showSpeedPicker(context, 'Video Speed', speeds, _videoSpeed, (val) {
+                                 setState(() => _videoSpeed = val);
+                               });
                              }
                            ),
                         ],
@@ -342,6 +290,44 @@ class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
                   ],
                 ),
 
+                const SizedBox(height: 16),
+
+                // Accelerate Video Toggle
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white10 : Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
+                  ),
+                  child: SwitchListTile(
+                    title: const Text(
+                      'Accelerate Video Playback',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: const Text(
+                      'If ON, video plays fast. If OFF, only simulation time is accelerated.',
+                      style: TextStyle(fontSize: 11),
+                    ),
+                    value: _accelerateVideo,
+                    activeColor: const Color(0xFF0D9488),
+                    onChanged: (val) => setState(() => _accelerateVideo = val),
+                  ),
+                ),
+
+                // Simulation Multiplier
+                _buildLabel('Simulation Multiplier (1s video = Xs simulation)'),
+                _buildButton(
+                  '${_simMultiplier.toInt()}x', 
+                  Icons.timer, 
+                  () {
+                    final List<double> multipliers = [1, 30, 60, 120, 180, 240, 300];
+                    _showSpeedPicker(context, 'Simulation Multiplier', multipliers, _simMultiplier, (val) {
+                      setState(() => _simMultiplier = val);
+                    });
+                  }
+                ),
+
                 const SizedBox(height: 32),
 
                 // Play Button
@@ -353,11 +339,12 @@ class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
                       context.push('/analysis', extra: {
                         'videoPath': _videoPath,
                         'cameraName': _cameraNameController.text,
-                        'startTime': _startTime, // Pass TimeOfDay
-                        'date': _date, // Pass DateTime
-                        'speed': _speed, // Pass the selected playback speed
+                        'startTime': _startTime,
+                        'date': _date,
+                        'videoSpeed': _videoSpeed,
+                        'simMultiplier': _simMultiplier,
                       });
-                    } : null, // Disabled if no video
+                    } : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF0D9488),
                       disabledBackgroundColor: Colors.grey.shade200,
@@ -397,6 +384,63 @@ class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showSpeedPicker(BuildContext context, String title, List<double> options, double currentValue, Function(double) onSelected) {
+    int initialIndex = options.indexOf(currentValue);
+    if (initialIndex == -1) initialIndex = 0;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext builderContext) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Container(
+            height: 300,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(builderContext),
+                      child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                    ),
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    TextButton(
+                      onPressed: () => Navigator.pop(builderContext),
+                      child: const Text('Done', style: TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: CupertinoPicker(
+                    scrollController: FixedExtentScrollController(initialItem: initialIndex),
+                    itemExtent: 40.0,
+                    onSelectedItemChanged: (int index) {
+                      onSelected(options[index]);
+                    },
+                    children: options.map((s) => Center(
+                      child: Text('${s.toString().replaceAll(RegExp(r"([.]*0)(?!.*\d)"), "")}x',
+                        style: TextStyle(
+                          color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    )).toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

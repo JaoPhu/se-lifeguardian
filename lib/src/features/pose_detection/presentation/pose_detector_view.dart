@@ -30,7 +30,8 @@ class PoseDetectorView extends ConsumerStatefulWidget {
   final String? displayCameraName;
   final TimeOfDay? startTime;
   final DateTime? date;
-  final double? speed;
+  final double? videoSpeed;
+  final double? simMultiplier;
 
   const PoseDetectorView({
     super.key, 
@@ -39,7 +40,8 @@ class PoseDetectorView extends ConsumerStatefulWidget {
     this.displayCameraName,
     this.startTime,
     this.date,
-    this.speed,
+    this.videoSpeed,
+    this.simMultiplier,
   });
  
   @override
@@ -57,13 +59,13 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   Size? _imageSize;
   InputImageRotation? _imageRotation;
   bool _isLoading = true;
-  late final double _playbackSpeed;
+  late final double _videoSpeed;
+  late final double _simMultiplier;
   late final DateTime _baseSimTime; 
   DateTime get _simTime {
     if (_videoController == null || !_videoController!.value.isInitialized) return _baseSimTime;
-    // 1 second of video = (60 * _playbackSpeed) seconds of simulation
-    // This allows the user to speed up the simulation time without speeding up the video itself.
-    return _baseSimTime.add(Duration(milliseconds: (_videoController!.value.position.inMilliseconds * 60 * _playbackSpeed).toDouble().toInt()));
+    // 1 second of video = _simMultiplier simulation-seconds
+    return _baseSimTime.add(Duration(milliseconds: (_videoController!.value.position.inMilliseconds * (_simMultiplier / 60)).toDouble().toInt()));
   }
   bool _isAnalysisComplete = false;
   bool _isAnalyzing = false;
@@ -101,7 +103,8 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   @override
   void initState() {
     super.initState();
-    _playbackSpeed = widget.speed ?? 1.0;
+    _videoSpeed = widget.videoSpeed ?? 1.0;
+    _simMultiplier = widget.simMultiplier ?? 60.0; // Default: 1s video = 1m sim
     
     _loadingController = AnimationController(
       vsync: this,
@@ -148,7 +151,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     try {
       await _videoController!.initialize();
       await _videoController!.setLooping(false); // Play once for demo
-      await _videoController!.setPlaybackSpeed(1.0); // ✅ Keep video at normal speed as requested
+      await _videoController!.setPlaybackSpeed(_videoSpeed); // ✅ Use dedicated video speed
       
       setState(() {
         _imageSize = _videoController!.value.size;
