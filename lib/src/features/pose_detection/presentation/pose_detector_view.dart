@@ -980,7 +980,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Video Speed : ${_videoSpeed.toStringAsFixed(1)}X',
+                'Speed : ${_videoSpeed.toStringAsFixed(1)}X',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(width: 16),

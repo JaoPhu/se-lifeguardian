@@ -248,13 +248,13 @@ class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildLabel('Video Speed'),
+                          _buildLabel('Speed'),
                            _buildButton(
                              '${_videoSpeed.toString().replaceAll(RegExp(r"([.]*0)(?!.*\d)"), "")}x', 
                              Icons.speed, 
                              () {
                                final List<double> speeds = [0.5, 1.0, 1.5, 2.0];
-                               _showSpeedPicker(context, 'Video Speed', speeds, _videoSpeed, (val) {
+                               _showSpeedPicker(context, 'Speed', speeds, _videoSpeed, (val) {
                                  setState(() => _videoSpeed = val);
                                });
                              }
