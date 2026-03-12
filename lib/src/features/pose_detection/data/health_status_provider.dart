@@ -352,14 +352,21 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         // Global cleanup: UI Wipe + Cloud Wipe + Local Cache Wipe
         await _eventRepository.deleteAllDataForUser();
         
-        // Clear local SharedPreferences cache for this specific user
+        // Clear ALL local SharedPreferences keys for this specific user (including camera-specific ones)
         try {
           final targetUid = _ref.read(resolvedTargetUidProvider);
           if (targetUid.isNotEmpty) {
              final prefs = await SharedPreferences.getInstance();
-             final key = '${_storageKey}_$targetUid';
-             await prefs.remove(key);
-             debugPrint("SharedPreferences cleared for $targetUid");
+             final allKeys = prefs.getKeys();
+             
+             // Key pattern: health_state_v2[_cameraId]_targetUid
+             for (final k in allKeys) {
+               if (k.startsWith(_storageKey) && k.endsWith(targetUid)) {
+                 await prefs.remove(k);
+                 debugPrint("SharedPreferences cleared key: $k");
+               }
+             }
+             debugPrint("All SharedPreferences for $targetUid cleared.");
           }
         } catch (e) {
           debugPrint("Error clearing SharedPreferences: $e");

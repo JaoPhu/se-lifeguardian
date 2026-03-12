@@ -149,8 +149,8 @@ class EventRepository {
       // 5. Reset root level health fields
       batch.set(_firestore.collection('users').doc(uid), {
         'health_score': 1000,
-        'health_status': 0, // HealthStatus.normal enum index
-        'last_activity': 'standing',
+        'health_status': 3, // HealthStatus.none enum index
+        'last_activity': '',
         'last_updated': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
