@@ -11,6 +11,8 @@ class AuthTextField extends StatefulWidget {
 
   final bool readOnly;
   final FocusNode? focusNode;
+  final ValueChanged<String>? onFieldSubmitted;
+  final TextInputAction? textInputAction;
 
   const AuthTextField({
     super.key,
@@ -23,6 +25,8 @@ class AuthTextField extends StatefulWidget {
     this.suffixIcon,
     this.readOnly = false,
     this.focusNode,
+    this.onFieldSubmitted,
+    this.textInputAction,
   });
 
   @override
@@ -49,6 +53,8 @@ class _AuthTextFieldState extends State<AuthTextField> {
         ),
         const SizedBox(height: 8),
         Focus(
+          skipTraversal: true,
+          canRequestFocus: false,
           onFocusChange: (hasFocus) {
             setState(() {
               _isFocused = hasFocus;
@@ -86,6 +92,8 @@ class _AuthTextFieldState extends State<AuthTextField> {
               readOnly: widget.readOnly,
               obscureText: widget.isPassword && _obscureText,
               keyboardType: widget.keyboardType,
+              textInputAction: widget.textInputAction,
+              onSubmitted: widget.onFieldSubmitted,
               style: TextStyle(
                 fontSize: 14,
                 color: isDark ? Colors.white : const Color(0xFF111827),

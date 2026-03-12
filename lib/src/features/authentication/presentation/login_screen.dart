@@ -19,12 +19,16 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _emailFocusNode = FocusNode();
+  final _passwordFocusNode = FocusNode();
   bool _keepLoggedIn = false;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _emailFocusNode.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 
@@ -105,6 +109,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     await ref.read(userRepositoryProvider).ensureUserDoc();
   }
 
+  Future<void> _performLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      _showSnack('กรอกอีเมลและรหัสผ่านก่อนนะ');
+      return;
+    }
+
+    // ✅ 1) Login
+    await ref.read(authControllerProvider.notifier).login(email, password);
+
+    // ✅ 2) เช็ค state หลัง login
+    final s = ref.read(authControllerProvider);
+    if (s.hasError) {
+      _onAuthError(s.error!);
+      return;
+    }
+
+    // ✅ 3) สร้าง users/{uid} (กรณี login ด้วย Google/Apple/เก่าๆแล้วไม่มี doc)
+    await _afterLoginEnsureUserDoc();
+
+    if (!context.mounted) return;
+    context.go('/overview');
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -167,6 +197,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 prefixIcon: Icons.mail_outline,
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
+                focusNode: _emailFocusNode,
+                textInputAction: TextInputAction.next,
+                onFieldSubmitted: (_) => FocusScope.of(context).requestFocus(_passwordFocusNode),
               ),
               const SizedBox(height: 20),
 
@@ -176,6 +209,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 prefixIcon: Icons.lock_outline,
                 isPassword: true,
                 controller: _passwordController,
+                focusNode: _passwordFocusNode,
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) {
+                  if (!isLoading) _performLogin();
+                },
               ),
               const SizedBox(height: 16),
 
@@ -231,33 +269,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: isLoading
-                      ? null
-                      : () async {
-                          final email = _emailController.text.trim();
-                          final password = _passwordController.text.trim();
-
-                          if (email.isEmpty || password.isEmpty) {
-                            _showSnack('กรอกอีเมลและรหัสผ่านก่อนนะ');
-                            return;
-                          }
-
-                          // ✅ 1) Login
-                          await ref.read(authControllerProvider.notifier).login(email, password);
-
-                          // ✅ 2) เช็ค state หลัง login
-                          final s = ref.read(authControllerProvider);
-                          if (s.hasError) {
-                            _onAuthError(s.error!);
-                            return;
-                          }
-
-                          // ✅ 3) สร้าง users/{uid} (กรณี login ด้วย Google/Apple/เก่าๆแล้วไม่มี doc)
-                          await _afterLoginEnsureUserDoc();
-
-                          if (!context.mounted) return;
-                          context.go('/overview');
-                        },
+                  onPressed: isLoading ? null : _performLogin,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0D9488),
                     foregroundColor: Colors.white,
