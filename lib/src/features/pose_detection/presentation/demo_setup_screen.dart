@@ -316,7 +316,7 @@ class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
                 ),
 
                 // Simulation Multiplier
-                _buildLabel('Simulation Multiplier (1s video = Xs simulation)'),
+                _buildLabel('Simulation Multiplier (e.g. 60x = 1s video : 1m sim)'),
                 _buildButton(
                   '${_simMultiplier.toInt()}x', 
                   Icons.timer, 
