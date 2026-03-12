@@ -19,7 +19,7 @@ class OverviewScreen extends ConsumerWidget {
     final user = ref.watch(userProvider);
     // final isDark = Theme.of(context).brightness == Brightness.dark; // Unused
     final cameras = ref.watch(cameraProvider);
-    final healthState = ref.watch(healthStatusProvider);
+    // healthStatusFamily is now a family provider, we watch it per camera in _buildCameraCard
 
     return Scaffold(
 
@@ -141,7 +141,7 @@ class OverviewScreen extends ConsumerWidget {
                     },
                   ),
 
-                  ...cameras.map((camera) => _buildCameraCard(context, ref, camera, healthState)),
+                  ...cameras.map((camera) => _buildCameraCard(context, ref, camera)),
                   
                   const SizedBox(height: 24),
                   
@@ -216,7 +216,8 @@ class OverviewScreen extends ConsumerWidget {
       ),
     );
   }
-  Widget _buildCameraCard(BuildContext context, WidgetRef ref, Camera camera, HealthState healthState) {
+  Widget _buildCameraCard(BuildContext context, WidgetRef ref, Camera camera) {
+    final healthState = ref.watch(healthStatusFamily(camera.id));
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Container(
@@ -314,7 +315,7 @@ class OverviewScreen extends ConsumerWidget {
 
                         if (confirm == true) {
                           // 1. Clear History for this camera first
-                          await ref.read(healthStatusProvider.notifier).clearAllData(cameraId: camera.id);
+                          await ref.read(healthStatusFamily(camera.id).notifier).clearAllData(cameraId: camera.id);
                           // 2. Remove the camera
                           ref.read(cameraProvider.notifier).deleteCamera(camera.id);
                         }
@@ -378,19 +379,35 @@ class OverviewScreen extends ConsumerWidget {
                       final cameraEvents = healthState.events.where((e) => e.cameraId == camera.id).toList();
                       final latestEvent = cameraEvents.isNotEmpty ? cameraEvents.first : null;
 
-                      if (configThumbnail != null && File(configThumbnail).existsSync()) {
+                      if (configThumbnail != null && configThumbnail.startsWith('http')) {
+                        return _buildImageWrapper(Image.network(configThumbnail, fit: BoxFit.fitHeight));
+                      } else if (configThumbnail != null && File(configThumbnail).existsSync()) {
                         return _buildImageWrapper(Image.file(File(configThumbnail), fit: BoxFit.fitHeight));
-                      } else if (latestEvent != null) {
-                        if (latestEvent.remoteImageUrl != null) {
-                          return _buildImageWrapper(
-                            Image.network(
-                              latestEvent.remoteImageUrl!,
-                              fit: BoxFit.fitHeight,
-                              errorBuilder: (context, error, stackTrace) => _buildLocalFallback(latestEvent),
-                            ),
+                      } else {
+                        // Find the latest event for this camera that HAS an image
+                        final cameraEvents = healthState.events.where((e) => e.cameraId == camera.id).toList();
+                        
+                        SimulationEvent? eventWithImage;
+                        try {
+                          eventWithImage = cameraEvents.firstWhere(
+                            (e) => e.remoteImageUrl != null || (e.snapshotUrl != null && File(e.snapshotUrl!).existsSync()),
                           );
-                        } else if (latestEvent.snapshotUrl != null) {
-                          return _buildImageWrapper(_buildLocalFallback(latestEvent));
+                        } catch (_) {
+                          // No event with image found
+                        }
+
+                        if (eventWithImage != null) {
+                          if (eventWithImage.remoteImageUrl != null) {
+                            return _buildImageWrapper(
+                              Image.network(
+                                eventWithImage.remoteImageUrl!,
+                                fit: BoxFit.fitHeight,
+                                errorBuilder: (context, error, stackTrace) => _buildLocalFallback(eventWithImage!),
+                              ),
+                            );
+                          } else if (eventWithImage.snapshotUrl != null) {
+                            return _buildImageWrapper(_buildLocalFallback(eventWithImage));
+                          }
                         }
                       }
                       return const Center(child: Icon(Icons.videocam_off, color: Colors.white54));

@@ -89,9 +89,11 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
   final EventRepository _eventRepository;
   final NotificationRepository _notificationRepository;
   final Ref _ref;
+  final String? cameraId;
   Timer? _timer;
+  Future<void>? _processingLock;
 
-  HealthStatusNotifier(this._eventRepository, this._notificationRepository, this._ref) : super(HealthState.initial()) {
+  HealthStatusNotifier(this._eventRepository, this._notificationRepository, this._ref, {this.cameraId}) : super(HealthState.initial()) {
     _startTimer();
   }
 
@@ -99,10 +101,14 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
   Future<void> loadState(String targetUid) async {
     try {
+      final uid = targetUid.isEmpty ? 'demo_user' : targetUid;
+      // Prefix storage key with cameraId to segregate data if provided
+      final cameraKey = cameraId != null ? '_$cameraId' : '';
+      final storageKey = '$_storageKey${cameraKey}_$uid';
+      
       final prefs = await SharedPreferences.getInstance();
       // Ensure local cache is namespaced by targetUid so users don't see each other's data
-      final key = '${_storageKey}_$targetUid';
-      final jsonStr = prefs.getString(key);
+      final jsonStr = prefs.getString(storageKey);
       if (jsonStr != null) {
         state = HealthState.fromJson(json.decode(jsonStr) as Map<String, dynamic>);
       } else {
@@ -114,16 +120,21 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       if (targetUid.isNotEmpty) {
         try {
           // Fetch events
-          final eventsSnapshot = await FirebaseFirestore.instance
+          Query query = FirebaseFirestore.instance
               .collection('users')
               .doc(targetUid)
               .collection('events')
               .orderBy('startTimeMs', descending: true)
-              .limit(50)
-              .get();
+              .limit(50);
+          
+          if (cameraId != null) {
+            query = query.where('cameraId', isEqualTo: cameraId);
+          }
+          
+          final eventsSnapshot = await query.get();
 
           final remoteEvents = eventsSnapshot.docs
-              .map((doc) => SimulationEvent.fromJson(doc.data()))
+              .map((doc) => SimulationEvent.fromJson(doc.data() as Map<String, dynamic>))
               .toList();
 
           // Fetch current status/score
@@ -144,6 +155,35 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
             // If status doc doesn't exist but events do, load them
             state = state.copyWith(events: remoteEvents);
           }
+
+          // NEW: If global view (cameraId == null), derive EVERYTHING from events to ensure truth
+          if (cameraId == null && remoteEvents.isNotEmpty) {
+             final latestEvent = remoteEvents.first;
+             HealthStatus derivedStatus = HealthStatus.normal;
+             int derivedScore = 1000;
+
+             // If any event in the last 10 minutes is critical, status is emergency
+             final tenMinsAgo = DateTime.now().millisecondsSinceEpoch - (10 * 60 * 1000);
+             final hasRecentCritical = remoteEvents.take(10).any((e) => 
+               (e.isCritical || e.type.toLowerCase().contains('fall')) && 
+               (e.startTimeMs ?? 0) > tenMinsAgo);
+             
+             if (hasRecentCritical) {
+               derivedStatus = HealthStatus.emergency;
+               derivedScore = 400;
+             } else {
+               // Normal logic: find most recent status-affecting event
+               final isCritical = latestEvent.isCritical || latestEvent.type.toLowerCase().contains('fall');
+               derivedStatus = isCritical ? HealthStatus.emergency : HealthStatus.normal;
+               derivedScore = isCritical ? 400 : 1000;
+             }
+
+             state = state.copyWith(
+               status: derivedStatus,
+               score: derivedScore,
+               currentActivity: latestEvent.type,
+             );
+          }
         } catch (e) {
           debugPrint("Firestore load failed, using local: $e");
         }
@@ -159,8 +199,11 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       if (targetUid.isEmpty) return; // Don't save if no user is active
 
       final prefs = await SharedPreferences.getInstance();
-      final key = '${_storageKey}_$targetUid';
-      await prefs.setString(key, json.encode(state.toJson()));
+      final uid = targetUid.isEmpty ? 'demo_user' : targetUid;
+      final cameraKey = cameraId != null ? '_$cameraId' : '';
+      final storageKey = '$_storageKey${cameraKey}_$uid';
+      
+      await prefs.setString(storageKey, json.encode(state.toJson()));
       
       // Sync basic status to Firestore root user doc for quick access
         // Warning: This write will only succeed if Security Rules allow it,
@@ -319,8 +362,36 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
   }
 
   Future<void> _processActivityChange(String activity, String? snapshotPath, {String? cameraId, DateTime? customTime, bool forceSync = false}) async {
-    // If we're just forcing a sync of the current activity duration, don't return early
-    if (state.currentActivity == activity && snapshotPath == null && !forceSync) return;
+    // 0. Ensure Atomic Processing (Lock)
+    // This prevents one process from reading outdated state while another is writing it.
+    while (_processingLock != null) {
+      await _processingLock;
+    }
+    
+    final Completer<void> completer = Completer<void>();
+    _processingLock = completer.future;
+
+    try {
+      // If we're just forcing a sync of the current activity duration, don't return early
+      // Also ALLOW record if events is currently empty (initial state)
+      if (state.currentActivity == activity && snapshotPath == null && !forceSync && state.events.isNotEmpty) return;
+
+      // --- STICKY FALL LOGIC ---
+      // If the current activity is 'falling' and it's very recent (< 2 seconds),
+      // don't let it be superseded by ANY other activity immediately.
+      // This ensures the fall event is recorded and not "eaten" by a quick walk-away or rest.
+      if (state.currentActivity == 'falling' && activity != 'falling') {
+        if (state.events.isNotEmpty) {
+           final lastEvent = state.events.first;
+           if (lastEvent.type == 'falling' && lastEvent.startTimeMs != null) {
+              final elapsedMs = DateTime.now().millisecondsSinceEpoch - lastEvent.startTimeMs!;
+              if (elapsedMs < 2000) {
+                 debugPrint("Sticky Fall active: ignoring transition to $activity for now (elapsed: ${elapsedMs}ms).");
+                 return;
+              }
+           }
+        }
+      }
 
     final now = customTime ?? _currentTime;
     final timestamp = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
@@ -341,7 +412,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         
         updatedEvents[0] = lastEvent.copyWith(
           durationSeconds: durationSec,
-          duration: "$durationHrs hr",
+          duration: "$durationHrs h",
         );
         
         // Sync the updated event to cloud so the Events list reflects the final duration
@@ -349,17 +420,19 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       }
     }
 
-    // If we were just forcing a sync of the current event, we stop here
-    if (forceSync && state.currentActivity == activity) {
+    // If we were just forcing a sync of the current event, we stop here (ONLY if we actually have an event to sync)
+    if (forceSync && state.currentActivity == activity && updatedEvents.isNotEmpty) {
       state = state.copyWith(events: updatedEvents);
       _saveState();
+      // Sync the final version of the current event to cloud
+      unawaited(_eventRepository.syncEvent(updatedEvents.first));
       return;
     }
 
     // 2. Create new event (only if activity changed)
     final newEvent = SimulationEvent(
       id: _currentTime.millisecondsSinceEpoch.toString(),
-      cameraId: cameraId,
+      cameraId: cameraId ?? this.cameraId,
       type: activity,
       timestamp: timestamp,
       date: dateStr,
@@ -367,13 +440,17 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       snapshotUrl: snapshotPath,
       startTimeMs: _currentTime.millisecondsSinceEpoch, // Start tracking time
       durationSeconds: 0, // Initial duration
-      duration: "0.00 hr", 
+      duration: "0.00 h", 
       description: _getActivityDescription(activity),
       latitude: position?.latitude,
       longitude: position?.longitude,
     );
 
-    _processNewEvent(newEvent, activity, updatedEvents, position: position);
+      await _processNewEvent(newEvent, activity, updatedEvents, position: position);
+    } finally {
+      completer.complete();
+      _processingLock = null;
+    }
   }
 
   Future<void> _processNewEvent(SimulationEvent newEvent, String activity, List<SimulationEvent> updatedEvents, {Position? position}) async {
@@ -384,13 +461,10 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         score: newScore,
         currentActivity: activity,
         status: _getStatus(newScore),
-        events: updatedEvents,
+        events: [newEvent, ...updatedEvents],
       );
       
-      // Trigger Cloud Verification and Sync
-      _syncAndVerify(newEvent);
-      
-      // NEW: Trigger Notification Model creation
+      // Additional logic for critical events
       _triggerCriticalNotification(activity, newEvent, position: position);
     } else {
       state = state.copyWith(
@@ -398,16 +472,23 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         events: [newEvent, ...updatedEvents],
         status: state.status == HealthStatus.none ? HealthStatus.normal : state.status,
       );
-      // Sync basic activity change to Firestore
-      _eventRepository.syncEvent(newEvent);
     }
+    
+    // Universal logic for all events: Sync to cloud and upload snapshot if available
+    _syncAndUploadSnapshot(newEvent);
+
+    // NEW: Immediate Exercise Notification
+    if (activity == 'exercise') {
+      _triggerExerciseNotification(newEvent);
+    }
+
     _saveState();
   }
 
-  Future<void> _syncAndVerify(SimulationEvent event) async {
+  Future<void> _syncAndUploadSnapshot(SimulationEvent event) async {
     SimulationEvent currentEvent = event;
     
-    // 1. Sync to Firestore (Initial)
+    // 1. Sync to Firestore (Initial metadata)
     await _eventRepository.syncEvent(currentEvent);
 
     // 2. Upload Snapshot to Storage if available
@@ -415,16 +496,20 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       final remoteUrl = await _eventRepository.uploadSnapshot(currentEvent.snapshotUrl!, currentEvent.id);
       if (remoteUrl != null) {
         currentEvent = currentEvent.copyWith(remoteImageUrl: remoteUrl);
-        // Update local state with remote URL
-        final updatedEvents = state.events.map((e) => e.id == event.id ? currentEvent : e).toList();
-        state = state.copyWith(events: updatedEvents);
+        
+        // Update local state with remote URL to prevent re-upload and allow instant UI update
+        if (mounted) {
+          final updatedEvents = state.events.map((e) => e.id == event.id ? currentEvent : e).toList();
+          state = state.copyWith(events: updatedEvents);
+        }
+        
         // Sync updated event with remote image URL
         await _eventRepository.syncEvent(currentEvent);
       }
     }
 
-    // 3. Trigger Cloud Verification
-    if (currentEvent.snapshotUrl != null) {
+    // 3. Trigger Cloud Verification (CRITICAL ONLY)
+    if (currentEvent.snapshotUrl != null && (currentEvent.isCritical == true)) {
       _verifyEvent(currentEvent);
     }
   }
@@ -525,7 +610,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
            // Update and save the OLD event
            final cappedEvent = activeEvent.copyWith(
              durationSeconds: capDurationSec,
-             duration: "$capDurationHrs hr",
+             duration: "$capDurationHrs h",
            );
            updatedEvents[0] = cappedEvent;
            _eventRepository.syncEvent(cappedEvent);
@@ -548,7 +633,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
              snapshotUrl: activeEvent.snapshotUrl, // Keep last snapshot
              startTimeMs: midnightNewDay.millisecondsSinceEpoch,
              durationSeconds: newDurationSec,
-             duration: "$newDurationHrs hr",
+             duration: "$newDurationHrs h",
              description: activeEvent.description,
              latitude: activeEvent.latitude,
              longitude: activeEvent.longitude,
@@ -563,7 +648,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
            
            updatedEvents[0] = activeEvent.copyWith(
              durationSeconds: durationSec,
-             duration: "$durationHrs hr",
+             duration: "$durationHrs h",
            );
         }
       }
@@ -590,15 +675,27 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         final duration = updatedEvents.first.durationSeconds!;
         final previousDuration = state.events.first.durationSeconds ?? 0;
         
-        // Trigger sitting notification if they have been sitting for 1 hour (3600 sim-seconds)
-        // Check if we just crossed the 3600 threshold to prevent missing it when simulation jumps time
-        if (updatedEvents.first.type == 'sitting' && previousDuration < 3600 && duration >= 3600) {
+        // NEW: Suppress minor notifications if in Emergency state or very high simulation jump
+        final isEmergency = state.status == HealthStatus.emergency;
+        
+        // Trigger sitting notification if they have been sitting for 2 minutes (120 sim-seconds)
+        if (!isEmergency && updatedEvents.first.type == 'sitting' && previousDuration < 120 && duration >= 120) {
            _triggerSittingNotification(updatedEvents.first);
+        }
+
+        // Trigger Slouching notification if they have been slouching for 1 minute (60 sim-seconds)
+        if (!isEmergency && updatedEvents.first.type == 'slouching' && previousDuration < 60 && duration >= 60) {
+           _triggerSlouchingNotification(updatedEvents.first);
+        }
+
+        // Trigger Walking notification if they have been walking for 30 seconds (30 sim-seconds)
+        if (!isEmergency && (updatedEvents.first.type == 'walking' || updatedEvents.first.type == 'walk') && previousDuration < 30 && duration >= 30) {
+           _triggerWalkingNotification(updatedEvents.first);
         }
 
         // Periodically sync active event to Firestore (every 5 simulation minutes = 300 seconds)
         if ((duration ~/ 300) > (previousDuration ~/ 300)) {
-          _eventRepository.syncEvent(updatedEvents.first);
+           _eventRepository.syncEvent(updatedEvents.first);
         }
       }
 
@@ -660,26 +757,89 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       final notification = NotificationModel(
         id: '', // Firestore will generate
         title: 'นั่งนิ่งเป็นเวลานาน',
-        message: 'พบว่ามีการนั่งนานเกิน 1 ชั่วโมงที่กล้อง ${event.cameraId ?? "หลัก"} ควรมีการปรับเปลี่ยนอิริยาบถเพื่อสุขภาพที่ดี',
+        message: 'พบว่ามีการนั่งนานเกินสมควรที่กล้อง ${event.cameraId ?? "หลัก"} ควรมีการปรับเปลี่ยนอิริยาบถเพื่อสุขภาพที่ดี',
         type: NotificationType.warning,
         date: _currentTime,
       );
 
       await _notificationRepository.addNotification(notification, targetUid: uid);
+      _showLocal(notification);
       
-      // Locally show the banner so the user testing the Demo immediately sees it
-      try {
-        await _ref.read(notificationServiceProvider).showLocalAppNotification(
-          title: notification.title,
-          body: notification.message,
-        );
-      } catch (e) {
-        debugPrint("Error showing local app notification: $e");
-      }
-
       debugPrint("Logged sitting notification for $uid");
     } catch (e) {
       debugPrint("Error triggering sitting notification: $e");
+    }
+  }
+
+  Future<void> _triggerExerciseNotification(SimulationEvent event) async {
+    try {
+      final targetUid = _ref.read(resolvedTargetUidProvider);
+      final uid = targetUid.isEmpty ? 'demo_user' : targetUid;
+
+      final notification = NotificationModel(
+        id: '', 
+        title: 'เริ่มกิจกรรมกายบริหาร',
+        message: 'เริ่มกิจกรรมกายบริหาร ขอให้มีสุขภาพแข็งแรง! (จากกล้อง ${event.cameraId ?? "หลัก"})',
+        type: NotificationType.success,
+        date: _currentTime,
+        imageUrl: event.remoteImageUrl,
+      );
+
+      await _notificationRepository.addNotification(notification, targetUid: uid);
+      _showLocal(notification);
+    } catch (e) {
+      debugPrint("Error triggering exercise notification: $e");
+    }
+  }
+
+  Future<void> _triggerWalkingNotification(SimulationEvent event) async {
+    try {
+      final targetUid = _ref.read(resolvedTargetUidProvider);
+      final uid = targetUid.isEmpty ? 'demo_user' : targetUid;
+
+      final notification = NotificationModel(
+        id: '',
+        title: 'เดินเพื่อสุขภาพ',
+        message: 'คุณเดินต่อเนื่องมาได้ระยะหนึ่งแล้ว เยี่ยมมาก! (จากกล้อง ${event.cameraId ?? "หลัก"})',
+        type: NotificationType.success,
+        date: _currentTime,
+      );
+
+      await _notificationRepository.addNotification(notification, targetUid: uid);
+      _showLocal(notification);
+    } catch (e) {
+      debugPrint("Error triggering walking notification: $e");
+    }
+  }
+
+  Future<void> _triggerSlouchingNotification(SimulationEvent event) async {
+    try {
+      final targetUid = _ref.read(resolvedTargetUidProvider);
+      final uid = targetUid.isEmpty ? 'demo_user' : targetUid;
+
+      final notification = NotificationModel(
+        id: '',
+        title: 'แจ้งเตือนท่านั่ง',
+        message: 'ตรวจพบการนั่งหลังค่อมเป็นเวลานาน โปรดปรับท่านั่งเพื่อสุขภาพหลังครับ (จากกล้อง ${event.cameraId ?? "หลัก"})',
+        type: NotificationType.warning,
+        date: _currentTime,
+      );
+
+      await _notificationRepository.addNotification(notification, targetUid: uid);
+      _showLocal(notification);
+    } catch (e) {
+      debugPrint("Error triggering slouching notification: $e");
+    }
+  }
+
+  void _showLocal(NotificationModel notification) {
+    try {
+      _ref.read(notificationServiceProvider).showLocalAppNotification(
+        title: notification.title,
+        body: notification.message,
+      );
+    } catch (e) {
+      debugPrint("Error showing local app notification: $e");
     }
   }
 
@@ -696,10 +856,10 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
   }
 }
 
-final healthStatusProvider = StateNotifierProvider<HealthStatusNotifier, HealthState>((ref) {
+final healthStatusFamily = StateNotifierProvider.family<HealthStatusNotifier, HealthState, String?>((ref, cameraId) {
   final eventRepo = ref.watch(eventRepositoryProvider);
   final notificationRepo = ref.watch(notificationRepositoryProvider);
-  final notifier = HealthStatusNotifier(eventRepo, notificationRepo, ref);
+  final notifier = HealthStatusNotifier(eventRepo, notificationRepo, ref, cameraId: cameraId);
 
   // Watch selected targetUid and trigger loadState when it changes
   ref.listen(resolvedTargetUidProvider, (previous, next) {

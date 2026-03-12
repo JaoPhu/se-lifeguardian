@@ -252,7 +252,6 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                            Builder(builder: (context) {
                              if (events.isEmpty && !isOwner) {
                                // Show Mock Data for Caregivers if no real data exists
-                               final mockEvent = SimulationEvent(
                                   id: 'mock_1',
                                   cameraId: cameraName,
                                   type: 'falling',
@@ -262,7 +261,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                                   snapshotUrl: 'assets/images/google_logo.png', // Fallback local image
                                   startTimeMs: DateTime.now().subtract(const Duration(minutes: 5)).millisecondsSinceEpoch,
                                   durationSeconds: 15,
-                                  duration: "0.00 hr",
+                                  duration: "0.00 h",
                                   description: 'CRITICAL: Sudden impact detected. Check subject! (Mock Data)',
                                   isVerified: false,
                                 );
@@ -444,7 +443,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "Duration: ${event.duration ?? "0.32 hr"}",
+                  "Duration: ${event.duration ?? "0.32 h"}",
                   style: const TextStyle(
                     fontSize: 14, 
                     color: Color(0xFF0D9488),

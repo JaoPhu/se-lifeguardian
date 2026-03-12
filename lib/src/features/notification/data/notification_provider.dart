@@ -21,12 +21,8 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
   void updateTarget(String targetUid) {
     _subscription?.cancel();
     
-    if (targetUid.isEmpty) {
-      state = NotificationState(notifications: []);
-      return;
-    }
-
-    final List<String> targetUids = [targetUid]; 
+    final effectiveUid = targetUid.isEmpty ? 'demo_user' : targetUid;
+    final List<String> targetUids = [effectiveUid]; 
 
     _subscription = _repo.watchNotifications(targetUids: targetUids).listen((models) {
       final items = models.map((m) {

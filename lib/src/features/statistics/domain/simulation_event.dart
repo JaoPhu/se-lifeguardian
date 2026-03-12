@@ -42,7 +42,7 @@ class SimulationEvent {
       case 'slouching':
         return 'สลบ / ซบ';
       case 'laying':
-        return 'นอน';
+        return 'นอนหลับ / พักผ่อน';
       case 'walking':
         return 'เดิน';
       case 'standing':

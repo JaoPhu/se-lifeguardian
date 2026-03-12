@@ -9,6 +9,8 @@ import '../../authentication/providers/auth_providers.dart';
 import '../../../common_widgets/user_avatar.dart';
 import '../../notification/presentation/notification_bell.dart';
 import '../../pose_detection/data/health_status_provider.dart';
+import '../../history/data/history_repository_provider.dart';
+import '../../notification/data/notification_provider.dart';
 import 'change_password_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -291,15 +293,22 @@ class SettingsScreen extends ConsumerWidget {
                                       child: const Text('ยกเลิก', style: TextStyle(color: Colors.grey)),
                                     ),
                                     TextButton(
-                                      onPressed: () {
-                                        ref.read(healthStatusProvider.notifier).clearAllData();
-                                        Navigator.pop(context);
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('ล้างข้อมูลสำเร็จแล้วครับ!'),
-                                            backgroundColor: Color(0xFF0D9492),
-                                          ),
-                                        );
+                                      onPressed: () async {
+                                        await ref.read(healthStatusFamily(null).notifier).clearAllData();
+                                        
+                                        // Force invalidate statistics and notification providers to refresh UI
+                                        ref.invalidate(historyRepositoryProvider);
+                                        ref.invalidate(notificationProvider);
+                                        
+                                        if (context.mounted) {
+                                          Navigator.pop(context);
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('ล้างข้อมูลสำเร็จแล้วครับ!'),
+                                              backgroundColor: Color(0xFF0D9492),
+                                            ),
+                                          );
+                                        }
                                       },
                                       child: const Text('ยืนยันลบข้อมูล', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold)),
                                     ),
@@ -550,7 +559,7 @@ class SettingsScreen extends ConsumerWidget {
 
                     const SizedBox(height: 24),
                     Text(
-                      "version 1.0.0",
+                      "version 2.1.0 (v2.1 Regression Fixes)",
                       style: TextStyle(
                         color: theme.disabledColor,
                         fontSize: 14,

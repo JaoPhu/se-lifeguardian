@@ -2,11 +2,14 @@ import 'dart:math' as math;
 
 import 'dart:typed_data';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart' as ml_kit;
+import 'optimized_pose_classifier.dart';
 import 'pose_models.dart';
 import '../logic/kalman_filter.dart';
 import '../logic/physics_engine.dart';
 
 class TrackedPerson {
+  final int id;
+  int missedCount = 0;
   Map<PoseLandmarkType, PoseLandmark> smoothedLandmarks = {};
   math.Point<double> centroid = const math.Point(0, 0);
   math.Point<double> velocity = const math.Point(0, 0); // Legacy: derived from centroid
@@ -16,13 +19,16 @@ class TrackedPerson {
   final PhysicsEngine _physicsEngine = PhysicsEngine();
   Map<PoseLandmarkType, PhysicsData> landmarkPhysics = {};
 
-  int missedCount = 0;
-  int seenCount = 0;
-  final int id;
+  // Health Monitoring
+  DateTime? sitStartTime;
+  DateTime? lastSlouchTime;
+  Duration totalSlouchDuration = Duration.zero;
+  bool isCurrentlySlouching = false;
 
   TrackedPerson(this.id, Map<PoseLandmarkType, PoseLandmark> initialLandmarks) {
     smoothedLandmarks = Map<PoseLandmarkType, PoseLandmark>.from(initialLandmarks);
     _updateCentroid();
+    sitStartTime = DateTime.now();
   }
 
   void update(Map<PoseLandmarkType, PoseLandmark> rawLandmarks, double factor) {
@@ -99,6 +105,11 @@ class TrackedPerson {
 
 class PoseDetectionService {
   final ml_kit.PoseDetector _poseDetector = ml_kit.PoseDetector(options: ml_kit.PoseDetectorOptions());
+  final OptimizedPoseClassifier _classifier = OptimizedPoseClassifier();
+  
+  Future<void> initialize() async {
+    await _classifier.initialize();
+  }
   
   final List<TrackedPerson> _activeTracks = [];
 
@@ -252,8 +263,9 @@ class PoseDetectionService {
   bool isSlouching(Map<PoseLandmarkType, PoseLandmark> landmarks) {
     if (landmarks.isEmpty) return false;
     final torsoAngle = getTorsoAngle(landmarks);
-    // Unconscious / Slumped / Leaning significantly
-    return torsoAngle >= 25 && torsoAngle < 60;
+    // Unconscious / Slumped / Leaning significantly (35-60)
+    // Over 60 is Sitting/Standing, Under 35 is likely Laying
+    return torsoAngle >= 35 && torsoAngle < 60;
   }
 
   bool isSitting(Map<PoseLandmarkType, PoseLandmark> landmarks) {
@@ -262,25 +274,63 @@ class PoseDetectionService {
     if (torsoAngle < 60) return false;
     
     final legBend = getLegStraightness(landmarks);
-    // Knees bent significantly (> 70 degrees typically)
-    // Refined: Sitting usually has more pronounced leg bend than just active walking
-    return legBend > 60;
+    
+    // Check for Sitting on Floor: Hip and Ankle are relatively close in height
+    final leftHip = landmarks[PoseLandmarkType.leftHip];
+    final leftAnkle = landmarks[PoseLandmarkType.leftAnkle];
+    bool onFloor = false;
+    if (leftHip != null && leftAnkle != null) {
+      final nose = landmarks[PoseLandmarkType.nose];
+      final torsoHeight = (nose != null) ? (leftHip.y - nose.y).abs() : 100.0;
+      // If hip-to-ankle vertical distance is small, it's floor level
+      if ((leftHip.y - leftAnkle.y).abs() < torsoHeight * 0.5) {
+        onFloor = true;
+      }
+    }
+
+    // Chair sitting usually 90-120deg; 
+    // Floor sitting can be cross-legged (10-40deg) or legs out (straight).
+    // If onFloor is true, we allow almost ANY leg bend (tucked or straight)
+    // as long as the person is upright and low to the ground.
+    final maxBend = onFloor ? 175.0 : 135.0;
+    final minBend = onFloor ? 0.0 : 45.0;
+    
+    return legBend >= minBend && legBend < maxBend;
   }
 
-  bool isStanding(Map<PoseLandmarkType, PoseLandmark> landmarks) {
+  bool isStanding(Map<PoseLandmarkType, PoseLandmark> landmarks, {double maxVel = 0, double height = 100}) {
      if (landmarks.isEmpty) return false;
      final torsoAngle = getTorsoAngle(landmarks);
      if (torsoAngle < 60) return false;
-     
-     final legBend = getLegStraightness(landmarks);
-     return legBend < 25; // Very straight legs
+          final legBend = getLegStraightness(landmarks);
+      // Straight legs in anatomical standard are near 180 degrees.
+      // ALSO: Must not be moving significantly horizontally/vertically to be "Still"
+      final isNotMoving = maxVel < (height * 0.15);
+      
+      // Standing check: Torso height must be significant (to differentiate from sitting on floor)
+      // Usually torso is 40-50% of height. If total height is only slightly longer than torso, it's sitting.
+      final leftHip = landmarks[PoseLandmarkType.leftHip];
+      final leftAnkle = landmarks[PoseLandmarkType.leftAnkle];
+      bool isTall = true;
+      if (leftHip != null && leftAnkle != null) {
+        final nose = landmarks[PoseLandmarkType.nose];
+        final torsoY = (nose != null) ? (leftHip.y - nose.y).abs() : 0.0;
+        final legY = (leftHip.y - leftAnkle.y).abs();
+        // If legs aren't long enough vertically, it's not standing.
+        // Increased threshold from 0.7 to 1.1 to be stricter (human legs are ~1.0x torso height)
+        isTall = legY > (torsoY * 1.1); 
+      }
+
+      return legBend > 162 && isNotMoving && isTall; 
   }
 
   bool isWalking(TrackedPerson person) {
     final landmarks = person.smoothedLandmarks;
     if (landmarks.isEmpty) return false;
     final torsoAngle = getTorsoAngle(landmarks);
-    if (torsoAngle < 50) return false;
+    
+    // Allow more leaning for walking (down to 40 deg for fast walking)
+    if (torsoAngle < 40) return false;
     
     final legBend = getLegStraightness(landmarks);
     
@@ -292,12 +342,12 @@ class PoseDetectionService {
     }
 
     final height = _getBodyHeight(landmarks);
-    // Movement threshold: at least 0.2 body heights per second
-    final isMoving = maxVel > (height * 0.2);
+    // Lowered movement threshold: 0.12 body heights per second (catches slow walk)
+    final isMoving = maxVel > (height * 0.12);
 
     // Leg is partially bent (walking motion) 
-    // Refined: 20-70 range for walking, but MUST be moving
-    return isMoving && legBend >= 20 && legBend <= 70;
+    // Relaxed upper bound to 170 to catch frames where one leg is straight
+    return isMoving && legBend > 105 && legBend < 172;
   }
 
   bool isFalling(TrackedPerson person) {
@@ -313,14 +363,19 @@ class PoseDetectionService {
     for (var type in [PoseLandmarkType.leftHip, PoseLandmarkType.rightHip]) {
       if (person.landmarkPhysics.containsKey(type)) {
         final physics = person.landmarkPhysics[type]!;
+        // Use vy (downward) for fall detection
         if (physics.vy > maxDownVel) maxDownVel = physics.vy;
         if (physics.acceleration > maxAcc) maxAcc = physics.acceleration;
       }
     }
     
-    // Fall: Downward speed > 1.5 body heights/sec OR Impact > 6 body heights/sec^2
-    // Reduced impact threshold slightly to be more sensitive to sudden stops
-    return maxDownVel > (height * 1.5) || maxAcc > (height * 6.0);
+    final torsoAngle = getTorsoAngle(person.smoothedLandmarks);
+    // A fall usually involves leaning (torso angle < 60)
+    final isLeaning = torsoAngle < 60;
+
+    // Fall logic: High downward velocity + Leaning OR massive impact
+    // Thresholds: 1.8x body height/sec for velocity (was 2.2), 10.0x for acceleration (was 12.0)
+    return (maxDownVel > (height * 1.8) && isLeaning) || (maxAcc > (height * 10.0));
   }
 
   double _getBodyHeight(Map<PoseLandmarkType, PoseLandmark> landmarks) {
@@ -343,5 +398,143 @@ class PoseDetectionService {
           return (y1 - y2).abs();
       }
       return 100.0;
+  }
+
+  /// AI Classification using the trained model
+  String classifyActivity(TrackedPerson person) {
+    if (person.smoothedLandmarks.isEmpty) return 'unknown';
+
+    // Prepare features in the same order as training (0-32, x, y, z, visibility)
+    final List<double> features = [];
+    for (var type in PoseLandmarkType.values) {
+      final landmark = person.smoothedLandmarks[type];
+      if (landmark != null) {
+        features.addAll([landmark.x, landmark.y, landmark.z, landmark.likelihood]);
+      } else {
+        features.addAll([0.0, 0.0, 0.0, 0.0]);
+      }
+    }
+
+    if (features.length < 33 * 4) return 'unknown';
+
+    final rawLabel = _classifier.predictLabel(features);
+    final mappedLabel = _mapAILabel(rawLabel);
+
+    // --- HEURISTIC HYBRID GUARDS ---
+    // These guards use physical geometry to override AI if the prediction is physically improbable.
+    final landmarks = person.smoothedLandmarks;
+    final torsoAngle = getTorsoAngle(landmarks);
+    final height = _getBodyHeight(landmarks);
+
+    // Get max velocity for movement-aware standing check
+    double maxVel = 0;
+    for (var physics in person.landmarkPhysics.values) {
+      final speed = math.sqrt(physics.vx * physics.vx + physics.vy * physics.vy);
+      if (speed > maxVel) maxVel = speed;
+    }
+
+    // Define boolean flags for heuristics
+    final bool currentlyFalling = isFalling(person);
+    final bool currentlyLaying = isLaying(landmarks);
+
+    // 1. Fall Sanity Guard: Don't allow 'falling' if the person is still mostly upright
+    // or if the physics engine doesn't see a "fall-like" velocity/acceleration.
+    if (mappedLabel == 'falling') {
+      if (torsoAngle > 45 && !currentlyFalling) {
+        // Person is upright and not accelerating down: likely just walking or standing
+        return isWalking(person) ? 'walking' : 'standing';
+      }
+    }
+
+    // 2. Priority Falling Check: Physics detected a fall
+    if (currentlyFalling) {
+      return 'falling';
+    } 
+    
+    // 3. Sitting Guard: Priority check before standing for floor sitting support
+    if (isSitting(landmarks)) return 'sitting';
+
+    // 4. Strong Standing Guard: If legs are straight and torso is upright, it's standing.
+    if (isStanding(landmarks, maxVel: maxVel, height: height)) return 'standing';
+
+    // 5. Resting/Laying Guard: Critical for safety (overrides everything if flat)
+    if (currentlyLaying) {
+      // Priority Guard: If we were just falling or had high impact, stay as 'falling'
+      // rather than switching to 'laying' immediately.
+      final wasVeryFast = person.landmarkPhysics.values.any((ph) => ph.vy > (_getBodyHeight(landmarks) * 1.5));
+      if (wasVeryFast) {
+        return 'falling';
+      } else {
+        return 'laying';
+      }
+    }
+
+    // 6. Walking Guard: If moving and legs are in motion
+    if (isWalking(person)) return 'walking';
+
+    return mappedLabel;
+  }
+
+  String _mapAILabel(String rawLabel) {
+    final label = rawLabel.toLowerCase();
+    if (label.contains('fall')) return 'falling';
+    if (label.contains('sit') || label.contains('siting')) return 'sitting'; // Fuzzy and handle misspelling
+    if (label.contains('lying')) return 'laying';
+    if (label.contains('walk')) return 'walking';
+    if (label.contains('stand')) return 'standing';
+    if (label.contains('exercise') || label.contains('pushup') || label.contains('squat')) return 'exercise';
+    if (label.contains('sit_to_stand') || label.contains('stand_to_sit')) return 'standing';
+    return rawLabel;
+  }
+
+  /// Detects health issues like poor posture or sitting too long.
+  /// Returns a health warning string if issues are found.
+  String? detectHealthIssues(TrackedPerson person) {
+    final activity = classifyActivity(person);
+    final landmarks = person.smoothedLandmarks;
+    
+    if (activity == 'sitting') {
+      // 1. Long Sitting Check
+      if (person.sitStartTime != null) {
+        final sitDuration = DateTime.now().difference(person.sitStartTime!);
+        if (sitDuration.inMinutes > 30) {
+          return 'นั่งนานเกินไป ควรลุกขยับร่างกาย';
+        }
+      }
+
+      // 2. Slumping/Back Bending Check (หลังงอ)
+      final nose = landmarks[PoseLandmarkType.nose];
+      final lShoulder = landmarks[PoseLandmarkType.leftShoulder];
+      final rShoulder = landmarks[PoseLandmarkType.rightShoulder];
+      
+      if (nose != null && lShoulder != null && rShoulder != null) {
+        final midShoulderY = (lShoulder.y + rShoulder.y) / 2;
+        final headToShoulderDist = midShoulderY - nose.y;
+        
+        // If head is getting close to shoulder level while sitting (slumping forward)
+        // Or if torso angle is leaning too much
+        final torsoAngle = getTorsoAngle(landmarks);
+        
+        if (headToShoulderDist < 30 || (torsoAngle > 30 && torsoAngle < 60)) {
+           return 'ระวังหลังงอ ควรนั่งตัวตรงเพื่อสุขภาพ';
+        }
+      }
+
+      // 3. Head Dropping (หัวตก)
+       if (nose != null && lShoulder != null && rShoulder != null) {
+          final midShoulderY = (lShoulder.y + rShoulder.y) / 2;
+          if (nose.y > midShoulderY && !isLaying(landmarks)) {
+            return 'ศีรษะตก ระวังงีบหลับในท่าที่ไม่เหมาะสม';
+          }
+       }
+    } else {
+      // Reset sit timer if they stand up or walk
+      person.sitStartTime = null;
+      if (activity == 'standing') {
+        person.sitStartTime = null; // Stale reset
+      }
+    }
+    
+    return null;
   }
 }

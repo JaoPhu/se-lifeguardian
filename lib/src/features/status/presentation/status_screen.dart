@@ -11,7 +11,7 @@ class StatusScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final healthState = ref.watch(healthStatusProvider);
+    final healthState = ref.watch(healthStatusFamily(null));
     final user = ref.watch(userProvider);
     final config = _getStatusConfig(healthState.status, context);
 

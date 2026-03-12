@@ -20,8 +20,15 @@ def train_model():
     
     print(f"Training on {len(X_train)} samples...")
     
-    # Using RandomForest as per project standard
-    clf = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42)
+    # Improved RandomForest for better accuracy as per user request
+    clf = RandomForestClassifier(
+        n_estimators=200, 
+        max_depth=20, 
+        min_samples_split=2,
+        min_samples_leaf=1,
+        random_state=42,
+        n_jobs=-1 # Speed up training
+    )
     clf.fit(X_train, y_train)
     
     y_pred = clf.predict(X_test)
@@ -35,7 +42,7 @@ def train_model():
     with open(os.path.join(models_dir, 'pose_classifier.pkl'), 'wb') as f:
         pickle.dump(clf, f)
         
-    print(f"Model saved to {os.path.join(models_dir, 'pose_classifier.pkl')}")
+    print(f"Improved model saved to {os.path.join(models_dir, 'pose_classifier.pkl')}")
 
 if __name__ == "__main__":
     train_model()

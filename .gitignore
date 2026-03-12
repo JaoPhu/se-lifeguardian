@@ -62,3 +62,9 @@ firebase_keys_to_share.txt
 /Users/phu/se/firebase_keys_shared/
 
 ios/build/
+
+# ML Data
+ml/data/raw/**/*.csv
+ml/data/processed/*.csv
+ml/models/*.pkl
+!ml/data/raw/**/.gitkeep

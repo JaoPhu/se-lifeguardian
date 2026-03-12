@@ -15,9 +15,8 @@ class HistoryRepositoryImpl implements HistoryRepository {
 
   @override
   Future<List<DailyHistory>> fetchHistory({String? uid}) async {
-    final effectiveUid = uid ?? _auth.currentUser?.uid;
-    if (effectiveUid == null) return [];
-
+    final effectiveUid = uid ?? _auth.currentUser?.uid ?? 'demo_user';
+    
     final snapshot = await _firestore
         .collection('users')
         .doc(effectiveUid)
@@ -30,8 +29,7 @@ class HistoryRepositoryImpl implements HistoryRepository {
 
   @override
   Future<DailyStatsModel> getDailyStats(DateTime date, {String? uid}) async {
-    final effectiveUid = uid ?? _auth.currentUser?.uid;
-    if (effectiveUid == null) return _emptyDailyStats(date);
+    final effectiveUid = uid ?? _auth.currentUser?.uid ?? 'demo_user';
 
     final startOfDay = DateTime(date.year, date.month, date.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
@@ -55,8 +53,7 @@ class HistoryRepositoryImpl implements HistoryRepository {
 
   @override
   Future<WeeklyStatsModel> getWeeklyStats(DateTime startDate, {String? uid}) async {
-    final effectiveUid = uid ?? _auth.currentUser?.uid;
-    if (effectiveUid == null) return WeeklyStatsModel(dailyStats: []);
+    final effectiveUid = uid ?? _auth.currentUser?.uid ?? 'demo_user';
 
     final startRange = DateTime(startDate.year, startDate.month, startDate.day);
     final endRange = startRange.add(const Duration(days: 7));
@@ -95,8 +92,7 @@ class HistoryRepositoryImpl implements HistoryRepository {
 
   @override
   Future<List<SimulationEvent>> fetchEventsForDay(DateTime date, {String? uid}) async {
-    final effectiveUid = uid ?? _auth.currentUser?.uid;
-    if (effectiveUid == null) return [];
+    final effectiveUid = uid ?? _auth.currentUser?.uid ?? 'demo_user';
 
     final startOfDay = DateTime(date.year, date.month, date.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));

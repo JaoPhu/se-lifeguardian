@@ -15,12 +15,11 @@ class NotificationRepositoryFirestore implements NotificationRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  String? get _uid => _auth.currentUser?.uid;
+  String get _uid => _auth.currentUser?.uid ?? 'demo_user';
 
   @override
   Future<List<NotificationModel>> fetchNotifications() async {
     final uid = _uid;
-    if (uid == null) return [];
 
     final snapshot = await _firestore
         .collection('users')
@@ -39,9 +38,9 @@ class NotificationRepositoryFirestore implements NotificationRepository {
   @override
   Stream<List<NotificationModel>> watchNotifications({List<String> targetUids = const []}) {
     final authUid = _uid;
-
-    // In demo mode (not logged in), watch the first targetUid directly
-    if (authUid == null) {
+    
+    // Check if we are in demo mode (logged in as demo_user)
+    if (authUid == 'demo_user') {
       if (targetUids.isEmpty) return Stream.value([]);
       return _getNotificationStream(targetUids.first);
     }
@@ -103,7 +102,6 @@ class NotificationRepositoryFirestore implements NotificationRepository {
   @override
   Future<void> deleteNotification(String id) async {
     final uid = _uid;
-    if (uid == null) return;
 
     try {
       await _firestore

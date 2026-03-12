@@ -20,6 +20,7 @@ import 'dart:async';
 import '../../dashboard/data/camera_provider.dart' as cam_provider;
 import '../../dashboard/domain/camera.dart' as cam_domain;
 import '../../statistics/domain/simulation_event.dart';
+import '../../history/data/history_repository_provider.dart';
 
 
 class PoseDetectorView extends ConsumerStatefulWidget {
@@ -102,7 +103,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     )..repeat();
 
     // Initialize simulation time based on user input or default
-    final baseDate = widget.date ?? DateTime(2025, 1, 1);
+    final baseDate = widget.date ?? DateTime.now();
     final baseTime = widget.startTime ?? const TimeOfDay(hour: 10, minute: 0);
     _simTime = DateTime(
       baseDate.year, baseDate.month, baseDate.day, 
@@ -112,7 +113,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     // Initial sync of simulation clock to notifier
     // This is crucial so the very first event gets the correct start time!
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(healthStatusProvider.notifier).updateSimulationClock(_simTime);
+      ref.read(healthStatusFamily(_registeredCameraId).notifier).updateSimulationClock(_simTime);
     });
 
     if (widget.videoPath != null) {
@@ -121,7 +122,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     
     // Reset health monitoring state for new analysis session
     Future.microtask(() {
-      ref.read(healthStatusProvider.notifier).reset();
+      ref.read(healthStatusFamily(_registeredCameraId).notifier).reset();
     });
   }
 
@@ -153,8 +154,8 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
       if (!mounted) return;
 
       // Capture first frame for Thumbnail
-      await Future.delayed(const Duration(milliseconds: 500)); // Wait for first frame to render
-      final uint8list = await _screenshotController.capture(pixelRatio: 0.5);
+      await Future.delayed(const Duration(milliseconds: 1500)); // Increased wait for reliability
+      final uint8list = await _screenshotController.capture(pixelRatio: 2.0); // 2.0 = Extra sharp (Retina)
       if (uint8list != null) {
         final directory = await getTemporaryDirectory();
         final path = '${directory.path}/thumb_${DateTime.now().millisecondsSinceEpoch}.png';
@@ -213,7 +214,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
       
       // Update the HealthStatusNotifier with the new simulation time
       // This drives the duration calculation for active events
-      ref.read(healthStatusProvider.notifier).updateSimulationClock(_simTime);
+      ref.read(healthStatusFamily(_registeredCameraId).notifier).updateSimulationClock(_simTime);
     });
   }
 
@@ -228,13 +229,17 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
       });
     } else {
       // Force a final update to close the duration of the last activity
-      // using the final simulation time
-      if (_lastProcessedActivity != null) {
-        ref.read(healthStatusProvider.notifier).updateActivity(
-          _lastProcessedActivity!, // Re-confirm last activity
+      // Terminal Priority: If the very last detected frame was a fall/emergency, 
+      // prioritize it over the last "stable" processed activity to catch end-of-clip events.
+      final isLastDetectedCritical = _lastDetectedActivity == 'falling' || _lastDetectedActivity == 'near_fall';
+      final finalActivity = isLastDetectedCritical ? _lastDetectedActivity : (_lastProcessedActivity ?? _lastDetectedActivity);
+      
+      if (finalActivity != null) {
+        ref.read(healthStatusFamily(_registeredCameraId).notifier).updateActivity(
+          finalActivity,
           cameraId: _registeredCameraId,
           customTime: _simTime, // Final time
-          forceSync: true, // Force the last activity duration to be closed and synced
+          forceSync: true, 
         );
       }
 
@@ -243,6 +248,13 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
         _isAnalysisComplete = true;
         _statusText = "Analysis Complete";
       });
+
+      // Refetch stats data to ensure the Statistics screen is up-to-date
+      final analysisDate = widget.date ?? DateTime.now();
+      ref.invalidate(dailyEventsProvider(analysisDate));
+      ref.invalidate(dailyStatsProvider(analysisDate));
+      final startOfWeek = analysisDate.subtract(Duration(days: analysisDate.weekday - 1));
+      ref.invalidate(weeklyStatsProvider(startOfWeek));
     }
   }
 
@@ -297,9 +309,12 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
               id: tp.id,
               landmarks: tp.smoothedLandmarks,
               color: personColors[tp.id % personColors.length],
+              activity: _poseService.classifyActivity(tp),
               isLaying: _poseService.isLaying(tp.smoothedLandmarks),
-              isWalking: _poseService.isWalking(tp), // ✅ Pass person for velocity check
+              isSitting: _poseService.isSitting(tp.smoothedLandmarks),
+              isWalking: _poseService.isWalking(tp),
               isFalling: _poseService.isFalling(tp),
+              isExercise: _poseService.classifyActivity(tp) == 'exercise',
             )));
           });
         }
@@ -404,11 +419,13 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
             id: tp.id,
             landmarks: landmarks,
             color: personColors[tp.id % personColors.length],
+            activity: _poseService.classifyActivity(tp),
             isLaying: isLaying,
             isSitting: isSitting,
             isSlouching: isSlouching,
             isWalking: isWalking,
             isFalling: isFalling,
+            isExercise: _poseService.classifyActivity(tp) == 'exercise',
           ));
         }
 
@@ -488,8 +505,10 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   int _consecutiveFrameCount = 0;
   // Require ~60 frames (approx 2 sec) of consistency to trigger UI update/snapshot
   // Falling is critical, requires less buffering (e.g. 5 frames just to filter noise)
-  static const int _bufferThresholdNormal = 60; 
-  static const int _bufferThresholdCritical = 5;
+  // Require ~20 frames (approx 0.6 sec) of consistency to trigger UI update/snapshot in demo
+  // This ensures short clips actually record something.
+  static const int _bufferThresholdNormal = 20; 
+  static const int _bufferThresholdCritical = 2;
   
   // Track the last activity we successfully sent to the notifier to prevent loop
   String? _lastProcessedActivity;
@@ -507,7 +526,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
 
     if (_consecutiveFrameCount >= threshold) {
       // Activity confirmed stable in UI
-      final healthState = ref.read(healthStatusProvider);
+      final healthState = ref.read(healthStatusFamily(_registeredCameraId));
       
       // Only trigger update if it's DIFFERENT from what we last processed locally
       // AND different from current global state (double check)
@@ -519,8 +538,8 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
           // We capture snapshot NOW.
           _captureSnapshot(force: true, isCritical: isCritical).then((path) {
             if (mounted) {
-              ref.read(healthStatusProvider.notifier).updateActivity(
-                detectedActivity, 
+              ref.read(healthStatusFamily(_registeredCameraId).notifier).updateActivity(
+                detectedActivity,
                 snapshotPath: path,
                 cameraId: _registeredCameraId,
                 customTime: _simTime, // Use simulation time for duration calc
@@ -573,7 +592,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     try {
       // Use cached frame if available to avoid concurrency issues with ScreenshotController
       // and to ensure we capture exactly what the AI saw.
-      final image = _lastCapturedFrameBytes ?? await _screenshotController.capture(pixelRatio: 1.5);
+      final image = _lastCapturedFrameBytes ?? await _screenshotController.capture(pixelRatio: 2.0);
       
       if (image != null) {
         // ✅ [Cloud Only] Use TemporaryDirectory so images are naturally purged by OS
@@ -604,7 +623,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   @override
   Widget build(BuildContext context) {
     // --- Notification Listener ---
-    ref.listen<HealthState>(healthStatusProvider, (previous, next) {
+    ref.listen<HealthState>(healthStatusFamily(_registeredCameraId), (previous, next) {
       if (next.events.isEmpty) return;
       final currentEvent = next.events.first;
 
@@ -1078,14 +1097,14 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   }
 
   Widget _buildSummaryScreen() {
-    final healthState = ref.watch(healthStatusProvider);
+    final healthState = ref.watch(healthStatusFamily(_registeredCameraId));
     final events = healthState.events;
     
     // Count occurrences
-    final int sittingCount = events.where((e) => e.type == 'sitting' || e.type == 'slouching').length;
+    final int sittingCount = events.where((e) => e.type == 'sitting' || e.type == 'slouching' || e.type == 'laying').length;
     final int standingCount = events.where((e) => e.type == 'standing').length;
     final int walkingCount = events.where((e) => e.type == 'walking' || e.type == 'exercise').length;
-    final int emergencyCount = events.where((e) => e.type == 'falling' || e.type == 'near_fall' || e.type == 'laying').length;
+    final int emergencyCount = events.where((e) => e.type == 'falling' || e.type == 'near_fall').length;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
@@ -1136,13 +1155,13 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                 ),
                 child: Column(
                   children: [
-                    _buildSummaryRow('Sitting / Slouching', sittingCount.toString(), Colors.amber),
-                    const Divider(color: Colors.white24),
-                    _buildSummaryRow('Standing Still', standingCount.toString(), Colors.blue),
-                    const Divider(color: Colors.white24),
-                    _buildSummaryRow('Walking / Active', walkingCount.toString(), Colors.green),
-                    const Divider(color: Colors.white24),
-                    _buildSummaryRow('Fallen / Emergency', emergencyCount.toString(), Colors.red),
+                    _buildSummaryRow('Relax / Rest', sittingCount.toString(), Colors.amber, Icons.weekend),
+                    const Divider(color: Colors.white24, height: 1),
+                    _buildSummaryRow('Standing', standingCount.toString(), Colors.blue, Icons.person),
+                    const Divider(color: Colors.white24, height: 1),
+                    _buildSummaryRow('Active / Moving', walkingCount.toString(), Colors.green, Icons.directions_run),
+                    const Divider(color: Colors.white24, height: 1),
+                    _buildSummaryRow('Emergency / Fall', emergencyCount.toString(), Colors.red, Icons.warning_amber),
                   ],
                 ),
               ),
@@ -1159,7 +1178,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                     final snapshotPath = await _captureSnapshot(force: true);
                     
                     // Save results to dashboard
-                    final healthState = ref.read(healthStatusProvider);
+                    final healthState = ref.read(healthStatusFamily(_registeredCameraId));
                     final events = List<SimulationEvent>.from(healthState.events);
                     
                     // If we have a snapshot but no events have one, add/update one
@@ -1220,7 +1239,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     );
   }
 
-  Widget _buildSummaryRow(String label, String value, Color color) {
+  Widget _buildSummaryRow(String label, String value, Color color, [IconData? icon]) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
@@ -1228,10 +1247,13 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
         children: [
           Row(
             children: [
-              Container(
-                width: 12, height: 12,
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-              ),
+              if (icon != null)
+                Icon(icon, size: 22, color: color)
+              else
+                Container(
+                  width: 12, height: 12,
+                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                ),
               const SizedBox(width: 12),
               Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ],

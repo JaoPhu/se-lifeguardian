@@ -13,11 +13,10 @@ class EventRepository {
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  String? get currentUserId => _auth.currentUser?.uid;
+  String get currentUserId => _auth.currentUser?.uid ?? 'demo_user';
 
   Future<String?> uploadSnapshot(String filePath, String eventId) async {
     final uid = currentUserId;
-    if (uid == null) return null;
 
     try {
       final file = File(filePath);
@@ -47,10 +46,8 @@ class EventRepository {
       return null;
     }
   }
-
   Future<void> syncEvent(SimulationEvent event) async {
     final uid = currentUserId;
-    if (uid == null) return;
 
     try {
       await _firestore
@@ -82,7 +79,6 @@ class EventRepository {
 
   Future<void> deleteEventsForCamera(String cameraId) async {
     final uid = currentUserId;
-    if (uid == null) return;
 
     try {
       final events = await _firestore
@@ -104,7 +100,6 @@ class EventRepository {
 
   Future<void> deleteAllDataForUser() async {
     final uid = currentUserId;
-    if (uid == null) return;
 
     try {
       // 1. Delete all in 'events' subcollection
@@ -141,7 +136,18 @@ class EventRepository {
         batch.delete(doc.reference);
       }
 
-      // 3. Reset root level health fields
+      // 4. Delete all in 'notifications' subcollection
+      final notifications = await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('notifications')
+          .get();
+      
+      for (var doc in notifications.docs) {
+        batch.delete(doc.reference);
+      }
+
+      // 5. Reset root level health fields
       batch.set(_firestore.collection('users').doc(uid), {
         'health_score': 1000,
         'health_status': 0, // HealthStatus.normal enum index

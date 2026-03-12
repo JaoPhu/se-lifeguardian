@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:ui' as ui;
-// Removed camera import
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart' hide PoseLandmark, PoseLandmarkType;
 import '../data/pose_models.dart';
@@ -9,21 +8,25 @@ class PersonPose {
   final int id;
   final Map<PoseLandmarkType, PoseLandmark> landmarks;
   final Color color;
+  final String activity;
   final bool isLaying;
   final bool isSitting;
   final bool isSlouching;
   final bool isWalking;
   final bool isFalling;
+  final bool isExercise;
 
   PersonPose({
     required this.id,
     required this.landmarks,
     required this.color,
+    this.activity = 'unknown',
     this.isLaying = false,
     this.isSitting = false,
     this.isSlouching = false,
     this.isWalking = false,
     this.isFalling = false,
+    this.isExercise = false,
   });
 }
 
@@ -53,19 +56,11 @@ class PosePainter extends CustomPainter {
     final landmarks = person.landmarks;
     final color = person.color;
 
-
-
-    // Standardize coordinate translation to match the camera feed exactly
-    // detailed logic adapted from ML Kit Quickstart (Research Standard)
-    
     double translateX(double x, double y, InputImageRotation rotation) {
-       // For portrait (90/270), the image buffer's X/Y are swapped relative to the screen
        if (Platform.isIOS) {
           switch (rotation) {
             case InputImageRotation.rotation90deg:
             case InputImageRotation.rotation270deg:
-               // In portrait on iOS, the buffer Y corresponds to screen X
-               // Y ranges from 0 to absoluteImageSize.height, so we divide by height
                return y * size.width / absoluteImageSize.height;
             default:
                return x * size.width / absoluteImageSize.width;
@@ -86,8 +81,6 @@ class PosePainter extends CustomPainter {
           switch (rotation) {
             case InputImageRotation.rotation90deg:
             case InputImageRotation.rotation270deg:
-               // In portrait on iOS, the buffer X corresponds to screen Y
-               // X ranges from 0 to absoluteImageSize.width, so we divide by width
                return x * size.height / absoluteImageSize.width;
             default:
                return y * size.height / absoluteImageSize.height;
@@ -104,17 +97,9 @@ class PosePainter extends CustomPainter {
     }
 
     Offset translate(PoseLandmark landmark) {
-      final double x = landmark.x;
-      final double y = landmark.y;
-      
-      final double tx = translateX(x, y, rotation);
-      final double ty = translateY(x, y, rotation);
-
-      // Removed mirroring logic for video input
-      return Offset(tx, ty);
+      return Offset(translateX(landmark.x, landmark.y, rotation), translateY(landmark.x, landmark.y, rotation));
     }
 
-    // Draw connections (skeleton) with 3D Depth awareness
     void paintLine(PoseLandmarkType type1, PoseLandmarkType type2) {
       final p1 = landmarks[type1];
       final p2 = landmarks[type2];
@@ -123,9 +108,6 @@ class PosePainter extends CustomPainter {
       const double threshold = 0.5;
       if (p1.likelihood < threshold || p2.likelihood < threshold) return;
       
-      // Calculate avg depth for line thickness (closer = thicker)
-      // ML Kit Z: Smaller is closer. 
-      // We normalize around 0 (hips). Values typically range from -500 to 500
       final avgZ = (p1.z + p2.z) / 2;
       final depthFactor = (1.0 - (avgZ / 1000.0)).clamp(0.5, 2.0);
       
@@ -137,7 +119,7 @@ class PosePainter extends CustomPainter {
       canvas.drawLine(translate(p1), translate(p2), linePaint);
     }
 
-    // --- Connections (Same as before but with depth paint) ---
+    // Connections
     paintLine(PoseLandmarkType.nose, PoseLandmarkType.leftEyeInner);
     paintLine(PoseLandmarkType.leftEyeInner, PoseLandmarkType.leftEye);
     paintLine(PoseLandmarkType.leftEye, PoseLandmarkType.leftEyeOuter);
@@ -147,39 +129,20 @@ class PosePainter extends CustomPainter {
     paintLine(PoseLandmarkType.rightEye, PoseLandmarkType.rightEyeOuter);
     paintLine(PoseLandmarkType.rightEyeOuter, PoseLandmarkType.rightEar);
     paintLine(PoseLandmarkType.leftMouth, PoseLandmarkType.rightMouth);
-
     paintLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder);
     paintLine(PoseLandmarkType.leftHip, PoseLandmarkType.rightHip);
     paintLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.leftHip);
     paintLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightHip);
-
     paintLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.leftElbow);
     paintLine(PoseLandmarkType.leftElbow, PoseLandmarkType.leftWrist);
-    paintLine(PoseLandmarkType.leftWrist, PoseLandmarkType.leftThumb);
-    paintLine(PoseLandmarkType.leftWrist, PoseLandmarkType.leftIndex);
-    paintLine(PoseLandmarkType.leftWrist, PoseLandmarkType.leftPinky);
-    paintLine(PoseLandmarkType.leftIndex, PoseLandmarkType.leftPinky);
-
     paintLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightElbow);
     paintLine(PoseLandmarkType.rightElbow, PoseLandmarkType.rightWrist);
-    paintLine(PoseLandmarkType.rightWrist, PoseLandmarkType.rightThumb);
-    paintLine(PoseLandmarkType.rightWrist, PoseLandmarkType.rightIndex);
-    paintLine(PoseLandmarkType.rightWrist, PoseLandmarkType.rightPinky);
-    paintLine(PoseLandmarkType.rightIndex, PoseLandmarkType.rightPinky);
-
     paintLine(PoseLandmarkType.leftHip, PoseLandmarkType.leftKnee);
     paintLine(PoseLandmarkType.leftKnee, PoseLandmarkType.leftAnkle);
-    paintLine(PoseLandmarkType.leftAnkle, PoseLandmarkType.leftHeel);
-    paintLine(PoseLandmarkType.leftAnkle, PoseLandmarkType.leftFootIndex);
-    paintLine(PoseLandmarkType.leftHeel, PoseLandmarkType.leftFootIndex);
-
     paintLine(PoseLandmarkType.rightHip, PoseLandmarkType.rightKnee);
     paintLine(PoseLandmarkType.rightKnee, PoseLandmarkType.rightAnkle);
-    paintLine(PoseLandmarkType.rightAnkle, PoseLandmarkType.rightHeel);
-    paintLine(PoseLandmarkType.rightAnkle, PoseLandmarkType.rightFootIndex);
-    paintLine(PoseLandmarkType.rightHeel, PoseLandmarkType.rightFootIndex);
 
-    // Draw joints with Depth (Z-aware)
+    // Joints
     for (final entry in landmarks.entries) {
       final type = entry.key;
       final landmark = entry.value;
@@ -187,25 +150,12 @@ class PosePainter extends CustomPainter {
       
       final pos = translate(landmark);
       final zFactor = (1.0 - (landmark.z / 1000.0)).clamp(0.5, 2.5);
-      
-      // Joint color darker if further away
       final depthColor = ui.Color.lerp(Colors.black, color, (0.4 + 0.6 * zFactor).clamp(0.0, 1.0)) ?? color;
 
       canvas.drawCircle(pos, 3.5 * zFactor, Paint()..color = depthColor);
-      
-      // Glow effect also scales with depth
-      canvas.drawCircle(
-        pos, 
-        8 * zFactor, 
-        Paint()..color = color.withValues(alpha: (0.15 * zFactor).clamp(0.0, 0.4))..style = PaintingStyle.fill
-      );
+      canvas.drawCircle(pos, 8 * zFactor, Paint()..color = color.withValues(alpha: (0.15 * zFactor).clamp(0.0, 0.4))..style = PaintingStyle.fill);
 
-      // --- Subtle Anatomical Labels for 3D orientation ---
-      if (type == PoseLandmarkType.leftShoulder || 
-          type == PoseLandmarkType.rightShoulder ||
-          type == PoseLandmarkType.leftHip ||
-          type == PoseLandmarkType.rightHip) {
-        
+      if (type == PoseLandmarkType.leftShoulder || type == PoseLandmarkType.rightShoulder || type == PoseLandmarkType.leftHip || type == PoseLandmarkType.rightHip) {
         final textPainter = TextPainter(
           text: TextSpan(
             text: type.name.split('.').last.substring(0, 1).toUpperCase() + type.name.split('.').last.substring(1),
@@ -222,6 +172,45 @@ class PosePainter extends CustomPainter {
         textPainter.paint(canvas, Offset(pos.dx + 10, pos.dy - 10));
       }
     }
+
+    // --- Activity Label (Direct AI output) ---
+    final center = _getPersonCenter(landmarks);
+    if (center != null) {
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: person.activity.toUpperCase(),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            backgroundColor: color.withValues(alpha: 0.8),
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      final pos = translate(landmarks[PoseLandmarkType.nose] ?? landmarks.values.first);
+      textPainter.paint(canvas, Offset(pos.dx - textPainter.width / 2, pos.dy - 30));
+    }
+  }
+
+  Offset? _getPersonCenter(Map<PoseLandmarkType, PoseLandmark> landmarks) {
+    final lHip = landmarks[PoseLandmarkType.leftHip];
+    final rHip = landmarks[PoseLandmarkType.rightHip];
+    final lSho = landmarks[PoseLandmarkType.leftShoulder];
+    final rSho = landmarks[PoseLandmarkType.rightShoulder];
+    
+    double sumX = 0;
+    double sumY = 0;
+    int count = 0;
+    for (var l in [lHip, rHip, lSho, rSho]) {
+      if (l != null) {
+        sumX += l.x;
+        sumY += l.y;
+        count++;
+      }
+    }
+    return count > 0 ? Offset(sumX / count, sumY / count) : null;
   }
 
   @override

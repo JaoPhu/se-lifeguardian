@@ -86,10 +86,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
         slouch += duration;
       } else if (type == 'exercise') {
         exercise += duration;
-      } else if (type == 'falling' || type == 'fall') {
+      } else if (type == 'falling' || type == 'fall' || type == 'near_fall') {
         falls++;
-      } else if (type == 'near_fall') {
-        nearFalls++;
       }
     }
 
@@ -100,7 +98,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       'slouch': slouch,
       'exercise': exercise,
       'falls': falls.toDouble(),
-      'nearFalls': nearFalls.toDouble(),
     };
   }
 
@@ -376,7 +373,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                               const SizedBox(width: 12),
                               Expanded(child: _buildSummaryCard('Walk\n${stats['walk']!.toStringAsFixed(1)}h', Icons.directions_walk, isDark ? Colors.green.shade900.withValues(alpha: 0.6) : const Color(0xFFECFDF5), isDark ? Colors.green.shade100 : const Color(0xFF047857))),
                               const SizedBox(width: 12),
-                              Expanded(child: _buildSummaryCard('Falls\n${stats['falls']!.toInt()}', Icons.warning_amber_rounded, isDark ? Colors.red.shade900.withValues(alpha: 0.6) : const Color(0xFFFFEBEE), isDark ? Colors.red.shade100 : const Color(0xFFC62828))),
+                              Expanded(child: _buildSummaryCard('Critical\n${stats['falls']!.toInt()}', Icons.warning_amber_rounded, isDark ? Colors.red.shade900.withValues(alpha: 0.6) : const Color(0xFFFFEBEE), isDark ? Colors.red.shade100 : const Color(0xFFC62828))),
                             ],
                           ),
                         ),
@@ -510,6 +507,81 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                             ],
                           ),
                         ),
+                        const SizedBox(height: 32),
+                        const Divider(),
+                        const SizedBox(height: 24),
+
+                        // Event History List
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Event History',
+                            style: TextStyle(
+                              fontSize: 22, 
+                              fontWeight: FontWeight.bold, 
+                              color: isDark ? Colors.white : const Color(0xFF1E293B)
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        if (dailyEvents.isEmpty)
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(vertical: 40),
+                              child: Text('No events recorded for this day', style: TextStyle(color: Colors.grey)),
+                            ),
+                          )
+                        else
+                          ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: dailyEvents.length,
+                            itemBuilder: (context, index) {
+                              final event = dailyEvents[index];
+                              final isCritical = event.isCritical || event.type.contains('fall');
+                              
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).cardColor,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: isCritical ? Border.all(color: Colors.red.withValues(alpha: 0.3), width: 1.5) : null,
+                                ),
+                                child: ListTile(
+                                  leading: Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: isCritical 
+                                        ? Colors.red.shade50 
+                                        : _getIconBgColor(event.type),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      _getIconForType(event.type),
+                                      color: isCritical 
+                                        ? Colors.red.shade600 
+                                        : _getIconColor(event.type),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    event.thaiLabel,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: isCritical ? Colors.red.shade800 : null,
+                                    ),
+                                  ),
+                                  subtitle: Text('${event.timestamp} | Camera: ${event.cameraId ?? "Main"}'),
+                                  trailing: Text(
+                                    event.duration ?? '0.0h',
+                                    style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.grey),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+
                         const SizedBox(height: 120),
                       ],
                     ),
@@ -539,5 +611,54 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
         ],
       ),
     );
+  }
+
+  IconData _getIconForType(String type) {
+    switch (type.toLowerCase()) {
+      case 'sitting': return Icons.chair;
+      case 'slouching': return Icons.accessibility_new;
+      case 'walking':
+      case 'walk': return Icons.directions_walk;
+      case 'standing':
+      case 'work':
+      case 'working': return Icons.person;
+      case 'laying': 
+      case 'relax': return Icons.hotel;
+      case 'exercise': return Icons.fitness_center;
+      case 'falling':
+      case 'fall': return Icons.warning_amber_rounded;
+      case 'near_fall': return Icons.error_outline;
+      default: return Icons.local_activity;
+    }
+  }
+
+  Color _getIconBgColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'exercise': return Colors.orange.shade50;
+      case 'walking':
+      case 'walk': return Colors.teal.shade50;
+      case 'standing':
+      case 'work':
+      case 'working': return Colors.blue.shade50;
+      case 'sitting':
+      case 'laying':
+      case 'relax': return Colors.purple.shade50;
+      default: return Colors.grey.shade50;
+    }
+  }
+
+  Color _getIconColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'exercise': return Colors.orange.shade600;
+      case 'walking':
+      case 'walk': return Colors.teal.shade600;
+      case 'standing':
+      case 'work':
+      case 'working': return Colors.blue.shade600;
+      case 'sitting':
+      case 'laying':
+      case 'relax': return Colors.purple.shade600;
+      default: return Colors.grey.shade600;
+    }
   }
 }
