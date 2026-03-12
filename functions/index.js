@@ -364,7 +364,7 @@ exports.onNotificationCreated = onDocumentCreated("users/{uid}/notifications/{no
     try {
         // --- [AI/Standard Logic] FCM Broadcast to Caregivers ---
         // 1. Find groups this user belongs to as the monitored person
-        const groupsSnapshot = await db.collection('groups').where('ownerUid', 'isEqualTo', patientUid).get();
+        const groupsSnapshot = await db.collection('groups').where('ownerUid', '==', patientUid).get();
         const caregiverTokens = new Set();
 
         for (const groupDoc of groupsSnapshot.docs) {
