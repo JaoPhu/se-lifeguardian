@@ -1,6 +1,8 @@
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, HttpsError, onRequest } = require("firebase-functions/v2/https");
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
+const axios = require('axios');
+const crypto = require('crypto');
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -166,6 +168,161 @@ exports.resetPasswordWithOTP = onCall({ cors: true }, async (request) => {
 
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 
+// LINE Messaging API Configuration
+const LINE_CHANNEL_ACCESS_TOKEN = 'xue62ZGHj3gL0Z+cQGI9XJzDWQkJpwwW6cDnfZ0fH4N7aEu0MDcxwTvCeXJfPOwBXY6J3IshPCIraG+q34OdXcqyzqs3LIWS5Lb2sWgacz/uvatNTwaZ3wZ7zlFrX0rhGsO/an4wXY4Mt4hO2gI8wQdB04t89/1O/w1cDnyilFU=';
+const LINE_CHANNEL_SECRET = 'bde20a66f5d8671fd86709c212fa60a1';
+
+/**
+ * ส่งข้อความ LINE Push Message (plain text)
+ */
+async function sendLinePushText(lineUserId, text) {
+    try {
+        await axios.post(
+            'https://api.line.me/v2/bot/message/push',
+            {
+                to: lineUserId,
+                messages: [{ type: 'text', text }],
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
+                },
+            }
+        );
+        console.log(`LINE text sent to ${lineUserId}: ${text.substring(0, 40)}...`);
+        return true;
+    } catch (error) {
+        console.error(`Error sending LINE text:`, error.response?.data || error.message);
+        return false;
+    }
+}
+
+/**
+ * ส่งการแจ้งเตือนฉุกเฉินแบบ Flex Message + จำลองสถานะเจ้าหน้าที่
+ */
+async function sendLineEmergencyAlert(lineUserId, notiData) {
+    let locationText = 'ไม่ทราบตำแหน่ง';
+    let mapUrl = '';
+    if (notiData.latitude && notiData.longitude) {
+        locationText = `${notiData.latitude.toFixed(6)}, ${notiData.longitude.toFixed(6)}`;
+        mapUrl = `https://www.google.com/maps?q=${notiData.latitude},${notiData.longitude}`;
+    }
+
+    const timeText = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
+    const patientName = notiData.patientName || 'ไม่ทราบชื่อ';
+    const cameraId = notiData.cameraId || 'หลัก';
+
+    const flexMessage = {
+        type: 'flex',
+        altText: `🚨 ตรวจพบการล้ม! ผู้ป่วย: ${patientName}`,
+        contents: {
+            type: 'bubble',
+            size: 'mega',
+            header: {
+                type: 'box',
+                layout: 'vertical',
+                contents: [
+                    { type: 'text', text: '🚨 แจ้งเตือนฉุกเฉิน', weight: 'bold', size: 'xl', color: '#FFFFFF' },
+                    { type: 'text', text: notiData.title || 'ตรวจพบการล้ม!', size: 'sm', color: '#FFD0D0', margin: 'xs' },
+                ],
+                backgroundColor: '#DC2626',
+                paddingAll: '16px',
+            },
+            body: {
+                type: 'box',
+                layout: 'vertical',
+                spacing: 'sm',
+                paddingAll: '16px',
+                contents: [
+                    {
+                        type: 'box',
+                        layout: 'baseline',
+                        spacing: 'sm',
+                        contents: [
+                            { type: 'text', text: '👤 ผู้ป่วย:', size: 'sm', color: '#888888', flex: 3 },
+                            { type: 'text', text: patientName, size: 'sm', color: '#111111', flex: 5, weight: 'bold', wrap: true },
+                        ],
+                    },
+                    {
+                        type: 'box',
+                        layout: 'baseline',
+                        spacing: 'sm',
+                        contents: [
+                            { type: 'text', text: '📷 กล้อง:', size: 'sm', color: '#888888', flex: 3 },
+                            { type: 'text', text: cameraId, size: 'sm', color: '#111111', flex: 5, wrap: true },
+                        ],
+                    },
+                    {
+                        type: 'box',
+                        layout: 'baseline',
+                        spacing: 'sm',
+                        contents: [
+                            { type: 'text', text: '📍 ตำแหน่ง:', size: 'sm', color: '#888888', flex: 3 },
+                            { type: 'text', text: locationText, size: 'sm', color: '#111111', flex: 5, wrap: true },
+                        ],
+                    },
+                    {
+                        type: 'box',
+                        layout: 'baseline',
+                        spacing: 'sm',
+                        contents: [
+                            { type: 'text', text: '🕐 เวลา:', size: 'sm', color: '#888888', flex: 3 },
+                            { type: 'text', text: timeText, size: 'sm', color: '#111111', flex: 5, wrap: true },
+                        ],
+                    },
+                ],
+            },
+            footer: mapUrl ? {
+                type: 'box',
+                layout: 'vertical',
+                paddingAll: '12px',
+                contents: [
+                    {
+                        type: 'button',
+                        action: { type: 'uri', label: '📍 ดูตำแหน่งบนแผนที่', uri: mapUrl },
+                        style: 'primary',
+                        color: '#0D9488',
+                        height: 'sm',
+                    },
+                ],
+            } : undefined,
+        },
+    };
+
+    try {
+        await axios.post(
+            'https://api.line.me/v2/bot/message/push',
+            { to: lineUserId, messages: [flexMessage] },
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
+                },
+            }
+        );
+        console.log(`✅ Emergency LINE alert sent to ${lineUserId}`);
+
+        const rescueUpdates = [
+            { delayMs: 5000,  text: `🚑 รับทราบเหตุการณ์แล้ว กำลังส่งเจ้าหน้าที่ไปยังจุดเกิดเหตุ\n\n👤 ผู้ป่วย: ${patientName}\n📷 กล้อง: ${cameraId}` },
+            { delayMs: 15000, text: `🚗 เจ้าหน้าที่กำลังเดินทางไปยังพิกัดที่ตรวจพบ\n📍 ${locationText}` },
+            { delayMs: 30000, text: `📍 เจ้าหน้าที่ถึงที่เกิดเหตุแล้ว กำลังเข้าตรวจสอบสถานการณ์` },
+            { delayMs: 45000, text: `✅ ผู้ป่วยได้รับการช่วยเหลือเรียบร้อยแล้ว\n\nเหตุการณ์: ${notiData.title || 'ตรวจพบการล้ม'}\n👤 ผู้ป่วย: ${patientName}\n🕐 เวลา: ${timeText}\n\n— เหตุการณ์ปิด —` },
+        ];
+
+        for (const update of rescueUpdates) {
+            setTimeout(async () => {
+                await sendLinePushText(lineUserId, update.text);
+            }, update.delayMs);
+        }
+
+        return true;
+    } catch (error) {
+        console.error(`Error sending emergency LINE alert:`, error.response?.data || error.message);
+        return false;
+    }
+}
+
 exports.onNotificationCreated = onDocumentCreated("users/{uid}/notifications/{notiId}", async (event) => {
     const snapshot = event.data;
     if (!snapshot) return;
@@ -176,24 +333,19 @@ exports.onNotificationCreated = onDocumentCreated("users/{uid}/notifications/{no
     console.log(`New notification for patient ${patientUid}: ${notiData.title}`);
 
     try {
+        // --- [AI/Standard Logic] FCM Broadcast to Caregivers ---
         // 1. Find groups this user belongs to as the monitored person
         const groupsSnapshot = await db.collection('groups').where('ownerUid', 'isEqualTo', patientUid).get();
-
         const caregiverTokens = new Set();
 
         for (const groupDoc of groupsSnapshot.docs) {
             const groupId = groupDoc.id;
-            // 2. Find all members in this group who are caregivers/caretakers
             const membersSnapshot = await db.collection('groups').doc(groupId).collection('members').get();
 
             for (const memberDoc of membersSnapshot.docs) {
                 const memberUid = memberDoc.id;
                 const memberData = memberDoc.data();
-
-                // if (memberUid === patientUid) continue; // Commented out for easier testing/verification
-
                 if (memberData.role === 'caretaker' || memberData.role === 'owner') {
-                    // 3. Get FCM tokens for this caregiver
                     const caregiverDoc = await db.collection('users').doc(memberUid).get();
                     if (caregiverDoc.exists) {
                         const tokens = caregiverDoc.data().fcm_tokens || [];
@@ -203,33 +355,95 @@ exports.onNotificationCreated = onDocumentCreated("users/{uid}/notifications/{no
             }
         }
 
-        if (caregiverTokens.size === 0) {
-            console.log("No caregivers found with FCM tokens.");
-            return;
+        if (caregiverTokens.size > 0) {
+            const message = {
+                notification: { title: notiData.title, body: notiData.message },
+                data: {
+                    type: 'CRITICAL_EVENT',
+                    userId: patientUid,
+                    eventId: notiData.eventId || '',
+                    latitude: (notiData.latitude || '').toString(),
+                    longitude: (notiData.longitude || '').toString(),
+                    imageUrl: notiData.imageUrl || '',
+                    confidence: (notiData.confidence || '').toString(),
+                    click_action: 'FLUTTER_NOTIFICATION_CLICK',
+                },
+                tokens: Array.from(caregiverTokens),
+            };
+            const response = await admin.messaging().sendEachForMulticast(message);
+            console.log(`${response.successCount} FCM messages sent`);
+        } else {
+            console.log("No caregivers found for FCM.");
         }
 
-        // 4. Send Message via FCM
-        const message = {
-            notification: {
-                title: notiData.title,
-                body: notiData.message,
-            },
-            data: {
-                type: 'CRITICAL_EVENT',
-                userId: patientUid,
-                eventId: notiData.eventId || '',
-                latitude: (notiData.latitude || '').toString(),
-                longitude: (notiData.longitude || '').toString(),
-                imageUrl: notiData.imageUrl || '',
-                confidence: (notiData.confidence || '').toString(),
-                click_action: 'FLUTTER_NOTIFICATION_CLICK',
-            },
-            tokens: Array.from(caregiverTokens),
-        };
+        // --- [Line Noti Logic] Priority: Emergency Alerts ---
+        if (notiData.type === 'danger') {
+            console.log(`🚨 Emergency Detected: Sending LINE alert for ${patientUid}`);
+            
+            // Get Emergency Line ID from config
+            const configDoc = await db.collection('app_config').doc('line_settings').get();
+            const emergencyLineId = configDoc.exists ? configDoc.data().emergencyContactLineId : null;
 
-        const response = await admin.messaging().sendEachForMulticast(message);
-        console.log(`${response.successCount} messages were sent successfully`);
+            if (emergencyLineId) {
+                // Get Patient Name
+                let patientName = 'ไม่ทราบชื่อ';
+                const patientDoc = await db.collection('users').doc(patientUid).get();
+                if (patientDoc.exists) {
+                    patientName = patientDoc.data().name || patientDoc.data().displayName || 'ไม่ทราบชื่อ';
+                }
+
+                // Send enriched alert
+                await sendLineEmergencyAlert(emergencyLineId, {
+                    ...notiData,
+                    patientName,
+                    cameraId: notiData.cameraId || 'หลัก'
+                });
+            } else {
+                console.log("No emergency LINE contact configured in Firestore.");
+            }
+        }
+
     } catch (error) {
-        console.error("Error sending FCM:", error);
+        console.error("Error in onNotificationCreated processing:", error);
     }
+});
+
+// ===== LINE Webhook Handler =====
+exports.lineWebhook = onRequest({ cors: true }, async (req, res) => {
+    const signature = req.headers['x-line-signature'];
+    const body = JSON.stringify(req.body);
+    const hash = crypto.createHmac('sha256', LINE_CHANNEL_SECRET).update(body).digest('base64');
+    
+    if (signature !== hash) {
+        return res.status(403).send('Forbidden');
+    }
+
+    const events = req.body.events || [];
+    for (const event of events) {
+        const lineUserId = event.source?.userId;
+        if (!lineUserId) continue;
+
+        if (event.type === 'follow') {
+            await axios.post('https://api.line.me/v2/bot/message/reply', {
+                replyToken: event.replyToken,
+                messages: [{
+                    type: 'text',
+                    text: `🚨 LifeGuardian — ระบบแจ้งเหตุฉุกเฉิน\n\nคุณเชื่อมต่อเข้าระบบแล้ว Bot นี้จะแจ้งสรุปเหตุการณ์ล้มอัตโนมัติพร้อมตำแหน่ง GPS และจำลองสถานะเจ้าหน้าที่ครับ`
+                }]
+            }, {
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}` }
+            });
+        } else if (event.type === 'message' && event.message?.type === 'text') {
+            await axios.post('https://api.line.me/v2/bot/message/reply', {
+                replyToken: event.replyToken,
+                messages: [{
+                    type: 'text',
+                    text: `🤖 LifeGuardian Bot\n\nBot นี้ใช้สำหรับรับแจ้งเหตุฉุกเฉินอัตโนมัติ ไม่สามารถตอบกลับได้ครับ`
+                }]
+            }, {
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}` }
+            });
+        }
+    }
+    res.status(200).send('OK');
 });

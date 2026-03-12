@@ -11,6 +11,7 @@ class NotificationModel {
   final String? imageUrl;
   final double? confidence;
   final String? eventId;
+  final String? cameraId;
 
   const NotificationModel({
     required this.id,
@@ -23,6 +24,7 @@ class NotificationModel {
     this.imageUrl,
     this.confidence,
     this.eventId,
+    this.cameraId,
   });
 
   Map<String, dynamic> toJson() {
@@ -37,6 +39,7 @@ class NotificationModel {
       'imageUrl': imageUrl,
       'confidence': confidence,
       'eventId': eventId,
+      'cameraId': cameraId,
     };
   }
 
@@ -55,6 +58,7 @@ class NotificationModel {
       imageUrl: json['imageUrl'] as String?,
       confidence: (json['confidence'] as num?)?.toDouble(),
       eventId: json['eventId'] as String?,
+      cameraId: json['cameraId'] as String?,
     );
   }
 }

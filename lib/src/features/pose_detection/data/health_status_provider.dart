@@ -728,6 +728,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         imageUrl: event.remoteImageUrl ?? event.snapshotUrl, // Preference remote
         confidence: event.confidence,
         eventId: event.id,
+        cameraId: event.cameraId, // Pass cameraId for LINE alert
       );
 
       // Save to user's notifications collection
@@ -760,6 +761,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         message: 'พบว่ามีการนั่งนานเกินสมควรที่กล้อง ${event.cameraId ?? "หลัก"} ควรมีการปรับเปลี่ยนอิริยาบถเพื่อสุขภาพที่ดี',
         type: NotificationType.warning,
         date: _currentTime,
+        cameraId: event.cameraId,
       );
 
       await _notificationRepository.addNotification(notification, targetUid: uid);
@@ -783,6 +785,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         type: NotificationType.success,
         date: _currentTime,
         imageUrl: event.remoteImageUrl,
+        cameraId: event.cameraId,
       );
 
       await _notificationRepository.addNotification(notification, targetUid: uid);
@@ -803,6 +806,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         message: 'คุณเดินต่อเนื่องมาได้ระยะหนึ่งแล้ว เยี่ยมมาก! (จากกล้อง ${event.cameraId ?? "หลัก"})',
         type: NotificationType.success,
         date: _currentTime,
+        cameraId: event.cameraId,
       );
 
       await _notificationRepository.addNotification(notification, targetUid: uid);
@@ -823,6 +827,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         message: 'ตรวจพบการนั่งหลังค่อมเป็นเวลานาน โปรดปรับท่านั่งเพื่อสุขภาพหลังครับ (จากกล้อง ${event.cameraId ?? "หลัก"})',
         type: NotificationType.warning,
         date: _currentTime,
+        cameraId: event.cameraId,
       );
 
       await _notificationRepository.addNotification(notification, targetUid: uid);
