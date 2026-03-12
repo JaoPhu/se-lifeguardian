@@ -30,7 +30,7 @@ class OptimizedPoseClassifier {
     final List<int> votes = List.filled(_labels.length, 0);
 
     for (var tree in _trees) {
-      int prediction = _traverseTree(tree, features);
+      final int prediction = _traverseTree(tree, features);
       if (prediction >= 0 && prediction < votes.length) {
         votes[prediction]++;
       }

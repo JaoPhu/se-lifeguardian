@@ -33,7 +33,7 @@ class JoinRequest {
       'displayName': displayName,
       'username': username,
       'avatarUrl': avatarUrl,
-      'createdAt': createdAt == null ? FieldValue.serverTimestamp() : createdAt,
+      'createdAt': createdAt ?? FieldValue.serverTimestamp(),
     };
   }
 }

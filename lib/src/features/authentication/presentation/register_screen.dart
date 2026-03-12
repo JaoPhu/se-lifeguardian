@@ -23,12 +23,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _nameController = TextEditingController();
   final _birthDateController = TextEditingController();
   final _ageController = TextEditingController();
-  String? _gender = 'Male';
+  final String _gender = 'Male';
   bool _agreeTerms = false;
 
   @override
   void initState() {
     super.initState();
+    _birthDateController.addListener(_onBirthDateChanged);
   }
 
   @override

@@ -7,9 +7,8 @@ import '../../group/providers/group_providers.dart';
 
 class CameraNotifier extends StateNotifier<List<Camera>> {
   final CameraRepository _repository;
-  final Ref _ref;
 
-  CameraNotifier(this._repository, this._ref) : super([]);
+  CameraNotifier(this._repository) : super([]);
 
   // Placeholder camera for future real camera implementation
   static const _placeholderCamera = Camera(
@@ -98,7 +97,7 @@ class CameraNotifier extends StateNotifier<List<Camera>> {
 
 final cameraProvider = StateNotifierProvider<CameraNotifier, List<Camera>>((ref) {
   final repository = ref.watch(cameraRepositoryProvider);
-  final notifier = CameraNotifier(repository, ref);
+  final notifier = CameraNotifier(repository);
 
   // Watch for the active target UID
   final targetUid = ref.watch(resolvedTargetUidProvider);

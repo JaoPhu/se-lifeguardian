@@ -32,7 +32,7 @@ class Group {
       'name': name,
       'ownerUid': ownerUid,
       'inviteCode': inviteCode,
-      'createdAt': createdAt == null ? FieldValue.serverTimestamp() : createdAt,
+      'createdAt': createdAt ?? FieldValue.serverTimestamp(),
     };
   }
 }

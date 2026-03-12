@@ -30,7 +30,7 @@ class NotificationService {
 
   Future<void> init() async {
     // 1. Request Permission
-    NotificationSettings settings = await _fcm.requestPermission(
+    final NotificationSettings settings = await _fcm.requestPermission(
       alert: true,
       badge: true,
       sound: true,
@@ -43,7 +43,7 @@ class NotificationService {
       // Update token once at init if user already logged in
       final user = _ref.read(authStateProvider).valueOrNull;
       if (user != null) {
-        String? token = await _fcm.getToken().timeout(
+        final String? token = await _fcm.getToken().timeout(
           const Duration(seconds: 10),
           onTimeout: () => null,
         );
@@ -102,7 +102,7 @@ class NotificationService {
       }
     });
 
-    RemoteMessage? initialMessage = await _fcm.getInitialMessage();
+    final RemoteMessage? initialMessage = await _fcm.getInitialMessage();
     if (initialMessage != null) {
       debugPrint('App opened from terminated state via notification: ${initialMessage.data}');
       final type = initialMessage.data['type'];

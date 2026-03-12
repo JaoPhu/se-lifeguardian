@@ -51,7 +51,7 @@ final joinedGroupsProvider = StreamProvider<List<Group>>((ref) {
 // ✅ Added: A global listener to force-refresh group state when auth changes
 final groupStateInvalidatorProvider = Provider<void>((ref) {
   ref.listen(authStateProvider, (prev, next) {
-    if (prev?.value?.uid != next?.value?.uid) {
+    if (prev?.value?.uid != next.value?.uid) {
       // Identity changed or logged out, kill all cached group states
       ref.invalidate(groupRepoProvider);
       ref.invalidate(ownerGroupProvider);

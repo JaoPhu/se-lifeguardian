@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../statistics/domain/simulation_event.dart';
-import '../../authentication/providers/auth_providers.dart';
 import '../../group/providers/group_providers.dart';
 
 class EventRepository {

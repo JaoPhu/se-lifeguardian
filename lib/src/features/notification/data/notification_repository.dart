@@ -90,7 +90,6 @@ class NotificationRepositoryFirestore implements NotificationRepository {
   @override
   Future<void> addNotification(NotificationModel notification, {String? targetUid}) async {
     final uid = targetUid ?? _uid;
-    if (uid == null) return;
 
     await _firestore
         .collection('users')

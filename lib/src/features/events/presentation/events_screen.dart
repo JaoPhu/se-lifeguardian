@@ -27,8 +27,6 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     final isOwner = selectedUid.isEmpty || selectedUid == user.id || selectedUid == 'demo_user';
     final eventsStream = ref.watch(eventsStreamProvider);
     
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
     // Get camera name for context
     final cameras = ref.watch(cameraProvider);
     final camera = cameras.any((c) => c.id == widget.cameraId) 
@@ -102,7 +100,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                       final events = allEvents.where((e) => e.cameraId == widget.cameraId).toList();
                       
                       // For wrapping gallery:
-                      final int maxPreviewCount = 4; // 2 rows of 2 columns
+                      const int maxPreviewCount = 4; // 2 rows of 2 columns
                       final bool showToggle = events.length > maxPreviewCount;
                       final List<SimulationEvent> displayEvents = (showToggle && !_isGalleryExpanded) 
                           ? events.take(maxPreviewCount).toList() 
@@ -141,7 +139,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                                         decoration: BoxDecoration(
                                           color: Theme.of(context).cardColor,
                                           borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: const Color(0xFF0D9488).withOpacity(0.3)),
+                                          border: Border.all(color: const Color(0xFF0D9488).withValues(alpha: 0.3)),
                                         ),
                                         child: DropdownButtonHideUnderline(
                                           child: DropdownButton<String>(
@@ -240,7 +238,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                                   const SizedBox(width: 8),
                                   Text(
                                     'Total: ${events.length}',
-                                    style: TextStyle(fontSize: 12, color: Colors.grey.withOpacity(0.6)),
+                                    style: TextStyle(fontSize: 12, color: Colors.grey.withValues(alpha: 0.6)),
                                   ),
                                 ],
                               ),

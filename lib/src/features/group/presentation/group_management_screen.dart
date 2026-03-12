@@ -813,9 +813,9 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                     ),
                     error: (e, _) => InkWell(
                       onTap: () => ref.invalidate(ownerGroupProvider),
-                      child: Text(
+                      child: const Text(
                         'Group members (error - tap to retry)',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.red),
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.red),
                       ),
                     ),
                     data: (members) => Row(
@@ -891,7 +891,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
         const Row(
           children: [
             Text('🤝', style: TextStyle(fontSize: 18)),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             Text(
               'Groups you joined',
               style: TextStyle(

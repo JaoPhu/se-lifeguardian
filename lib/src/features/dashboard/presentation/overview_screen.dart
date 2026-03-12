@@ -375,9 +375,6 @@ class OverviewScreen extends ConsumerWidget {
                     builder: (context) {
                       final configThumbnail = camera.config?.thumbnailUrl;
 
-                      // Find the latest event for this camera from the global state
-                      final cameraEvents = healthState.events.where((e) => e.cameraId == camera.id).toList();
-                      final latestEvent = cameraEvents.isNotEmpty ? cameraEvents.first : null;
 
                       if (configThumbnail != null && configThumbnail.startsWith('http')) {
                         return _buildImageWrapper(Image.network(configThumbnail, fit: BoxFit.fitHeight));

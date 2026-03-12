@@ -4,13 +4,11 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../statistics/domain/simulation_event.dart';
 import '../../events/data/event_repository.dart';
 import '../../events/data/cloud_verification_service.dart';
-import '../../authentication/providers/auth_providers.dart';
 import '../../group/providers/group_providers.dart';
 import '../../notification/data/notification_repository.dart';
 import '../../notification/domain/notification_model.dart';
@@ -231,7 +229,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
   Future<Position?> _getCurrentLocation() async {
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) return null;
 
       LocationPermission permission = await Geolocator.checkPermission();

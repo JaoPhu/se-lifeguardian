@@ -35,9 +35,6 @@ import 'package:lifeguardian/src/features/pose_detection/presentation/analysis_l
 import 'package:lifeguardian/src/features/notification/presentation/notification_screen.dart';
 import 'package:lifeguardian/src/features/events/presentation/events_screen.dart';
 import 'package:lifeguardian/src/features/pose_detection/presentation/pose_detector_view.dart';
-import 'package:lifeguardian/src/features/notification/data/notification_service.dart';
-
-
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 // Global flag to track first launch/restart

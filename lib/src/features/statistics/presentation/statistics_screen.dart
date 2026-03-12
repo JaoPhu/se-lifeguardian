@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
-import '../../pose_detection/data/health_status_provider.dart';
+
 import '../domain/simulation_event.dart';
 import '../../profile/data/user_repository.dart';
 import '../../notification/presentation/notification_bell.dart';
@@ -62,7 +62,6 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     double slouch = 0;
     double exercise = 0;
     int falls = 0;
-    int nearFalls = 0;
 
     for (var event in events) {
       final type = event.type.toLowerCase();
@@ -118,14 +117,14 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     final List<PieChartSectionData> sections = [];
     
     // Calculate total recorded hours
-    double recordedTotal = stats['relax']! + 
+    final double recordedTotal = stats['relax']! + 
                           stats['work']! + 
                           stats['walk']! + 
                           stats['slouch']! + 
                           stats['exercise']!;
                           
     // Denominator is 24h or total if > 24h (as requested for testing scenarios)
-    double totalDenominator = recordedTotal > 24 ? recordedTotal : 24.0;
+    final double totalDenominator = recordedTotal > 24 ? recordedTotal : 24.0;
 
     if (stats['relax']! > 0) {
       sections.add(PieChartSectionData(

@@ -36,7 +36,7 @@ class GroupMember {
       'displayName': displayName,
       'username': username,
       'avatarUrl': avatarUrl,
-      'joinedAt': joinedAt == null ? FieldValue.serverTimestamp() : joinedAt,
+      'joinedAt': joinedAt ?? FieldValue.serverTimestamp(),
     };
   }
 }
