@@ -58,7 +58,12 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   InputImageRotation? _imageRotation;
   bool _isLoading = true;
   late final double _playbackSpeed;
-  DateTime _simTime = DateTime.now();
+  late final DateTime _baseSimTime; 
+  DateTime get _simTime {
+    if (_videoController == null || !_videoController!.value.isInitialized) return _baseSimTime;
+    // 1 second of video = 1 minute (60 seconds) of simulation
+    return _baseSimTime.add(Duration(milliseconds: (_videoController!.value.position.inMilliseconds * 60).toInt()));
+  }
   bool _isAnalysisComplete = false;
   bool _isAnalyzing = false;
   bool _isPaused = false;
@@ -105,7 +110,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     // Initialize simulation time based on user input or default
     final baseDate = widget.date ?? DateTime.now();
     final baseTime = widget.startTime ?? const TimeOfDay(hour: 10, minute: 0);
-    _simTime = DateTime(
+    _baseSimTime = DateTime(
       baseDate.year, baseDate.month, baseDate.day, 
       baseTime.hour, baseTime.minute
     );
@@ -202,19 +207,17 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   }
 
   void _startSimulation() {
+    // We no longer need a timer to advance _simTime as it's now a getter based on video position.
+    // However, we still want to periodcially trigger updates in the notifier 
+    // (e.g. for score updates and sticky fall logic) while the video is playing.
     _simTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) return;
-      if (_isPaused) return;
+      if (!mounted || _isPaused) return;
       
-      setState(() {
-        // ✅ Incremental simulation time based on speed
-        // One second equals '_playbackSpeed' minutes simulation
-        _simTime = _simTime.add(Duration(seconds: (_playbackSpeed * 60).toInt()));
-      });
-      
-      // Update the HealthStatusNotifier with the new simulation time
-      // This drives the duration calculation for active events
+      // Update the HealthStatusNotifier with the current simulation time
       ref.read(healthStatusFamily(_registeredCameraId).notifier).updateSimulationClock(_simTime);
+      
+      // Trigger UI update to reflect the new time/score if necessary
+      setState(() {});
     });
   }
 

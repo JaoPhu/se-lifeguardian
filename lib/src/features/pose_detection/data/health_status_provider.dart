@@ -227,12 +227,28 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
   // Internal clock for simulation support
   DateTime _currentTime = DateTime.now();
+  DateTime? _lastScoreUpdateTime;
+  DateTime? _lastDurationSyncTime;
   bool _isSimulation = false;
 
   void updateSimulationClock(DateTime time) {
-    _isSimulation = true;
+    if (!_isSimulation || _lastScoreUpdateTime == null) {
+      _isSimulation = true;
+      _lastScoreUpdateTime = time;
+      _lastDurationSyncTime = time;
+    }
+    
     _currentTime = time;
-    _updateScoreBasedOnActivity(); // Trigger regular updates based on new time
+    
+    // Only update score if at least 1 simulation second has passed
+    final elapsedSec = _currentTime.difference(_lastScoreUpdateTime!).inSeconds;
+    if (elapsedSec >= 1) {
+       // Loop to handle potential jumps > 1s (though rare in frame-by-frame)
+       for (int i = 0; i < elapsedSec; i++) {
+         _updateScoreBasedOnActivity();
+       }
+       _lastScoreUpdateTime = _lastScoreUpdateTime!.add(Duration(seconds: elapsedSec));
+    }
   }
 
   Future<Position?> _getCurrentLocation() async {
