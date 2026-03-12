@@ -177,6 +177,14 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         } else {
           state = state.copyWith(events: remoteEvents);
         }
+      } else {
+        // No events found for this target user/camera
+        state = state.copyWith(
+          events: [],
+          status: HealthStatus.none,
+          score: 1000,
+          currentActivity: '', // Clear activity if no events
+        );
       }
     }, onError: (e) => debugPrint("Events listener failed: $e"));
 
@@ -188,11 +196,21 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         .listen((doc) {
       if (doc.exists) {
         final data = doc.data()!;
-        // Only override if we are NOT in a simulation or if this is a remote update
-        // (Actually, always syncing status is safer for caretaker view)
+        
+        final rawStatus = data['health_status'] as int?;
+        HealthStatus derivedStatus = state.status;
+        if (rawStatus != null) {
+          derivedStatus = HealthStatus.values[rawStatus];
+        }
+        
+        // Force 'none' if we have no events to support the "null" status requirement
+        if (state.events.isEmpty) {
+          derivedStatus = HealthStatus.none;
+        }
+
         state = state.copyWith(
           score: (data['health_score'] as num?)?.toInt() ?? state.score,
-          status: HealthStatus.values[(data['health_status'] as int?) ?? state.status.index],
+          status: derivedStatus,
           currentActivity: data['last_activity'] as String? ?? state.currentActivity,
         );
       }
