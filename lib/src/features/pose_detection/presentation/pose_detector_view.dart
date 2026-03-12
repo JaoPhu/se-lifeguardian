@@ -61,8 +61,9 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   late final DateTime _baseSimTime; 
   DateTime get _simTime {
     if (_videoController == null || !_videoController!.value.isInitialized) return _baseSimTime;
-    // 1 second of video = 1 minute (60 seconds) of simulation
-    return _baseSimTime.add(Duration(milliseconds: (_videoController!.value.position.inMilliseconds * 60).toInt()));
+    // 1 second of video = (60 * _playbackSpeed) seconds of simulation
+    // This allows the user to speed up the simulation time without speeding up the video itself.
+    return _baseSimTime.add(Duration(milliseconds: (_videoController!.value.position.inMilliseconds * 60 * _playbackSpeed).toDouble().toInt()));
   }
   bool _isAnalysisComplete = false;
   bool _isAnalyzing = false;
@@ -147,7 +148,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     try {
       await _videoController!.initialize();
       await _videoController!.setLooping(false); // Play once for demo
-      await _videoController!.setPlaybackSpeed(_playbackSpeed); // ✅ Apply speed multiplier to video
+      await _videoController!.setPlaybackSpeed(1.0); // ✅ Keep video at normal speed as requested
       
       setState(() {
         _imageSize = _videoController!.value.size;
