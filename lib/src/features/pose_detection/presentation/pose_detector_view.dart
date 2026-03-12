@@ -980,18 +980,23 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Speed : ${_playbackSpeed.toInt()}X',
+                'Video Speed : ${_videoSpeed.toStringAsFixed(1)}X',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(width: 16),
+              Text(
+                'Sim : ${_simMultiplier.toInt()}X',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0D9488)),
               ),
             ],
           ),
           const SizedBox(height: 4),
-          const Row(
+          Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'One second equals 1 minutes.',
-                style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w500),
+                '1s video = ${_simMultiplier.toInt()}s simulation',
+                style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w500),
               ),
             ],
           ),

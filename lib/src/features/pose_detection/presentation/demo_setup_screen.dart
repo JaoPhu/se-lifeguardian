@@ -293,27 +293,6 @@ class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
                 const SizedBox(height: 16),
 
                 // Accelerate Video Toggle
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.white10 : Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
-                  ),
-                  child: SwitchListTile(
-                    title: const Text(
-                      'Accelerate Video Playback',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: const Text(
-                      'If ON, video plays fast. If OFF, only simulation time is accelerated.',
-                      style: TextStyle(fontSize: 11),
-                    ),
-                    value: _accelerateVideo,
-                    activeColor: const Color(0xFF0D9488),
-                    onChanged: (val) => setState(() => _accelerateVideo = val),
-                  ),
-                ),
 
                 // Simulation Multiplier
                 _buildLabel('Simulation Multiplier (e.g. 60x = 1s video : 1m sim)'),
