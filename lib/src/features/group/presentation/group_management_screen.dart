@@ -13,6 +13,7 @@ import '../providers/group_providers.dart';
 import '../domain/group.dart';
 import '../domain/group_member.dart';
 import '../domain/join_request.dart';
+import '../../notification/presentation/notification_bell.dart';
 
 class GroupManagementScreen extends ConsumerStatefulWidget {
   const GroupManagementScreen({super.key});
@@ -543,7 +544,7 @@ class _GroupManagementScreenState extends ConsumerState<GroupManagementScreen> {
                     ),
                     Row(
                       children: [
-                        const Icon(Icons.notifications, color: Colors.white, size: 24),
+                        const NotificationBell(color: Colors.white, whiteBorder: true),
                         const SizedBox(width: 16),
                         GestureDetector(
                           onTap: () => context.push('/profile'),

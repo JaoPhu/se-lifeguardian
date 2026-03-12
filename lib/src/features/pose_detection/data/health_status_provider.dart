@@ -90,6 +90,8 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
   final String? cameraId;
   Timer? _timer;
   Future<void>? _processingLock;
+  StreamSubscription? _eventsSubscription;
+  StreamSubscription? _userDocSubscription;
 
   HealthStatusNotifier(this._eventRepository, this._notificationRepository, this._ref, {this.cameraId}) : super(HealthState.initial()) {
     _startTimer();
@@ -114,81 +116,87 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         state = HealthState.initial();
       }
 
-      // 2. Fetch latest events and status from Firestore (Override local if online)
+      // 2. Setup Real-time Listeners (Override local if online)
       if (targetUid.isNotEmpty) {
-        try {
-          // Fetch events
-          Query query = FirebaseFirestore.instance
-              .collection('users')
-              .doc(targetUid)
-              .collection('events')
-              .orderBy('startTimeMs', descending: true)
-              .limit(50);
-          
-          if (cameraId != null) {
-            query = query.where('cameraId', isEqualTo: cameraId);
-          }
-          
-          final eventsSnapshot = await query.get();
-
-          final remoteEvents = eventsSnapshot.docs
-              .map((doc) => SimulationEvent.fromJson(doc.data() as Map<String, dynamic>))
-              .toList();
-
-          // Fetch current status/score
-          final statusDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(targetUid)
-              .get();
-
-          if (statusDoc.exists) {
-            final data = statusDoc.data()!;
-            state = state.copyWith(
-              score: (data['health_score'] as num?)?.toInt() ?? state.score,
-              status: HealthStatus.values[(data['health_status'] as int?) ?? state.status.index],
-              // Always prefer remote events if available to ensure sync across devices/restarts
-              events: remoteEvents.isNotEmpty ? remoteEvents : state.events,
-            );
-          } else if (remoteEvents.isNotEmpty) {
-            // If status doc doesn't exist but events do, load them
-            state = state.copyWith(events: remoteEvents);
-          }
-
-          // NEW: If global view (cameraId == null), derive EVERYTHING from events to ensure truth
-          if (cameraId == null && remoteEvents.isNotEmpty) {
-             final latestEvent = remoteEvents.first;
-             HealthStatus derivedStatus = HealthStatus.normal;
-             int derivedScore = 1000;
-
-             // If any event in the last 10 minutes is critical, status is emergency
-             final tenMinsAgo = DateTime.now().millisecondsSinceEpoch - (10 * 60 * 1000);
-             final hasRecentCritical = remoteEvents.take(10).any((e) => 
-               (e.isCritical || e.type.toLowerCase().contains('fall')) && 
-               (e.startTimeMs ?? 0) > tenMinsAgo);
-             
-             if (hasRecentCritical) {
-               derivedStatus = HealthStatus.emergency;
-               derivedScore = 400;
-             } else {
-               // Normal logic: find most recent status-affecting event
-               final isCritical = latestEvent.isCritical || latestEvent.type.toLowerCase().contains('fall');
-               derivedStatus = isCritical ? HealthStatus.emergency : HealthStatus.normal;
-               derivedScore = isCritical ? 400 : 1000;
-             }
-
-             state = state.copyWith(
-               status: derivedStatus,
-               score: derivedScore,
-               currentActivity: latestEvent.type,
-             );
-          }
-        } catch (e) {
-          debugPrint("Firestore load failed, using local: $e");
-        }
+        _setupRealtimeListeners(targetUid);
       }
     } catch (e) {
       debugPrint("Error loading health state: $e");
     }
+  }
+
+  void _setupRealtimeListeners(String targetUid) {
+    _eventsSubscription?.cancel();
+    _userDocSubscription?.cancel();
+
+    // 1. Listen to Events
+    Query eventsQuery = FirebaseFirestore.instance
+        .collection('users')
+        .doc(targetUid)
+        .collection('events')
+        .orderBy('startTimeMs', descending: true)
+        .limit(50);
+
+    if (cameraId != null) {
+      eventsQuery = eventsQuery.where('cameraId', isEqualTo: cameraId);
+    }
+
+    _eventsSubscription = eventsQuery.snapshots().listen((snapshot) {
+      final remoteEvents = snapshot.docs
+          .map((doc) => SimulationEvent.fromJson(doc.data() as Map<String, dynamic>))
+          .toList();
+
+      if (remoteEvents.isNotEmpty) {
+        // If global view (cameraId == null), derive EVERYTHING from events to ensure truth
+        if (cameraId == null) {
+          final latestEvent = remoteEvents.first;
+          HealthStatus derivedStatus = HealthStatus.normal;
+          int derivedScore = 1000;
+
+          // If any event in the last 10 minutes is critical, status is emergency
+          final tenMinsAgo = DateTime.now().millisecondsSinceEpoch - (10 * 60 * 1000);
+          final hasRecentCritical = remoteEvents.take(10).any((e) =>
+              (e.isCritical || e.type.toLowerCase().contains('fall')) &&
+              (e.startTimeMs ?? 0) > tenMinsAgo);
+
+          if (hasRecentCritical) {
+            derivedStatus = HealthStatus.emergency;
+            derivedScore = 400;
+          } else {
+            final isCritical = latestEvent.isCritical || latestEvent.type.toLowerCase().contains('fall');
+            derivedStatus = isCritical ? HealthStatus.emergency : HealthStatus.normal;
+            derivedScore = isCritical ? 400 : 1000;
+          }
+
+          state = state.copyWith(
+            events: remoteEvents,
+            status: derivedStatus,
+            score: derivedScore,
+            currentActivity: latestEvent.type,
+          );
+        } else {
+          state = state.copyWith(events: remoteEvents);
+        }
+      }
+    }, onError: (e) => debugPrint("Events listener failed: $e"));
+
+    // 2. Listen to User Status (Score/Status)
+    _userDocSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(targetUid)
+        .snapshots()
+        .listen((doc) {
+      if (doc.exists) {
+        final data = doc.data()!;
+        // Only override if we are NOT in a simulation or if this is a remote update
+        // (Actually, always syncing status is safer for caretaker view)
+        state = state.copyWith(
+          score: (data['health_score'] as num?)?.toInt() ?? state.score,
+          status: HealthStatus.values[(data['health_status'] as int?) ?? state.status.index],
+          currentActivity: data['last_activity'] as String? ?? state.currentActivity,
+        );
+      }
+    }, onError: (e) => debugPrint("Status listener failed: $e"));
   }
 
   Future<void> _saveState() async {
@@ -855,6 +863,8 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
   @override
   void dispose() {
     _timer?.cancel();
+    _eventsSubscription?.cancel();
+    _userDocSubscription?.cancel();
     super.dispose();
   }
 }

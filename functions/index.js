@@ -1,4 +1,5 @@
 const { onCall, HttpsError, onRequest } = require("firebase-functions/v2/https");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
 const axios = require('axios');
@@ -165,8 +166,6 @@ exports.resetPasswordWithOTP = onCall({ cors: true }, async (request) => {
     }
 });
 
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
-const axios = require('axios');
 
 // LINE Messaging API Configuration
 const LINE_CHANNEL_ACCESS_TOKEN = 'xue62ZGHj3gL0Z+cQGI9XJzDWQkJpwwW6cDnfZ0fH4N7aEu0MDcxwTvCeXJfPOwBXY6J3IshPCIraG+q34OdXcqyzqs3LIWS5Lb2sWgacz/uvatNTwaZ3wZ7zlFrX0rhGsO/an4wXY4Mt4hO2gI8wQdB04t89/1O/w1cDnyilFU=';

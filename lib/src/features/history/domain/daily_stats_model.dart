@@ -44,4 +44,36 @@ class DailyStatsModel {
       );
     }
   }
+
+  static DailyStatsModel calculate(DateTime date, List<dynamic> events) {
+    double relax = 0;
+    double work = 0;
+    double walk = 0;
+    int falls = 0;
+
+    for (var event in events) {
+      final type = (event.type as String).toLowerCase();
+      final durationHrs = (event.durationSeconds as int? ?? 0) / 3600.0;
+      
+      if (type == 'sitting' || type == 'laying' || type == 'relax') {
+        relax += durationHrs;
+      } else if (type == 'working' || type == 'work' || type == 'standing') {
+        work += durationHrs;
+      } else if (type == 'walking' || type == 'walk' || type == 'exercise') {
+        walk += durationHrs;
+      }
+
+      if (event.isCritical == true || type.contains('fall')) {
+        falls++;
+      }
+    }
+
+    return DailyStatsModel(
+      date: date,
+      relaxHours: relax,
+      workHours: work,
+      walkHours: walk,
+      falls: falls,
+    );
+  }
 }

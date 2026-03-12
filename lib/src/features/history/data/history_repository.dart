@@ -8,4 +8,6 @@ abstract class HistoryRepository {
   Future<DailyStatsModel> getDailyStats(DateTime date, {String? uid});
   Future<WeeklyStatsModel> getWeeklyStats(DateTime startDate, {String? uid});
   Future<List<SimulationEvent>> fetchEventsForDay(DateTime date, {String? uid});
+  Stream<List<SimulationEvent>> watchDailyEvents(DateTime date, {String? uid});
+  Stream<List<SimulationEvent>> watchWeeklyEvents(DateTime startDate, {String? uid});
 }
