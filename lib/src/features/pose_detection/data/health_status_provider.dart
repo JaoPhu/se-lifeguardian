@@ -406,7 +406,8 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         if (state.events.isNotEmpty) {
            final lastEvent = state.events.first;
            if (lastEvent.type == 'falling' && lastEvent.startTimeMs != null) {
-              final elapsedMs = DateTime.now().millisecondsSinceEpoch - lastEvent.startTimeMs!;
+              final now = customTime ?? _currentTime;
+              final elapsedMs = now.millisecondsSinceEpoch - lastEvent.startTimeMs!;
               if (elapsedMs < 2000) {
                  debugPrint("Sticky Fall active: ignoring transition to $activity for now (elapsed: ${elapsedMs}ms).");
                  return;
@@ -430,15 +431,14 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       
       if (lastEvent.startTimeMs != null) {
         final durationSec = (now.millisecondsSinceEpoch - lastEvent.startTimeMs!) ~/ 1000;
-        final durationHrs = (durationSec / 3600).toStringAsFixed(2);
         
         updatedEvents[0] = lastEvent.copyWith(
           durationSeconds: durationSec,
-          duration: "$durationHrs h",
+          duration: _formatDurationLabel(durationSec),
         );
         
-        // Sync the updated event to cloud so the Events list reflects the final duration
-        _eventRepository.syncEvent(updatedEvents[0]);
+        // AWAIT sync to ensure closure is recorded before opening new one
+        await _eventRepository.syncEvent(updatedEvents[0]);
       }
     }
 
@@ -498,8 +498,8 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         events: [newEvent, ...updatedEvents],
         status: state.status == HealthStatus.none ? HealthStatus.normal : state.status,
       );
-      // Still sync regular events
-      _syncAndUploadSnapshot(newEvent);
+      // Still sync regular events - AWAIT to ensure image is uploaded
+      await _syncAndUploadSnapshot(newEvent);
     }
 
     // NEW: Immediate Exercise Notification

@@ -65,7 +65,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   DateTime get _simTime {
     if (_videoController == null || !_videoController!.value.isInitialized) return _baseSimTime;
     // 1 second of video = _simMultiplier simulation-seconds
-    return _baseSimTime.add(Duration(milliseconds: (_videoController!.value.position.inMilliseconds * (_simMultiplier / 60)).toDouble().toInt()));
+    return _baseSimTime.add(Duration(milliseconds: (_videoController!.value.position.inMilliseconds * _simMultiplier).toDouble().toInt()));
   }
   bool _isAnalysisComplete = false;
   bool _isAnalyzing = false;
