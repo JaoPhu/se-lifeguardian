@@ -38,6 +38,7 @@ class UserRepository {
           ownerGroupId: data['ownerGroupId'],
           joinedGroupIds: List<String>.from(data['joinedGroupIds'] ?? []),
           sessionId: data['sessionId'],
+          lineUserId: data['lineUserId'],
         );
       }
     } catch (e) {
@@ -75,6 +76,7 @@ class UserRepository {
         'foodAllergies': user.foodAllergies,
         'ownerGroupId': user.ownerGroupId,
         'joinedGroupIds': user.joinedGroupIds,
+        'lineUserId': user.lineUserId,
       };
 
       await _firestore.collection('users').doc(uid).set(data, SetOptions(merge: true));
@@ -370,6 +372,7 @@ class UserNotifier extends StateNotifier<User> {
           ownerGroupId: data['ownerGroupId'],
           joinedGroupIds: List<String>.from(data['joinedGroupIds'] ?? []),
           sessionId: serverSessionId,
+          lineUserId: data['lineUserId'],
         );
 
         // Only update if something actually changed to avoid unnecessary rebuilds

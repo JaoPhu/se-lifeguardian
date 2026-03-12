@@ -69,10 +69,9 @@ exports.sendOTPEmail = onCall({ cors: true }, async (request) => {
         service: 'gmail',
         auth: {
             user: 'lifeguardian.service@gmail.com',
-            pass: 'GMAIL_APP_PASSWORD_REMOVED' // App Password
+            pass: process.env.GMAIL_PASS
         }
     });
-
     // Email HTML template
     const htmlContent = `
         <div style="font-family: 'Sarabun', sans-serif; padding: 20px; background-color: #f4f4f4;">
@@ -167,13 +166,15 @@ exports.resetPasswordWithOTP = onCall({ cors: true }, async (request) => {
 });
 
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const axios = require('axios');
 
 // LINE Messaging API Configuration
 const LINE_CHANNEL_ACCESS_TOKEN = 'xue62ZGHj3gL0Z+cQGI9XJzDWQkJpwwW6cDnfZ0fH4N7aEu0MDcxwTvCeXJfPOwBXY6J3IshPCIraG+q34OdXcqyzqs3LIWS5Lb2sWgacz/uvatNTwaZ3wZ7zlFrX0rhGsO/an4wXY4Mt4hO2gI8wQdB04t89/1O/w1cDnyilFU=';
-const LINE_CHANNEL_SECRET = 'bde20a66f5d8671fd86709c212fa60a1';
 
 /**
  * ส่งข้อความ LINE Push Message (plain text)
+ * @param {string} lineUserId - LINE User ID ของผู้รับ
+ * @param {string} text - ข้อความที่จะส่ง
  */
 async function sendLinePushText(lineUserId, text) {
     try {
@@ -200,8 +201,11 @@ async function sendLinePushText(lineUserId, text) {
 
 /**
  * ส่งการแจ้งเตือนฉุกเฉินแบบ Flex Message + จำลองสถานะเจ้าหน้าที่
+ * @param {string} lineUserId - LINE User ID ของเจ้าหน้าที่
+ * @param {object} notiData - ข้อมูลการแจ้งเตือน {title, message, latitude, longitude, patientName, cameraId}
  */
 async function sendLineEmergencyAlert(lineUserId, notiData) {
+    // สร้าง Google Maps link ถ้ามีพิกัด GPS
     let locationText = 'ไม่ทราบตำแหน่ง';
     let mapUrl = '';
     if (notiData.latitude && notiData.longitude) {
@@ -213,6 +217,7 @@ async function sendLineEmergencyAlert(lineUserId, notiData) {
     const patientName = notiData.patientName || 'ไม่ทราบชื่อ';
     const cameraId = notiData.cameraId || 'หลัก';
 
+    // Flex Message หลัก
     const flexMessage = {
         type: 'flex',
         altText: `🚨 ตรวจพบการล้ม! ผู้ป่วย: ${patientName}`,
@@ -223,8 +228,20 @@ async function sendLineEmergencyAlert(lineUserId, notiData) {
                 type: 'box',
                 layout: 'vertical',
                 contents: [
-                    { type: 'text', text: '🚨 แจ้งเตือนฉุกเฉิน', weight: 'bold', size: 'xl', color: '#FFFFFF' },
-                    { type: 'text', text: notiData.title || 'ตรวจพบการล้ม!', size: 'sm', color: '#FFD0D0', margin: 'xs' },
+                    {
+                        type: 'text',
+                        text: '🚨 แจ้งเตือนฉุกเฉิน',
+                        weight: 'bold',
+                        size: 'xl',
+                        color: '#FFFFFF',
+                    },
+                    {
+                        type: 'text',
+                        text: notiData.title || 'ตรวจพบการล้ม!',
+                        size: 'sm',
+                        color: '#FFD0D0',
+                        margin: 'xs',
+                    },
                 ],
                 backgroundColor: '#DC2626',
                 paddingAll: '16px',
@@ -280,7 +297,11 @@ async function sendLineEmergencyAlert(lineUserId, notiData) {
                 contents: [
                     {
                         type: 'button',
-                        action: { type: 'uri', label: '📍 ดูตำแหน่งบนแผนที่', uri: mapUrl },
+                        action: {
+                            type: 'uri',
+                            label: '📍 ดูตำแหน่งบนแผนที่',
+                            uri: mapUrl,
+                        },
                         style: 'primary',
                         color: '#0D9488',
                         height: 'sm',
@@ -303,6 +324,7 @@ async function sendLineEmergencyAlert(lineUserId, notiData) {
         );
         console.log(`✅ Emergency LINE alert sent to ${lineUserId}`);
 
+        // จำลองสถานะเจ้าหน้าที่ตอบรับ (Rescue Status Simulation)
         const rescueUpdates = [
             { delayMs: 5000,  text: `🚑 รับทราบเหตุการณ์แล้ว กำลังส่งเจ้าหน้าที่ไปยังจุดเกิดเหตุ\n\n👤 ผู้ป่วย: ${patientName}\n📷 กล้อง: ${cameraId}` },
             { delayMs: 15000, text: `🚗 เจ้าหน้าที่กำลังเดินทางไปยังพิกัดที่ตรวจพบ\n📍 ${locationText}` },
@@ -323,6 +345,8 @@ async function sendLineEmergencyAlert(lineUserId, notiData) {
     }
 }
 
+const LINE_CHANNEL_SECRET = 'bde20a66f5d8671fd86709c212fa60a1';
+
 exports.onNotificationCreated = onDocumentCreated("users/{uid}/notifications/{notiId}", async (event) => {
     const snapshot = event.data;
     if (!snapshot) return;
@@ -330,7 +354,13 @@ exports.onNotificationCreated = onDocumentCreated("users/{uid}/notifications/{no
     const notiData = snapshot.data();
     const patientUid = event.params.uid;
 
-    console.log(`New notification for patient ${patientUid}: ${notiData.title}`);
+    // ส่งเฉพาะ notification ประเภท 'danger' (การล้ม) เท่านั้น
+    if (notiData.type !== 'danger') {
+        console.log(`Skipping non-emergency notification: ${notiData.type}`);
+        return;
+    }
+
+    console.log(`🚨 Fall detected for patient ${patientUid}: ${notiData.title}`);
 
     try {
         // --- [AI/Standard Logic] FCM Broadcast to Caregivers ---
@@ -377,32 +407,44 @@ exports.onNotificationCreated = onDocumentCreated("users/{uid}/notifications/{no
         }
 
         // --- [Line Noti Logic] Priority: Emergency Alerts ---
-        if (notiData.type === 'danger') {
-            console.log(`🚨 Emergency Detected: Sending LINE alert for ${patientUid}`);
-            
-            // Get Emergency Line ID from config
-            const configDoc = await db.collection('app_config').doc('line_settings').get();
-            const emergencyLineId = configDoc.exists ? configDoc.data().emergencyContactLineId : null;
-
-            if (emergencyLineId) {
-                // Get Patient Name
-                let patientName = 'ไม่ทราบชื่อ';
-                const patientDoc = await db.collection('users').doc(patientUid).get();
-                if (patientDoc.exists) {
-                    patientName = patientDoc.data().name || patientDoc.data().displayName || 'ไม่ทราบชื่อ';
-                }
-
-                // Send enriched alert
-                await sendLineEmergencyAlert(emergencyLineId, {
-                    ...notiData,
-                    patientName,
-                    cameraId: notiData.cameraId || 'หลัก'
-                });
-            } else {
-                console.log("No emergency LINE contact configured in Firestore.");
-            }
+        // ดึง LINE User ID ของเจ้าหน้าที่จาก Firestore config
+        const configDoc = await db.collection('app_config').doc('line_settings').get();
+        let emergencyLineId = null;
+        
+        if (configDoc.exists) {
+            emergencyLineId = configDoc.data().emergencyContactLineId;
         }
 
+        if (!emergencyLineId) {
+            console.log("No emergency LINE contact configured. Set it in Firestore: app_config/line_settings.emergencyContactLineId");
+            return;
+        }
+
+        // ดึงชื่อคนไข้จาก Firestore
+        let patientName = 'ไม่ทราบชื่อ';
+        try {
+            const patientDoc = await db.collection('users').doc(patientUid).get();
+            if (patientDoc.exists) {
+                patientName = patientDoc.data().name || patientDoc.data().displayName || 'ไม่ทราบชื่อ';
+            }
+        } catch (e) {
+            console.error("Error fetching patient name:", e);
+        }
+
+        // รวมข้อมูลทั้งหมดเพื่อส่งไปใน Flex Message
+        const enrichedNotiData = {
+            ...notiData,
+            patientName,
+            cameraId: notiData.cameraId || 'ไม่ทราบกล้อง',
+        };
+
+        const success = await sendLineEmergencyAlert(emergencyLineId, enrichedNotiData);
+        
+        if (success) {
+            console.log(`✅ Emergency LINE alert sent successfully`);
+        } else {
+            console.error(`❌ Failed to send LINE alert to emergency contact`);
+        }
     } catch (error) {
         console.error("Error in onNotificationCreated processing:", error);
     }
@@ -415,6 +457,7 @@ exports.lineWebhook = onRequest({ cors: true }, async (req, res) => {
     const hash = crypto.createHmac('sha256', LINE_CHANNEL_SECRET).update(body).digest('base64');
     
     if (signature !== hash) {
+        console.error('LINE webhook signature mismatch');
         return res.status(403).send('Forbidden');
     }
 
@@ -423,26 +466,48 @@ exports.lineWebhook = onRequest({ cors: true }, async (req, res) => {
         const lineUserId = event.source?.userId;
         if (!lineUserId) continue;
 
+        console.log(`LINE event: ${event.type} from ${lineUserId}`);
+
         if (event.type === 'follow') {
-            await axios.post('https://api.line.me/v2/bot/message/reply', {
-                replyToken: event.replyToken,
-                messages: [{
-                    type: 'text',
-                    text: `🚨 LifeGuardian — ระบบแจ้งเหตุฉุกเฉิน\n\nคุณเชื่อมต่อเข้าระบบแล้ว Bot นี้จะแจ้งสรุปเหตุการณ์ล้มอัตโนมัติพร้อมตำแหน่ง GPS และจำลองสถานะเจ้าหน้าที่ครับ`
-                }]
-            }, {
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}` }
-            });
+            // เมื่อมีคนเพิ่ม Bot เป็นเพื่อน — แสดงข้อความต้อนรับเจ้าหน้าที่
+            await axios.post(
+                'https://api.line.me/v2/bot/message/reply',
+                {
+                    replyToken: event.replyToken,
+                    messages: [
+                        {
+                            type: 'text',
+                            text: `🚨 LifeGuardian — ระบบแจ้งเหตุฉุกเฉิน\n\nคุณได้รับการเชื่อมต่อกับระบบตรวจจับการล้มอัตโนมัติแล้ว\n\n✅ เมื่อระบบตรวจพบการล้ม Bot นี้จะแจ้งเตือนคุณทันที พร้อมข้อมูล:\n• ชื่อผู้ป่วย\n• กล้องที่ตรวจพบ\n• ตำแหน่ง GPS\n• เวลาที่เกิดเหตุ`,
+                        },
+                    ],
+                },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
+                    },
+                }
+            );
         } else if (event.type === 'message' && event.message?.type === 'text') {
-            await axios.post('https://api.line.me/v2/bot/message/reply', {
-                replyToken: event.replyToken,
-                messages: [{
-                    type: 'text',
-                    text: `🤖 LifeGuardian Bot\n\nBot นี้ใช้สำหรับรับแจ้งเหตุฉุกเฉินอัตโนมัติ ไม่สามารถตอบกลับได้ครับ`
-                }]
-            }, {
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}` }
-            });
+            // เมื่อมีคนส่งข้อความมา — แจ้งว่า Bot ใช้สำหรับรับแจ้งเหตุเท่านั้น
+            await axios.post(
+                'https://api.line.me/v2/bot/message/reply',
+                {
+                    replyToken: event.replyToken,
+                    messages: [
+                        {
+                            type: 'text',
+                            text: `🤖 LifeGuardian Bot\n\nBot นี้ใช้สำหรับรับแจ้งเหตุฉุกเฉินอัตโนมัติจากระบบตรวจจับการล้ม\n\n⚠️ ไม่สามารถตอบกลับข้อความได้ กรุณารอรับการแจ้งเตือนเมื่อเกิดเหตุ`,
+                        },
+                    ],
+                },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
+                    },
+                }
+            );
         }
     }
     res.status(200).send('OK');

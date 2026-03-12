@@ -726,7 +726,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         imageUrl: event.remoteImageUrl ?? event.snapshotUrl, // Preference remote
         confidence: event.confidence,
         eventId: event.id,
-        cameraId: event.cameraId, // Pass cameraId for LINE alert
+        cameraId: event.cameraId, // ส่ง cameraId ให้ Cloud Function ใช้ใน LINE alert
       );
 
       // Save to user's notifications collection

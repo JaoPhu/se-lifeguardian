@@ -1,0 +1,62 @@
+{
+  "project_info": {
+    "project_number": "292872685738",
+    "project_id": "lifeguardian-app",
+    "storage_bucket": "lifeguardian-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:292872685738:android:0e5d178179f9baefd6a8d3",
+        "android_client_info": {
+          "package_name": "com.example.lifeguardian"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "292872685738-6ot8uu0g5u27seulvjgc6tub0ujgtbn4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.lifeguardian",
+            "certificate_hash": "752c6078e75ddf641b8c7ad55f34cd618fc7019b"
+          }
+        },
+        {
+          "client_id": "292872685738-okivs0ditpb3878oh99cbkllo9m9048r.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.lifeguardian",
+            "certificate_hash": "5c9b70e8e52c8c2e04b48c83155723f92efacc53"
+          }
+        },
+        {
+          "client_id": "292872685738-pta8d6kft4snbo147bu190ce7ibrcr8l.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDf6X97VndzFK1K6V1RibLEWpcgPpobdg8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "292872685738-pta8d6kft4snbo147bu190ce7ibrcr8l.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "292872685738-s8muujp6hdv453lpknjakpa8cr4m3q9v.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.lifeguardian"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

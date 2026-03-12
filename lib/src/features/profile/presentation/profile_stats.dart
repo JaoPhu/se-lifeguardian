@@ -28,7 +28,19 @@ class ProfileStats extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildStatItem('Gender', Icon(LucideIcons.smile, size: 24, color: theme.iconTheme.color), theme),
+              _buildStatItem(
+                'Gender',
+                Icon(
+                  gender.toLowerCase() == 'male'
+                      ? Icons.male
+                      : gender.toLowerCase() == 'female'
+                          ? Icons.female
+                          : LucideIcons.user,
+                  size: 24,
+                  color: theme.iconTheme.color,
+                ),
+                theme,
+              ),
               _buildStatItem('Blood Type', Text(bloodType, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.textTheme.bodyLarge?.color)), theme),
             ],
           ),

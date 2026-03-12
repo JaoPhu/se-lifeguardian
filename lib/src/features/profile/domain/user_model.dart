@@ -18,6 +18,7 @@ class User {
   final String? ownerGroupId;
   final List<String> joinedGroupIds;
   final String? sessionId;
+  final String? lineUserId;
 
   const User({
     required this.id,
@@ -39,6 +40,7 @@ class User {
     this.ownerGroupId,
     this.joinedGroupIds = const [],
     this.sessionId,
+    this.lineUserId,
   });
 
   User copyWith({
@@ -61,6 +63,7 @@ class User {
     String? ownerGroupId,
     List<String>? joinedGroupIds,
     String? sessionId,
+    String? lineUserId,
   }) {
     return User(
       id: id ?? this.id,
@@ -82,6 +85,7 @@ class User {
       ownerGroupId: ownerGroupId ?? this.ownerGroupId,
       joinedGroupIds: joinedGroupIds ?? this.joinedGroupIds,
       sessionId: sessionId ?? this.sessionId,
+      lineUserId: lineUserId ?? this.lineUserId,
     );
   }
 
@@ -121,7 +125,8 @@ class User {
       other.foodAllergies == foodAllergies &&
       other.ownerGroupId == ownerGroupId &&
       other.joinedGroupIds == joinedGroupIds &&
-      other.sessionId == sessionId;
+      other.sessionId == sessionId &&
+      other.lineUserId == lineUserId;
   }
 
   @override
@@ -144,6 +149,7 @@ class User {
       foodAllergies.hashCode ^
       ownerGroupId.hashCode ^
       joinedGroupIds.hashCode ^
-      sessionId.hashCode;
+      sessionId.hashCode ^
+      lineUserId.hashCode;
   }
 }

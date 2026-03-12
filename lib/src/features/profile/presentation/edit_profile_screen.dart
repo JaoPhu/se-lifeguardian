@@ -652,6 +652,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               _buildInputField('Drug Allergies', _drugAllergiesController, theme, hintText: 'None', isMultiline: true),
               _buildInputField('Food Allergies', _foodAllergiesController, theme, hintText: 'Peanuts', isMultiline: true),
 
+
               const SizedBox(height: 24),
               Row(
                 children: [
