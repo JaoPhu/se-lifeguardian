@@ -8,7 +8,8 @@ import argparse
 import os
 
 def collect_data(video_path, label, start, end):
-    model_path = 'ml/models/pose_landmarker.task'
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    model_path = os.path.normpath(os.path.join(script_dir, '..', 'models', 'pose_landmarker.task'))
     if not os.path.exists(model_path):
         print(f"Error: Model file {model_path} not found.")
         print("Please ensure you've downloaded the task model.")
@@ -74,10 +75,11 @@ def collect_data(video_path, label, start, end):
         print("No pose detected in video.")
         return
 
-    # Save CSV
-    os.makedirs('ml/data/raw', exist_ok=True)
+    # Save CSV — use absolute path so it works from any working directory
+    output_dir = os.path.normpath(os.path.join(script_dir, '..', 'data', 'raw'))
+    os.makedirs(output_dir, exist_ok=True)
     df = pd.DataFrame(data)
-    output_path = f'ml/data/raw/{label}.csv'
+    output_path = os.path.join(output_dir, f'{label}.csv')
 
     if os.path.exists(output_path):
         df.to_csv(output_path, mode='a', header=False, index=False)
