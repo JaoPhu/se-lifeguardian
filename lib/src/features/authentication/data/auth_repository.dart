@@ -165,11 +165,37 @@ class AuthRepository {
       throw Exception(result.data?['message'] ?? 'Failed to reset password');
     } on FirebaseFunctionsException catch (e) {
       debugPrint('Cloud Function error: ${e.code} - ${e.message}');
-      // Return the error message from the server (e.g. "OTP Invalid")
       throw Exception(e.message ?? 'เกิดข้อผิดพลาดในการรีเซ็ตรหัสผ่าน');
     } catch (e) {
       debugPrint('Error resetting password with OTP: $e');
       throw Exception('ไม่สามารถรีเซ็ตรหัสผ่านได้ กรุณาลองใหม่อีกครั้ง');
+    }
+  }
+
+  /// Verify OTP for registration or password reset (Standalone check)
+  Future<void> verifyOTP({
+    required String email,
+    required String otp,
+  }) async {
+    try {
+      final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'us-central1').httpsCallable('verifyOTP');
+      final result = await callable.call(<String, dynamic>{
+        'email': email,
+        'otp': otp,
+      });
+
+      if (result.data != null && result.data['success'] == true) {
+        debugPrint('OTP verified successfully');
+        return;
+      }
+      
+      throw Exception(result.data?['message'] ?? 'รหัส OTP ไม่ถูกต้อง');
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('Cloud Function error: ${e.code} - ${e.message}');
+      throw Exception(e.message ?? 'รหัส OTP ไม่ถูกต้องหรือหมดอายุ');
+    } catch (e) {
+      debugPrint('Error verifying OTP: $e');
+      throw Exception('ไม่สามารถตรวจสอบรหัส OTP ได้ กรุณาลองใหม่อีกครั้ง');
     }
   }
 
@@ -247,21 +273,12 @@ class AuthRepository {
         await _reauthenticateSocial();
       }
 
-      // 2. Delete Firestore data (Bottom-Up)
-      // This happens while user is still fully authenticated.
-      await _deleteFirestoreData(uid);
-      debugPrint('AuthRepository: Firestore data deleted');
-
-      // 3. Delete Storage data
-      await _deleteStorageData(uid);
-      debugPrint('AuthRepository: Storage data deleted');
-
-      // 4. Delete Firebase Auth account (The final step)
-      // If we reach here, we've cleaned up all user-controlled data.
+      // 2. Delete Firebase Auth account (The final step)
+      // This is now the ONLY remote step. The Cloud Function will handle the rest.
       await user.delete();
       debugPrint('AuthRepository: Firebase Auth account deleted');
 
-      // 5. Cleanup Local State
+      // 3. Cleanup Local State
       await _clearLocalCache();
       await _storage.delete(key: _passwordKey);
       
@@ -335,129 +352,7 @@ class AuthRepository {
     }
   }
 
-  Future<void> _deleteFirestoreData(String uid) async {
-    final firestore = FirebaseFirestore.instance;
-    final userRef = firestore.collection('users').doc(uid);
 
-    // 0. Fetch user data to find groups
-    final userSnap = await userRef.get();
-    final userData = userSnap.data() ?? {};
-    final ownerGroupId = userData['ownerGroupId'] as String?;
-    final joinedGroupIds = List<String>.from(userData['joinedGroupIds'] ?? []);
-
-    // 1. Cleanup Owned Group (If exists)
-    if (ownerGroupId != null && ownerGroupId.isNotEmpty) {
-      try {
-        final groupRef = firestore.collection('groups').doc(ownerGroupId);
-        
-        // Delete members
-        final members = await groupRef.collection('members').get();
-        for (var doc in members.docs) {
-          await doc.reference.delete();
-        }
-        
-        // Delete join requests
-        final requests = await groupRef.collection('join_requests').get();
-        for (var doc in requests.docs) {
-          await doc.reference.delete();
-        }
-
-        // Delete group document
-        await groupRef.delete();
-        debugPrint('AuthRepository: Owned group $ownerGroupId deleted');
-      } catch (e) {
-        debugPrint('AuthRepository: Error deleting owned group: $e');
-      }
-    }
-
-    // 2. Remove self from Joined Groups
-    for (final groupId in joinedGroupIds) {
-      try {
-        await firestore
-            .collection('groups')
-            .doc(groupId)
-            .collection('members')
-            .doc(uid)
-            .delete();
-        debugPrint('AuthRepository: Removed from joined group $groupId');
-      } catch (e) {
-        debugPrint('AuthRepository: Error removing from joined group $groupId: $e');
-      }
-    }
-
-    // 3. Delete associated subcollections
-    // (Events)
-    try {
-      final events = await userRef.collection('events').get();
-      for (var doc in events.docs) {
-        await doc.reference.delete();
-      }
-      debugPrint('AuthRepository: Subcollection "events" deleted');
-    } catch (e) {
-      debugPrint('AuthRepository: Error deleting events: $e');
-    }
-
-    // (Notifications)
-    try {
-      final notifications = await userRef.collection('notifications').get();
-      for (var doc in notifications.docs) {
-        await doc.reference.delete();
-      }
-      debugPrint('AuthRepository: Subcollection "notifications" deleted');
-    } catch (e) {
-      debugPrint('AuthRepository: Error deleting notifications: $e');
-    }
-
-    // 4. Delete main user document LAST
-    await userRef.delete();
-    debugPrint('AuthRepository: Main user document deleted');
-  }
-
-  Future<void> _deleteStorageData(String uid) async {
-    try {
-      final storage = FirebaseStorage.instance;
-      final userRef = storage.ref().child('users').child(uid);
-      
-      // We need to delete files recursively. Firebase Storage doesn't support folder deletion directly.
-      // 1. Profile pic
-      try {
-        await userRef.child('profile_pic.jpg').delete();
-      } catch (_) {}
-
-      // 2. Event snapshots
-      try {
-        final eventsRef = userRef.child('events');
-        final listResult = await eventsRef.listAll();
-        for (var item in listResult.items) {
-          await item.delete();
-        }
-        for (var prefix in listResult.prefixes) {
-          final subList = await prefix.listAll();
-          for (var item in subList.items) {
-            await item.delete();
-          }
-        }
-      } catch (_) {}
-
-      // 3. Camera thumbnails
-      try {
-        final camerasRef = userRef.child('cameras');
-        final listResult = await camerasRef.listAll();
-        for (var item in listResult.items) {
-          await item.delete();
-        }
-        for (var prefix in listResult.prefixes) {
-          final subList = await prefix.listAll();
-          for (var item in subList.items) {
-            await item.delete();
-          }
-        }
-      } catch (_) {}
-
-    } catch (e) {
-      debugPrint('Error deleting Storage data: $e');
-    }
-  }
 
   Future<void> _clearLocalCache() async {
     try {
@@ -494,7 +389,7 @@ class AuthRepository {
     }
 
     // --- Strict Check ---
-    final user = credential.user;
+    final user = credential?.user;
     if (user != null) {
       final email = user.email?.trim().toLowerCase();
       

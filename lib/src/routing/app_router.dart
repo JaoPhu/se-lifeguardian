@@ -88,6 +88,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           final extra = state.extra as Map<String, dynamic>;
           return OtpVerificationScreen(
             email: extra['email'] as String,
+            isRegistration: extra['isRegistration'] as bool? ?? false,
+            registrationData: extra['registrationData'] as Map<String, dynamic>?,
           );
         },
       ),

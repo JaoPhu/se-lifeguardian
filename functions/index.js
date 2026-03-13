@@ -1,5 +1,6 @@
 const { onCall, HttpsError, onRequest } = require("firebase-functions/v2/https");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onUserDeleted } = require("firebase-functions/v2/identity");
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
 const axios = require('axios');
@@ -42,34 +43,35 @@ exports.updateUserPassword = onCall({ cors: true }, async (request) => {
 
 
 exports.sendOTPEmail = onCall({ cors: true, secrets: ["GMAIL_PASS"] }, async (request) => {
-    const { email, otp } = request.data;
+    const { email, otp, isRegistration } = request.data;
+    const normalizedEmail = (email || "").trim().toLowerCase();
 
     // Validate input
-    if (!email || !otp) {
+    if (!normalizedEmail || !otp) {
         throw new HttpsError('invalid-argument', 'Email and OTP are required');
     }
 
-    // 0. Verify if user actually exists in Auth so we don't send emails to unregistered users
-    try {
-        await admin.auth().getUserByEmail(email);
-    } catch (error) {
-        if (error.code === 'auth/user-not-found') {
-            throw new HttpsError('not-found', 'user-not-found');
+    // Check user existence IF not a registration attempt
+    if (!isRegistration) {
+        try {
+            await admin.auth().getUserByEmail(normalizedEmail);
+        } catch (error) {
+            if (error.code === 'auth/user-not-found') {
+                throw new HttpsError('not-found', 'user-not-found');
+            }
+            throw new HttpsError('internal', 'Error checking user existence');
         }
-        throw new HttpsError('internal', 'Error checking user existence');
     }
 
     // --- 1. Store OTP in Firestore ---
     try {
-        // Store in 'otp_requests' collection, using email as ID
-        // Set expiration to 10 minutes from now
         const expiresAt = Date.now() + (10 * 60 * 1000);
-        await db.collection('otp_requests').doc(email).set({
+        await db.collection('otp_requests').doc(normalizedEmail).set({
             otp: otp,
             expiresAt: expiresAt,
             createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
-        console.log(`OTP stored for ${email}`);
+        console.log(`OTP stored for ${normalizedEmail} (isRegistration: ${!!isRegistration})`);
     } catch (error) {
         console.error('Error storing OTP:', error);
         throw new HttpsError('internal', 'Failed to generate OTP system record');
@@ -83,14 +85,16 @@ exports.sendOTPEmail = onCall({ cors: true, secrets: ["GMAIL_PASS"] }, async (re
             pass: process.env.GMAIL_PASS
         }
     });
-    // Email HTML template
+
     const htmlContent = `
         <div style="font-family: 'Sarabun', sans-serif; padding: 20px; background-color: #f4f4f4;">
             <div style="max-width: 500px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                <h2 style="color: #0D9488; text-align: center;">รหัสยืนยันตัวตน (OTP)</h2>
+                <h2 style="color: #0D9488; text-align: center;">${isRegistration ? 'ยืนยันการสมัครสมาชิก' : 'รหัสยืนยันตัวตน (OTP)'}</h2>
                 <p style="font-size: 16px; color: #333;">สวัสดีครับ,</p>
                 <p style="font-size: 16px; color: #333;">
-                    ใช้รหัสอ้างอิงด้านล่างนี้เพื่อยืนยันตัวตนและรีเซ็ตรหัสผ่านของคุณในแอปพลิเคชัน <strong>LifeGuardian</strong>
+                    ${isRegistration 
+                        ? 'ใช้รหัสอ้างอิงด้านล่างนี้เพื่อยืนยันอีเมลสำหรับการสมัครใช้งาน <strong>LifeGuardian</strong>' 
+                        : 'ใช้รหัสอ้างอิงด้านล่างนี้เพื่อยืนยันตัวตนและรีเซ็ตรหัสผ่านของคุณในแอปพลิเคชัน <strong>LifeGuardian</strong>'}
                 </p>
                 <div style="text-align: center; margin: 30px 0;">
                     <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #0D9488; background-color: #f0fdfa; padding: 10px 20px; border-radius: 5px; border: 1px solid #ccfbf1;">
@@ -113,12 +117,14 @@ exports.sendOTPEmail = onCall({ cors: true, secrets: ["GMAIL_PASS"] }, async (re
     try {
         await transporter.sendMail({
             from: '"LifeGuardian Support" <lifeguardian.service@gmail.com>',
-            to: email,
-            subject: `รหัสยืนยันตัวตน LifeGuardian ของคุณ: ${otp}`,
+            to: normalizedEmail,
+            subject: isRegistration 
+                ? `รหัสยืนยันการสมัคร LifeGuardian: ${otp}`
+                : `รหัสยืนยันตัวตน LifeGuardian ของคุณ: ${otp}`,
             html: htmlContent
         });
 
-        console.log(`OTP email sent successfully to ${email}`);
+        console.log(`OTP email sent successfully to ${normalizedEmail}`);
         return { success: true };
     } catch (error) {
         console.error('Error sending OTP email:', error);
@@ -128,15 +134,16 @@ exports.sendOTPEmail = onCall({ cors: true, secrets: ["GMAIL_PASS"] }, async (re
 
 exports.resetPasswordWithOTP = onCall({ cors: true }, async (request) => {
     const { email, otp, newPassword } = request.data;
+    const normalizedEmail = (email || "").trim().toLowerCase();
 
     // Validate input
-    if (!email || !otp || !newPassword) {
+    if (!normalizedEmail || !otp || !newPassword) {
         throw new HttpsError('invalid-argument', 'Email, OTP, and New Password are required');
     }
 
     try {
         // 1. Verify OTP from Firestore
-        const docRef = db.collection('otp_requests').doc(email);
+        const docRef = db.collection('otp_requests').doc(normalizedEmail);
         const doc = await docRef.get();
 
         if (!doc.exists) {
@@ -155,7 +162,7 @@ exports.resetPasswordWithOTP = onCall({ cors: true }, async (request) => {
         }
 
         // 2. OTP Valid! Update Password via Admin SDK
-        const user = await admin.auth().getUserByEmail(email);
+        const user = await admin.auth().getUserByEmail(normalizedEmail);
         await admin.auth().updateUser(user.uid, {
             password: newPassword,
         });
@@ -163,7 +170,7 @@ exports.resetPasswordWithOTP = onCall({ cors: true }, async (request) => {
         // 3. Delete used OTP (One-time use)
         await docRef.delete();
 
-        console.log(`Password reset successfully with OTP for: ${email}`);
+        console.log(`Password reset successfully with OTP for: ${normalizedEmail}`);
         return { success: true, message: 'Password reset successfully' };
 
     } catch (error) {
@@ -171,8 +178,46 @@ exports.resetPasswordWithOTP = onCall({ cors: true }, async (request) => {
         if (error instanceof HttpsError) {
             throw error;
         }
-        // Handle unexpected errors
         throw new HttpsError('internal', `Reset failed: ${error.message}`);
+    }
+});
+
+exports.verifyOTP = onCall({ cors: true }, async (request) => {
+    const { email, otp } = request.data;
+    const normalizedEmail = (email || "").trim().toLowerCase();
+
+    if (!normalizedEmail || !otp) {
+        throw new HttpsError('invalid-argument', 'Email and OTP are required');
+    }
+
+    try {
+        const docRef = db.collection('otp_requests').doc(normalizedEmail);
+        const doc = await docRef.get();
+
+        if (!doc.exists) {
+            throw new HttpsError('not-found', 'ไม่พบรหัส OTP สำหรับอีเมลนี้');
+        }
+
+        const data = doc.data();
+        const now = Date.now();
+
+        if (data.otp !== otp) {
+            throw new HttpsError('invalid-argument', 'รหัส OTP ไม่ถูกต้อง');
+        }
+
+        if (data.expiresAt < now) {
+            throw new HttpsError('deadline-exceeded', 'รหัส OTP หมดอายุแล้ว');
+        }
+
+        // Optional: Keep OTP for the next step (actual registration) if needed,
+        // or delete it if this is the final verification. 
+        // For registration flow, we probably keep it until the account is created.
+        
+        return { success: true };
+    } catch (error) {
+        console.error('Error in verifyOTP:', error);
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', 'Verification failed');
     }
 });
 
@@ -535,4 +580,76 @@ exports.lineWebhook = onRequest({
         }
     }
     res.status(200).send('OK');
+});
+
+// ===== Background Account Deletion Cleanup =====
+exports.onUserDeletedCleanup = onUserDeleted({ region: 'us-central1' }, async (event) => {
+    const uid = event.data.uid;
+    console.log(`🗑️ Starting cleanup for deleted user UID: ${uid}`);
+
+    const userRef = db.collection('users').doc(uid);
+
+    try {
+        // 1. Fetch user data to identify groups
+        const userSnap = await userRef.get();
+        if (!userSnap.exists) {
+            console.log(`User document for ${uid} already gone or never existed.`);
+        } else {
+            const userData = userSnap.data();
+            const ownerGroupId = userData.ownerGroupId;
+            const joinedGroupIds = userData.joinedGroupIds || [];
+
+            // 2. Cleanup Owned Group
+            if (ownerGroupId) {
+                console.log(`Cleaning up owned group: ${ownerGroupId}`);
+                const groupRef = db.collection('groups').doc(ownerGroupId);
+                
+                // Delete subcollections (members, join_requests)
+                const membersSnap = await groupRef.collection('members').get();
+                const memberDeletes = membersSnap.docs.map(doc => doc.ref.delete());
+                
+                const requestsSnap = await groupRef.collection('join_requests').get();
+                const requestDeletes = requestsSnap.docs.map(doc => doc.ref.delete());
+
+                await Promise.all([...memberDeletes, ...requestDeletes]);
+                await groupRef.delete();
+            }
+
+            // 3. Remove user from joined groups
+            if (joinedGroupIds.length > 0) {
+                const groupRemovals = joinedGroupIds.map(groupId => 
+                    db.collection('groups').doc(groupId).collection('members').doc(uid).delete()
+                );
+                await Promise.all(groupRemovals);
+            }
+        }
+
+        // 4. Delete Firestore subcollections (notifications, events)
+        const subcollections = ['notifications', 'events', 'cameras'];
+        for (const sub of subcollections) {
+            const snap = await userRef.collection(sub).get();
+            const deletes = snap.docs.map(doc => doc.ref.delete());
+            await Promise.all(deletes);
+            console.log(`Deleted subcollection: ${sub}`);
+        }
+
+        // 5. Delete main user document
+        await userRef.delete();
+
+        // 6. Cleanup Firebase Storage files
+        // Note: Admin SDK doesn't have a single "delete folder" for Storage either.
+        // We list and delete.
+        const bucket = admin.storage().bucket();
+        const prefix = `users/${uid}/`;
+        try {
+            await bucket.deleteFiles({ prefix: prefix });
+            console.log(`Deleted storage files with prefix: ${prefix}`);
+        } catch (storageErr) {
+            console.error(`Error deleting storage files for ${uid}:`, storageErr);
+        }
+
+        console.log(`✅ Cleanup complete for UID: ${uid}`);
+    } catch (error) {
+        console.error(`❌ Global error during cleanup for ${uid}:`, error);
+    }
 });

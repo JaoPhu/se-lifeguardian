@@ -1,21 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:async';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lifeguardian/src/features/authentication/data/email_service.dart';
+import 'package:lifeguardian/src/features/authentication/providers/auth_providers.dart';
+import 'package:lifeguardian/src/features/authentication/controllers/auth_controller.dart';
+import 'package:lifeguardian/src/features/profile/data/user_repository.dart';
 
-class OtpVerificationScreen extends StatefulWidget {
+class OtpVerificationScreen extends ConsumerStatefulWidget {
   const OtpVerificationScreen({
     super.key,
     required this.email,
+    this.isRegistration = false,
+    this.registrationData,
   });
 
   final String email;
+  final bool isRegistration;
+  final Map<String, dynamic>? registrationData;
 
   @override
-  State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
+  ConsumerState<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
 }
 
-class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
+class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
   final List<TextEditingController> _controllers = List.generate(4, (index) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(4, (index) => FocusNode());
   bool _isLoading = false;
@@ -72,8 +80,12 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
     setState(() => _isLoading = true);
     
-    final newOtp = EmailService.generateOTP();
-    final success = await EmailService.sendOTP(widget.email, newOtp);
+    // Check if it's registration or forgot password
+    final success = await EmailService.sendOTP(
+      widget.email, 
+      EmailService.generateOTP(),
+      isRegistration: widget.isRegistration,
+    );
 
     if (!mounted) return;
 
@@ -118,18 +130,55 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
     setState(() => _isLoading = true);
 
-    // No local check here anymore!
-    // We just move to the reset password screen and pass the entered OTP.
-    // The actual verification happens during the final password update call.
-    
-    await Future.delayed(const Duration(milliseconds: 300));
-    
-    if (!mounted) return;
-    
-    context.push('/reset-password', extra: {
-      'email': widget.email,
-      'otp': otp,
-    });
+    if (widget.isRegistration) {
+      // --- Registration Flow ---
+      try {
+        // 1. Verify OTP first (Backend check)
+        await ref.read(authRepositoryProvider).verifyOTP(
+          email: widget.email,
+          otp: otp,
+        );
+
+        // 2. Finalize Registration
+        if (widget.registrationData != null) {
+          final data = widget.registrationData!;
+          await ref.read(authControllerProvider.notifier).register(
+            data['email'] as String,
+            data['password'] as String,
+          );
+
+          // 3. Ensure User Doc (profile data)
+          await ref.read(userRepositoryProvider).ensureUserDoc(
+            displayName: data['name'] as String,
+            gender: data['gender'] as String,
+            birthDate: data['birthDate'] as String,
+            age: data['age'] as String,
+          );
+
+          if (!mounted) return;
+          
+          // 4. Success -> Push to edit-profile
+          context.pushReplacement(
+            '/edit-profile',
+            extra: {'fromRegistration': true},
+          );
+        }
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    } else {
+      // --- Forgot Password Flow ---
+      // We just move to the reset password screen and pass the entered OTP.
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
+      context.push('/reset-password', extra: {
+        'email': widget.email,
+        'otp': otp,
+      });
+    }
     
     setState(() => _isLoading = false);
   }

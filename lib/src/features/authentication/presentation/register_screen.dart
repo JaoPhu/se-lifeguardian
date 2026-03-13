@@ -7,7 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // ✅ controller
 import 'package:lifeguardian/src/features/authentication/controllers/auth_controller.dart';
+import 'package:lifeguardian/src/features/authentication/providers/auth_providers.dart';
 import 'package:lifeguardian/src/features/profile/data/user_repository.dart';
+import 'package:lifeguardian/src/features/authentication/data/email_service.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -25,6 +27,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _ageController = TextEditingController();
   final String _gender = 'Male';
   bool _agreeTerms = false;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -339,34 +342,54 @@ Future<void> _ensureUserDocAfterAuth() async {
                             return;
                           }
 
-                          // ✅ 1) Register ก่อน (ให้ได้ uid)
-                          await ref
-                              .read(authControllerProvider.notifier)
-                              .register(email, password);
+                          setState(() => _isLoading = true);
+                          try {
+                            // 1) Check if user already exists
+                            final exists = await ref
+                                .read(authRepositoryProvider)
+                                .checkUserExists(email);
+                            if (exists) {
+                              if (!context.mounted) return;
+                              setState(() => _isLoading = false);
+                              _onAuthError('account-already-exists');
+                              return;
+                            }
 
-                          // ✅ 2) เช็ค state หลัง register
-                          final s = ref.read(authControllerProvider);
-                          if (s.hasError) {
-                            _onAuthError(s.error!);
-                            return;
+                            // 2) Send OTP
+                            final otp = EmailService.generateOTP();
+                            final success = await EmailService.sendOTP(
+                              email,
+                              otp,
+                              isRegistration: true,
+                            );
+
+                            if (!success) {
+                              throw Exception('ไม่สามารถส่งรหัส OTP ได้');
+                            }
+
+                            if (!context.mounted) return;
+
+                            // 3) Push to OTP Verification screen with full registration data
+                            context.push(
+                              '/otp-verification',
+                              extra: {
+                                'email': email,
+                                'isRegistration': true,
+                                'registrationData': {
+                                  'email': email,
+                                  'password': password,
+                                  'name': _nameController.text,
+                                  'birthDate': _birthDateController.text,
+                                  'gender': _gender,
+                                  'age': _ageController.text,
+                                },
+                              },
+                            );
+                          } catch (e) {
+                            _showSnack(e.toString());
+                          } finally {
+                            if (mounted) setState(() => _isLoading = false);
                           }
-
-                          // ✅ 3) สร้าง/อัปเดต users/{uid} ใน Firestore (แก้ Unknown)
-                          await ref.read(userRepositoryProvider).ensureUserDoc(
-                                displayName: _nameController.text,
-                                gender: _gender,
-                                birthDate: _birthDateController.text,
-                                age: _ageController
-                                    .text, // ✅ ส่งเป็น String ให้ตรงกับ repo
-                              );
-
-                          if (!context.mounted) return;
-
-                          // ✅ 4) ไปหน้า edit-profile
-                          context.pushReplacement(
-                            '/edit-profile',
-                            extra: {'fromRegistration': true},
-                          );
                         },
 
                   style: ElevatedButton.styleFrom(

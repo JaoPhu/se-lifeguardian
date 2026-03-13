@@ -11,15 +11,16 @@ class EmailService {
   }
 
   // Send OTP Email via Cloud Function
-  static Future<bool> sendOTP(String recipientEmail, String otp) async {
+  static Future<bool> sendOTP(String recipientEmail, String otp, {bool isRegistration = false}) async {
     try {
       final callable = _functions.httpsCallable('sendOTPEmail');
       final result = await callable.call({
         'email': recipientEmail,
         'otp': otp,
+        'isRegistration': isRegistration,
       });
       
-      debugPrint('OTP email sent successfully: ${result?.data}');
+      debugPrint('OTP email sent successfully: ${result.data}');
       return true;
     } on FirebaseFunctionsException catch (e) {
       if (e.code == 'not-found' && e.message == 'user-not-found') {
