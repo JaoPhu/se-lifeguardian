@@ -12,7 +12,7 @@ import '../../pose_detection/data/health_status_provider.dart';
 import '../../history/data/history_repository_provider.dart';
 import '../../notification/data/notification_provider.dart';
 import '../../group/providers/group_providers.dart';
-import 'change_password_screen.dart';
+import '../../authentication/presentation/change_password_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
