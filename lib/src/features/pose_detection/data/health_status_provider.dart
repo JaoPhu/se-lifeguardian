@@ -14,6 +14,12 @@ import '../../notification/data/notification_repository.dart';
 import '../../notification/domain/notification_model.dart';
 import '../../notification/data/notification_service.dart';
 import '../../history/data/history_repository_provider.dart';
+import '../../history/presentation/providers/history_provider.dart';
+import '../../../routing/app_router.dart';
+import '../../../common/widgets/top_notification_toast.dart';
+import 'package:flutter/material.dart';
+
+final globalResetProvider = StateProvider<int>((ref) => 0);
 
 enum HealthStatus { normal, warning, emergency, none }
 
@@ -248,53 +254,28 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
   // Internal clock for simulation support
   DateTime _currentTime = DateTime.now();
   DateTime? _lastScoreUpdateTime;
-  DateTime? _lastDurationSyncTime;
   bool _isSimulation = false;
 
   void updateSimulationClock(DateTime time) {
     if (!_isSimulation || _lastScoreUpdateTime == null) {
       _isSimulation = true;
       _lastScoreUpdateTime = time;
-      _lastDurationSyncTime = time;
     }
     
-    _currentTime = time;
+    // Calculate how many simulation seconds have passed
+    final elapsedSec = time.difference(_lastScoreUpdateTime!).inSeconds;
     
-    // Update current event duration in real-time if 1s has passed
-    if (state.events.isNotEmpty) {
-      final lastEvent = state.events.first;
-      if (lastEvent.startTimeMs != null) {
-        final nowMs = _currentTime.millisecondsSinceEpoch;
-        final startMs = lastEvent.startTimeMs!;
-        
-        // Only update if time is moving forward
-        if (nowMs > startMs) {
-          final durationSec = (nowMs - startMs) ~/ 1000;
-          
-          // Update local state frequently for smooth UI
-          final updatedEvents = List<SimulationEvent>.from(state.events);
-          updatedEvents[0] = lastEvent.copyWith(
-            durationSeconds: durationSec,
-            duration: _formatDurationLabel(durationSec),
-          );
-          
-          state = state.copyWith(events: updatedEvents);
-          
-          // Sync to Firestore periodically (e.g., every 5 simulation seconds) to avoid spamming
-          if (durationSec % 5 == 0) {
-            _eventRepository.syncEvent(updatedEvents[0]);
-          }
-        }
-      }
-    }
-    
-    // Only update health score if at least 1 simulation second has passed
-    final elapsedSec = _currentTime.difference(_lastScoreUpdateTime!).inSeconds;
     if (elapsedSec >= 1) {
+       // Advance time incrementally and update score/status for EACH simulation second
+       // This ensures threshold-based notifications (like sitting 10s) trigger correctly
        for (int i = 0; i < elapsedSec; i++) {
+         _currentTime = _lastScoreUpdateTime!.add(const Duration(seconds: 1));
          _updateScoreBasedOnActivity();
+         _lastScoreUpdateTime = _currentTime;
        }
-       _lastScoreUpdateTime = _lastScoreUpdateTime!.add(Duration(seconds: elapsedSec));
+    } else {
+       // Just update current time if less than a second passed
+       _currentTime = time;
     }
   }
 
@@ -382,6 +363,9 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         // Global cleanup: UI Wipe + Cloud Wipe + Local Cache Wipe
         await _eventRepository.deleteAllDataForUser();
         
+        // 1.5 Trigger global reset signal to clear all other running family instances
+        _ref.read(globalResetProvider.notifier).update((state) => state + 1);
+
         // Clear ALL local SharedPreferences keys for this specific user (including camera-specific ones)
         try {
           final targetUid = _ref.read(resolvedTargetUidProvider);
@@ -406,14 +390,12 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         _ref.invalidate(dailyStatsProvider);
         _ref.invalidate(weeklyStatsProvider);
         _ref.invalidate(dailyEventsProvider);
+        _ref.invalidate(historyListProvider); // Ensure future providers also refresh
       }
     
     // 3. Update active state
     if (cameraId == null) {
-      // reset() also saves to state, but we want to be explicit here
-      state = HealthState.initial();
-      _currentTime = DateTime.now();
-      _isSimulation = false;
+      resetLocalState();
     } else {
       // Local cleanup for specific camera
       state = state.copyWith(
@@ -423,6 +405,15 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       );
       await _saveState();
     }
+  }
+
+  /// Resets the local memory state and cancels any active monitoring/simulation.
+  void resetLocalState() {
+    _timer?.cancel();
+    _isSimulation = false;
+    state = HealthState.initial();
+    _currentTime = DateTime.now();
+    debugPrint("🔄 Local State Reset Completed for Camera: $cameraId");
   }
 
   void updateActivity(String activity, {String? snapshotPath, String? cameraId, DateTime? customTime, bool forceSync = false}) {
@@ -664,28 +655,37 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
   void _updateScoreBasedOnActivity() {
     double change = 0;
+    final activeEvent = state.events.isNotEmpty ? state.events.first : null;
+    final double duration = (activeEvent?.durationSeconds ?? 0).toDouble();
     
     switch (state.currentActivity) {
       case 'sitting':
-        change = 30; // Recovery (+30 pts/sec)
+        // Recovery initially, penalty after 10s (Simulation time)
+        change = duration < 10 ? 30 : -20;
         break;
       case 'slouching':
-        change = -60; // Warning (-60 pts/sec) - Reaches 799 in ~3.4s
+        change = -60; // Heavier penalty
         break;
       case 'laying':
-        change = -10; // Slow deduction (-10 pts/sec)
+        // Constant penalty, heavier after 30s
+        change = duration < 30 ? -10 : -30;
         break;
       case 'walking':
-        change = 30; // Recovery (+30 pts/sec)
+        change = 30; // Recovery
         break;
       case 'standing':
-        change = 30; // Recovery (+30 pts/sec)
+        // Recovery initially, penalty after 15s (Simulation time)
+        change = duration < 15 ? 30 : -10;
+        break;
+      case 'work': // Handling both standing/work labels
+      case 'working':
+        change = duration < 15 ? 30 : -10;
         break;
       case 'exercise':
-        change = 60; // Fast recovery (+60 pts/sec)
+        change = 60; // Fast recovery
         break;
       case 'occluded':
-        change = -10; // Occluded deduction
+        change = -10;
         break;
     }
 
@@ -801,24 +801,33 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         }
       }
 
-      // Periodically sync active event to Firestore (every 30 simulation seconds)
+      // --- NOTIFICATION TRIGGERS ---
+      // We use a more robust threshold-crossing logic to ensure no notifications are missed 
+      // during high-speed jumps in the simulation.
       if (durationChanged && updatedEvents.isNotEmpty && updatedEvents.first.durationSeconds != null) {
         final duration = updatedEvents.first.durationSeconds!;
         final previousDuration = state.events.isNotEmpty ? (state.events.first.durationSeconds ?? 0) : 0;
+        final type = updatedEvents.first.type;
         
         final isEmergency = state.status == HealthStatus.emergency;
         
-        if (!isEmergency && updatedEvents.first.type == 'sitting' && previousDuration < 60 && duration >= 60) {
-           _triggerSittingNotification(updatedEvents.first);
+        // Use a persistent key to track if a specific threshold has been notified for this event id
+        // This is handled via a private map in the notifier to prevent double-firing
+        void checkThreshold(int thresholdSec, String thresholdKey, Function() trigger) {
+          if (!isEmergency && previousDuration < thresholdSec && duration >= thresholdSec) {
+             debugPrint("🔔 THRESHOLD REACHED: $type - ${thresholdSec}s (Event ID: ${updatedEvents.first.id})");
+             trigger();
+          }
         }
-        if (!isEmergency && updatedEvents.first.type == 'slouching' && previousDuration < 60 && duration >= 60) {
-           _triggerSlouchingNotification(updatedEvents.first);
-        }
-        if (!isEmergency && (updatedEvents.first.type == 'walking' || updatedEvents.first.type == 'walk') && previousDuration < 30 && duration >= 30) {
-           _triggerWalkingNotification(updatedEvents.first);
-        }
-        if (!isEmergency && updatedEvents.first.type == 'laying' && previousDuration < 120 && duration >= 120) {
-           _triggerLayingNotification(updatedEvents.first);
+
+        if (type == 'sitting') {
+          checkThreshold(10, 'sitting_10s', () => _triggerSittingNotification(updatedEvents.first));
+        } else if (type == 'slouching') {
+          checkThreshold(10, 'slouching_10s', () => _triggerSlouchingNotification(updatedEvents.first));
+        } else if (type == 'walking' || type == 'walk') {
+          checkThreshold(5, 'walking_5s', () => _triggerWalkingNotification(updatedEvents.first));
+        } else if (type == 'laying') {
+          checkThreshold(20, 'laying_20s', () => _triggerLayingNotification(updatedEvents.first));
         }
 
         // Periodic Health Advice (every 10 minutes of simulation)
@@ -826,6 +835,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
            _triggerHealthAdviceNotification(state.score, state.status);
         }
 
+        // Periodically sync active event to Firestore (every 30 simulation seconds)
         if ((duration ~/ 30) > (previousDuration ~/ 30)) {
            _eventRepository.syncEvent(updatedEvents.first);
         }
@@ -1071,6 +1081,16 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         title: notification.title,
         body: notification.message,
       );
+
+      // Also show in-app toast for users without OS notification permissions (e.g. no Apple Dev account)
+      final context = rootNavigatorKey.currentContext;
+      if (context != null) {
+        TopNotificationToast.show(
+          context,
+          notification.title,
+          notification.message,
+        );
+      }
     } catch (e) {
       debugPrint("Error showing local app notification: $e");
     }
@@ -1113,6 +1133,37 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       _showLocal(notification);
     } catch (e) {
       debugPrint("Error triggering threshold emergency: $e");
+    }
+  }
+
+  /// Public method to record a notification and show it locally.
+  /// Used by PoseDetectorView for immediate, guaranteed notifications.
+  Future<void> recordNotification({
+    required String title,
+    required String message,
+    required NotificationType type,
+    String? eventId,
+    String? cameraId,
+  }) async {
+    try {
+      final targetUid = _ref.read(resolvedTargetUidProvider);
+      final uid = targetUid.isEmpty ? 'demo_user' : targetUid;
+
+      final notification = NotificationModel(
+        id: '',
+        title: title,
+        message: message,
+        type: type,
+        date: _currentTime,
+        eventId: eventId,
+        cameraId: cameraId ?? this.cameraId,
+      );
+
+      await _notificationRepository.addNotification(notification, targetUid: uid);
+      _showLocal(notification);
+      debugPrint("🔔 LOGGED Notification [$uid]: ${notification.title}");
+    } catch (e) {
+      debugPrint("Error recording manual notification: $e");
     }
   }
 

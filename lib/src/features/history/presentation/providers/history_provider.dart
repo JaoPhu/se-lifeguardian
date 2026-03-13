@@ -6,6 +6,6 @@ import '../../domain/history_model.dart';
 
 final historyListProvider =
     FutureProvider<List<DailyHistory>>((ref) async {
-  final repo = ref.read(historyRepositoryProvider);
+  final repo = ref.watch(historyRepositoryProvider);
   return repo.fetchHistory();
 });

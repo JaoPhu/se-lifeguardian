@@ -358,6 +358,11 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                           ),
                         ),
 
+                        const SizedBox(height: 28),
+
+                        // Stacked Activity Bar Chart
+                        _buildActivityBarChart(stats, dailyEvents, isDark),
+
                         const SizedBox(height: 32),
 
                         // Summary Cards
@@ -471,7 +476,25 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                                           final index = entry.key;
                                           final stat = entry.value;
                                           final totalHours = stat.relaxHours + stat.workHours + stat.walkHours;
-                                          
+
+                                          // Build activity list and sort descending (largest first = bottom of bar)
+                                          final segments = <Map<String, dynamic>>[
+                                            {'hours': stat.relaxHours, 'color': Colors.blue.shade300},
+                                            {'hours': stat.workHours,  'color': Colors.amber.shade400},
+                                            {'hours': stat.walkHours,  'color': const Color(0xFF10B981)},
+                                          ].where((s) => (s['hours'] as double) > 0)
+                                           .toList()
+                                            ..sort((a, b) => (b['hours'] as double).compareTo(a['hours'] as double));
+
+                                          // Build cumulative rod stack items
+                                          double stackY = 0;
+                                          final stackItems = segments.map((s) {
+                                            final fromY = stackY;
+                                            final toY = stackY + (s['hours'] as double);
+                                            stackY = toY;
+                                            return BarChartRodStackItem(fromY, toY, s['color'] as Color);
+                                          }).toList();
+
                                           return BarChartGroupData(
                                             x: index,
                                             barRods: [
@@ -484,11 +507,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
                                                   toY: 24,
                                                   color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.grey.shade200,
                                                 ),
-                                                rodStackItems: totalHours == 0 ? [] : [
-                                                  BarChartRodStackItem(0, stat.relaxHours, Colors.blue.shade200),
-                                                  BarChartRodStackItem(stat.relaxHours, stat.relaxHours + stat.workHours, Colors.amber.shade200),
-                                                  BarChartRodStackItem(stat.relaxHours + stat.workHours, totalHours, const Color(0xFF10B981).withValues(alpha: 0.5)),
-                                                ],
+                                                rodStackItems: stackItems,
                                               ),
                                             ],
                                           );
@@ -659,5 +678,162 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
       case 'relax': return Colors.purple.shade600;
       default: return Colors.grey.shade600;
     }
+  }
+
+  Widget _buildActivityBarChart(Map<String, double> stats, List<SimulationEvent> events, bool isDark) {
+    // Activity data with labels, colors, and durations
+    final List<Map<String, dynamic>> activities = [
+      {'key': 'relax',    'label': 'Relax/Sit',  'color': Colors.blue.shade400},
+      {'key': 'work',     'label': 'Stand/Work',  'color': Colors.amber.shade500},
+      {'key': 'walk',     'label': 'Walk',         'color': const Color(0xFF10B981)},
+      {'key': 'slouch',   'label': 'Slouch',       'color': Colors.purple.shade400},
+      {'key': 'exercise', 'label': 'Exercise',     'color': Colors.indigo.shade400},
+    ];
+
+    // Filter out 0-duration activities and sort from least to most (ascending)
+    final filtered = activities
+        .where((a) => (stats[a['key']] ?? 0) > 0)
+        .toList()
+      ..sort((a, b) =>
+          (stats[b['key']] as double).compareTo(stats[a['key']] as double));
+
+    final double recordedTotal = filtered.fold(
+        0.0, (sum, a) => sum + (stats[a['key']] as double));
+    final double totalDenominator = recordedTotal > 24 ? recordedTotal : 24.0;
+    const String denomLabel = '24ชม.';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey.shade900 : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'กิจกรรมในวันนี้',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : const Color(0xFF1E293B),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '/ $denomLabel',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Stacked bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              height: 36,
+              child: events.isEmpty
+                  ? Container(
+                      width: double.infinity,
+                      color: isDark ? Colors.white10 : const Color(0xFFE8EBF0),
+                      child: Center(
+                        child: Text(
+                          'ไม่มีข้อมูลในวันนี้',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
+                          ),
+                        ),
+                      ),
+                    )
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        final totalWidth = constraints.maxWidth;
+                        double offset = 0;
+
+                        final List<Widget> segments = filtered.map((activity) {
+                          final hours = stats[activity['key']] as double;
+                          final fraction = hours / totalDenominator;
+                          final width = totalWidth * fraction;
+                          final widget = Positioned(
+                            left: offset,
+                            top: 0,
+                            bottom: 0,
+                            width: width,
+                            child: Container(
+                              color: activity['color'] as Color,
+                            ),
+                          );
+                          offset += width;
+                          return widget;
+                        }).toList();
+
+                        // Remainder (untracked time)
+                        final remainder = totalDenominator - recordedTotal;
+                        if (remainder > 0.001) {
+                          segments.add(Positioned(
+                            left: offset,
+                            top: 0,
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              color: isDark ? Colors.white12 : const Color(0xFFE8EBF0),
+                            ),
+                          ));
+                        }
+
+                        return Stack(
+                          children: segments,
+                        );
+                      },
+                    ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Legend (sorted: most → least descending for readability)
+          if (filtered.isNotEmpty)
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: filtered.reversed.map((activity) {
+                final hours = stats[activity['key']] as double;
+                final pct = (hours / totalDenominator * 100).toStringAsFixed(1);
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: activity['color'] as Color,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      '${activity['label']} ${hours.toStringAsFixed(1)}ชม. ($pct%)',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                );
+              }).toList(),
+            ),
+        ],
+      ),
+    );
   }
 }

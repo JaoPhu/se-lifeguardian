@@ -101,63 +101,56 @@ class EventRepository {
     final uid = currentUserId;
 
     try {
-      // 1. Delete all in 'events' subcollection
-      final events = await _firestore
-          .collection('users')
-          .doc(uid)
-          .collection('events')
-          .get();
-
-      final batch = _firestore.batch();
-      for (var doc in events.docs) {
-        batch.delete(doc.reference);
-      }
+      // 1. Delete all in 'events' subcollection (potentially large)
+      await _deleteCollectionChunked(
+          _firestore.collection('users').doc(uid).collection('events'));
 
       // 2. Delete all in 'history' subcollection
-      final history = await _firestore
-          .collection('users')
-          .doc(uid)
-          .collection('history')
-          .get();
-      
-      for (var doc in history.docs) {
-        batch.delete(doc.reference);
-      }
-      
+      await _deleteCollectionChunked(
+          _firestore.collection('users').doc(uid).collection('history'));
+
       // 3. Delete all in 'cameras' subcollection
-      final cameras = await _firestore
-          .collection('users')
-          .doc(uid)
-          .collection('cameras')
-          .get();
-      
-      for (var doc in cameras.docs) {
-        batch.delete(doc.reference);
-      }
+      await _deleteCollectionChunked(
+          _firestore.collection('users').doc(uid).collection('cameras'));
 
       // 4. Delete all in 'notifications' subcollection
-      final notifications = await _firestore
-          .collection('users')
-          .doc(uid)
-          .collection('notifications')
-          .get();
-      
-      for (var doc in notifications.docs) {
-        batch.delete(doc.reference);
-      }
+      await _deleteCollectionChunked(
+          _firestore.collection('users').doc(uid).collection('notifications'));
 
       // 5. Reset root level health fields
-      batch.set(_firestore.collection('users').doc(uid), {
+      await _firestore.collection('users').doc(uid).set({
         'health_score': 1000,
         'health_status': 3, // HealthStatus.none enum index
         'last_activity': '',
         'last_updated': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      await batch.commit();
       debugPrint('EventRepository: All user health data wiped successfully.');
     } catch (e) {
       debugPrint('Error wiping user data: $e');
+    }
+  }
+
+  /// Helper to delete all documents in a collection using multiple batches if needed.
+  Future<void> _deleteCollectionChunked(CollectionReference collection) async {
+    bool hasMore = true;
+    while (hasMore) {
+      final snapshot = await collection.limit(500).get();
+      if (snapshot.docs.isEmpty) {
+        hasMore = false;
+        break;
+      }
+
+      final batch = _firestore.batch();
+      for (var doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+      
+      // If we got exactly 500, there might be more
+      if (snapshot.docs.length < 500) {
+        hasMore = false;
+      }
     }
   }
 }

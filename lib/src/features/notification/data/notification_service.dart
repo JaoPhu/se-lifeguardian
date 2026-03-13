@@ -29,13 +29,28 @@ class NotificationService {
   }
 
   Future<void> init() async {
-    // 1. Request Permission
+    // 1.1 Request FCM Permissions
     final NotificationSettings settings = await _fcm.requestPermission(
       alert: true,
       badge: true,
       sound: true,
       provisional: false,
     );
+
+    // 1.2 Request Local Notification Permissions (iOS Specific for foreground)
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      // Use dynamic or specific implementation to request permissions if needed
+      final iosImplementation = _localNotifications
+          .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>();
+      if (iosImplementation != null) {
+        await iosImplementation.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+      }
+    }
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
       debugPrint('User granted permission');
@@ -175,7 +190,11 @@ class NotificationService {
       priority: Priority.high,
     );
     const DarwinNotificationDetails iOSPlatformChannelSpecifics =
-        DarwinNotificationDetails();
+        DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
     const NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
       iOS: iOSPlatformChannelSpecifics,

@@ -12,7 +12,6 @@ import '../data/pose_detection_service.dart';
 import '../data/health_status_provider.dart';
 import 'pose_painter.dart';
 import 'package:video_player/video_player.dart';
-import '../../../common/widgets/top_notification_toast.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:go_router/go_router.dart';
@@ -21,6 +20,7 @@ import '../../dashboard/data/camera_provider.dart' as cam_provider;
 import '../../dashboard/domain/camera.dart' as cam_domain;
 import '../../statistics/domain/simulation_event.dart';
 import '../../history/data/history_repository_provider.dart';
+import '../../notification/domain/notification_model.dart';
 
 
 class PoseDetectorView extends ConsumerStatefulWidget {
@@ -75,14 +75,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   final double _healthScore = 98.0;
   String _diagnosticMessage = "Scanning Systemic Alignment...";
 
-  // Notification state
-  String? _lastWarnedEventId;
-  bool _hasWarnedSittingForCurrentEvent = false;
-  // 60 simulation-seconds = 1 real second at 60x speed (adjust to 1800 for 30-min real threshold)
-  static const int _sittingWarningThresholdSeconds = 60;
-
-
-  // Video Player state
+  // Snapshot state
   VideoPlayerController? _videoController;
   Timer? _simTimer;
   bool _isAnalysisLoopRunning = false;
@@ -218,14 +211,26 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   }
 
   void _startSimulation() {
-    // We no longer need a timer to advance _simTime as it's now a getter based on video position.
-    // However, we still want to periodcially trigger updates in the notifier 
-    // (e.g. for score updates and sticky fall logic) while the video is playing.
     _simTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted || _isPaused) return;
       
       // Update the HealthStatusNotifier with the current simulation time
       ref.read(healthStatusFamily(_registeredCameraId).notifier).updateSimulationClock(_simTime);
+      
+      // --- Duration-based Toast Notifications ---
+      // Check if the current tracked activity has exceeded a threshold
+      if (_activityStartTime != null && _lastNotifiedActivity != null) {
+        final simElapsed = _simTime.difference(_activityStartTime!).inSeconds;
+
+        if (!_sittingToastShown && (_lastNotifiedActivity == 'sitting' || _lastNotifiedActivity == 'slouching') && simElapsed >= 10) {
+          _sittingToastShown = true;
+          ref.read(healthStatusFamily(_registeredCameraId).notifier).recordNotification(
+            title: 'ระวังออฟฟิศซินโดรมถามหานะครับ! ⚠️',
+            message: 'นั่งมานาน ${simElapsed}s แล้ว ลุกขึ้นหมุนหัวไหล่และสะบัดข้อมือสัก 2-3 นาทีดีไหมครับ? 💪',
+            type: NotificationType.warning,
+          );
+        }
+      }
       
       // Trigger UI update to reflect the new time/score if necessary
       setState(() {});
@@ -527,6 +532,12 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   // Track the last activity we successfully sent to the notifier to prevent loop
   String? _lastProcessedActivity;
 
+  // Notification tracking for demo mode
+  // We track sitting duration directly here to ensure Toast fires reliably
+  String? _lastNotifiedActivity;
+  DateTime? _activityStartTime;
+  bool _sittingToastShown = false;
+
   void _handleActivityChange(String detectedActivity) {
     if (_lastDetectedActivity == detectedActivity) {
       _consecutiveFrameCount++;
@@ -545,9 +556,26 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
       // Only trigger update if it's DIFFERENT from what we last processed locally
       // AND different from current global state (double check)
       if (_lastProcessedActivity != detectedActivity && healthState.currentActivity != detectedActivity) {
-         
+          
           // Mark as processed immediately to stop subsequent frames from triggering
           _lastProcessedActivity = detectedActivity;
+
+          // --- DIRECT IN-APP TOAST NOTIFICATIONS ---
+          // We trigger toasts here directly since the notifier pipeline may have guards.
+          if (detectedActivity == 'falling' || detectedActivity == 'near_fall') {
+            ref.read(healthStatusFamily(_registeredCameraId).notifier).recordNotification(
+              title: detectedActivity == 'falling' ? 'ตรวจพบการล้ม! ⚠️' : 'ตรวจพบอาการเสียหลัก (Near Fall) ⚠️',
+              message: 'พบเหตุการณ์${detectedActivity == 'falling' ? "ล้ม" : "เสียหลัก"}ในกล้อง ${_registeredCameraName ?? 'Demo'} โปรดตรวจสอบทันที',
+              type: detectedActivity == 'falling' ? NotificationType.danger : NotificationType.warning,
+            );
+          }
+
+          // Track activity start time for duration-based notifications
+          if (_lastNotifiedActivity != detectedActivity) {
+            _activityStartTime = _simTime;
+            _lastNotifiedActivity = detectedActivity;
+            _sittingToastShown = false;
+          }
 
           // We capture snapshot NOW.
           _captureSnapshot(force: true, isCritical: isCritical).then((path) {
