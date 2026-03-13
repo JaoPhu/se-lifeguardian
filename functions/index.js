@@ -45,6 +45,9 @@ exports.updateUserPassword = onCall({ cors: true }, async (request) => {
 exports.sendOTPEmail = onCall({ cors: true, secrets: ["GMAIL_PASS"] }, async (request) => {
     const { email, otp, isRegistration } = request.data;
     const normalizedEmail = (email || "").trim().toLowerCase();
+    const isRegistrationFlow = !!isRegistration;
+
+    console.log(`sendOTPEmail called: email=${normalizedEmail}, isRegistration=${isRegistrationFlow}`);
 
     // Validate input
     if (!normalizedEmail || !otp) {
@@ -52,10 +55,11 @@ exports.sendOTPEmail = onCall({ cors: true, secrets: ["GMAIL_PASS"] }, async (re
     }
 
     // Check user existence IF not a registration attempt
-    if (!isRegistration) {
+    if (!isRegistrationFlow) {
         try {
             await admin.auth().getUserByEmail(normalizedEmail);
         } catch (error) {
+            console.log(`User check failed for ${normalizedEmail}: ${error.code}`);
             if (error.code === 'auth/user-not-found') {
                 throw new HttpsError('not-found', 'user-not-found');
             }
@@ -69,30 +73,39 @@ exports.sendOTPEmail = onCall({ cors: true, secrets: ["GMAIL_PASS"] }, async (re
         await db.collection('otp_requests').doc(normalizedEmail).set({
             otp: otp,
             expiresAt: expiresAt,
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            isRegistration: isRegistrationFlow
         });
-        console.log(`OTP stored for ${normalizedEmail} (isRegistration: ${!!isRegistration})`);
+        console.log(`OTP stored for ${normalizedEmail}`);
     } catch (error) {
         console.error('Error storing OTP:', error);
         throw new HttpsError('internal', 'Failed to generate OTP system record');
     }
 
     // --- 2. Create transporter with Gmail ---
+    const gmailPass = process.env.GMAIL_PASS;
+    if (!gmailPass) {
+        console.error('CRITICAL: GMAIL_PASS environment variable is not set!');
+        throw new HttpsError('failed-precondition', 'Email service not configured');
+    }
+
     const transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
             user: 'lifeguardian.service@gmail.com',
-            pass: process.env.GMAIL_PASS
+            pass: gmailPass
         }
     });
+
+    const isReg = isRegistrationFlow;
 
     const htmlContent = `
         <div style="font-family: 'Sarabun', sans-serif; padding: 20px; background-color: #f4f4f4;">
             <div style="max-width: 500px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                <h2 style="color: #0D9488; text-align: center;">${isRegistration ? 'ยืนยันการสมัครสมาชิก' : 'รหัสยืนยันตัวตน (OTP)'}</h2>
+                <h2 style="color: #0D9488; text-align: center;">${isReg ? 'ยืนยันการสมัครสมาชิก' : 'รหัสยืนยันตัวตน (OTP)'}</h2>
                 <p style="font-size: 16px; color: #333;">สวัสดีครับ,</p>
                 <p style="font-size: 16px; color: #333;">
-                    ${isRegistration 
+                    ${isReg 
                         ? 'ใช้รหัสอ้างอิงด้านล่างนี้เพื่อยืนยันอีเมลสำหรับการสมัครใช้งาน <strong>LifeGuardian</strong>' 
                         : 'ใช้รหัสอ้างอิงด้านล่างนี้เพื่อยืนยันตัวตนและรีเซ็ตรหัสผ่านของคุณในแอปพลิเคชัน <strong>LifeGuardian</strong>'}
                 </p>
@@ -118,7 +131,7 @@ exports.sendOTPEmail = onCall({ cors: true, secrets: ["GMAIL_PASS"] }, async (re
         await transporter.sendMail({
             from: '"LifeGuardian Support" <lifeguardian.service@gmail.com>',
             to: normalizedEmail,
-            subject: isRegistration 
+            subject: isReg 
                 ? `รหัสยืนยันการสมัคร LifeGuardian: ${otp}`
                 : `รหัสยืนยันตัวตน LifeGuardian ของคุณ: ${otp}`,
             html: htmlContent

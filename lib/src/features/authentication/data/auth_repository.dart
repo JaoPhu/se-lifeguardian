@@ -395,22 +395,27 @@ class AuthRepository {
       
       bool profileExists = false;
       try {
-        if (email != null) {
-          debugPrint('AuthRepository: Checking Firestore profile (Google) for email: $email');
+        // 1. Primary Check: UID (Most reliable)
+        debugPrint('AuthRepository: Checking Firestore profile (Google) by UID: ${user.uid}');
+        final userDoc = await _firestore.collection('users').doc(user.uid).get();
+        profileExists = userDoc.exists;
+        
+        // 2. Secondary Check: Email (Catch orphans or migration cases)
+        if (!profileExists && email != null) {
+          debugPrint('AuthRepository: UID profile missing, checking by email: $email');
           final query = await _firestore
               .collection('users')
               .where('email', isEqualTo: email)
               .limit(1)
               .get();
           profileExists = query.docs.isNotEmpty;
+          
+          if (profileExists) {
+             debugPrint('AuthRepository: Profile found by email but UID mismatch. This may be an old account.');
+          }
         }
         
-        if (!profileExists) {
-          debugPrint('AuthRepository: Checking by UID: ${user.uid}');
-          final userDoc = await _firestore.collection('users').doc(user.uid).get();
-          profileExists = userDoc.exists;
-        }
-        debugPrint('AuthRepository: Profile exists: $profileExists');
+        debugPrint('AuthRepository: Final Profile Exists: $profileExists');
       } catch (e) {
         debugPrint('AuthRepository: Firestore profile check error (Google): $e');
         profileExists = false;
@@ -470,8 +475,14 @@ class AuthRepository {
       
       bool profileExists = false;
       try {
-        if (email != null) {
-          debugPrint('AuthRepository: Checking Firestore profile (Apple) for email: $email');
+        // 1. Primary Check: UID
+        debugPrint('AuthRepository: Checking Firestore profile (Apple) by UID: ${user.uid}');
+        final userDoc = await _firestore.collection('users').doc(user.uid).get();
+        profileExists = userDoc.exists;
+        
+        // 2. Secondary Check: Email
+        if (!profileExists && email != null) {
+          debugPrint('AuthRepository: UID profile missing, checking Apple by email: $email');
           final query = await _firestore
               .collection('users')
               .where('email', isEqualTo: email)
@@ -479,13 +490,7 @@ class AuthRepository {
               .get();
           profileExists = query.docs.isNotEmpty;
         }
-        
-        if (!profileExists) {
-          debugPrint('AuthRepository: Checking by UID: ${user.uid}');
-          final userDoc = await _firestore.collection('users').doc(user.uid).get();
-          profileExists = userDoc.exists;
-        }
-        debugPrint('AuthRepository: Profile exists: $profileExists');
+        debugPrint('AuthRepository: Final Apple Profile Exists: $profileExists');
       } catch (e) {
         debugPrint('AuthRepository: Firestore profile check error (Apple): $e');
         profileExists = false;
