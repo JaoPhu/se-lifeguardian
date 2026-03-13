@@ -439,7 +439,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "Duration: ${event.duration ?? "0.00 h"}",
+                  "Duration: ${((event.type == 'falling' || event.type == 'near_fall') && (event.duration == '0s' || event.duration == '0.00 h')) ? 'Detected' : (event.duration ?? '0.00 h')}",
                   style: const TextStyle(
                     fontSize: 14, 
                     color: Color(0xFF0D9488),

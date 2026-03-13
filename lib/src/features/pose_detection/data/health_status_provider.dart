@@ -94,7 +94,9 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
   StreamSubscription? _userDocSubscription;
 
   HealthStatusNotifier(this._eventRepository, this._notificationRepository, this._ref, {this.cameraId}) : super(HealthState.initial()) {
-    _startTimer();
+    if (cameraId != null) {
+      _startTimer();
+    }
   }
 
   static const _storageKey = 'health_state_v2';
@@ -784,8 +786,8 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
            _triggerWalkingNotification(updatedEvents.first);
         }
 
-        // Periodically sync active event to Firestore (every 5 simulation minutes = 300 seconds)
-        if ((duration ~/ 300) > (previousDuration ~/ 300)) {
+        // Periodically sync active event to Firestore (every 30 simulation seconds)
+        if ((duration ~/ 30) > (previousDuration ~/ 30)) {
            _eventRepository.syncEvent(updatedEvents.first);
         }
       }

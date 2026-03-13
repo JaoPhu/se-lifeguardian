@@ -178,22 +178,64 @@ class StatusScreen extends ConsumerWidget {
                             ),
                           )
                         else
-                          ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            padding: EdgeInsets.zero,
-                            itemCount: healthState.events.length > 4 ? 4 : healthState.events.length,
-                            separatorBuilder: (context, index) => const SizedBox(height: 12),
-                            itemBuilder: (context, index) {
-                              final event = healthState.events[index];
-                              return _buildActivityItem(
-                                context, 
-                                "${event.thaiLabel}${event.duration != null ? " (${event.duration})" : ""}", 
-                                _getIconForType(event.type), 
-                                event.isCritical
-                              );
-                            },
-                          ),
+                          (() {
+                            // Process activities: group by category and sum durations
+                            final Map<String, int> categoryDurations = {};
+                            final Map<String, String> categoryToRepresentativeType = {}; // For icons
+                            final Set<String> criticalCategories = {};
+                            
+                            // Iterate through latest 50 events
+                            for (var event in healthState.events.take(50)) {
+                              final categoryLabel = _mapToUserCategory(event.type);
+                              categoryDurations[categoryLabel] = (categoryDurations[categoryLabel] ?? 0) + (event.durationSeconds ?? 0);
+                              
+                              // Keep the first type we see for icon/representative purposes (most recent)
+                              categoryToRepresentativeType.putIfAbsent(categoryLabel, () => event.type);
+                              
+                              if (event.isCritical) {
+                                criticalCategories.add(categoryLabel);
+                              }
+                            }
+
+                            // Define the order of categories as requested by user
+                            const order = ['นั่ง', 'เดิน', 'ทำงาน', 'นอน', 'ล้ม'];
+                            final sortedCategories = order.where((cat) => categoryDurations.containsKey(cat)).toList();
+                            // If there are other categories not in the order list
+                            for (var cat in categoryDurations.keys) {
+                              if (!order.contains(cat) && !sortedCategories.contains(cat)) {
+                                sortedCategories.add(cat);
+                              }
+                            }
+
+                            return ListView.separated(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              padding: EdgeInsets.zero,
+                              itemCount: sortedCategories.length,
+                              separatorBuilder: (context, index) => const SizedBox(height: 12),
+                              itemBuilder: (context, index) {
+                                final categoryLabel = sortedCategories[index];
+                                final totalSeconds = categoryDurations[categoryLabel]!;
+                                final representativeType = categoryToRepresentativeType[categoryLabel]!;
+                                final isCritical = criticalCategories.contains(categoryLabel);
+                                
+                                String durationText = _formatAggregatedDuration(totalSeconds);
+                                
+                                // Special case for Falls: if we detect multiple falls with 0s duration, 
+                                // common for instantaneous events.
+                                if (categoryLabel == 'ล้ม' && totalSeconds == 0) {
+                                  durationText = "Detected";
+                                }
+
+                                return _buildActivityItem(
+                                  context, 
+                                  "$categoryLabel ($durationText)", 
+                                  _getIconForType(representativeType), 
+                                  isCritical
+                                );
+                              },
+                            );
+                          })(),
                       ],
                     ),
                   ),
@@ -232,6 +274,43 @@ class StatusScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  String _formatAggregatedDuration(int seconds) {
+    if (seconds <= 0) return "0s";
+    if (seconds < 60) return "${seconds}s"; 
+    
+    if (seconds < 3600) {
+      final m = seconds ~/ 60;
+      final s = seconds % 60;
+      return s == 0 ? "${m}m" : "${m}m ${s}s";
+    }
+    
+    final h = seconds ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
+    return m == 0 ? "${h}h" : "${h}h ${m}m";
+  }
+
+  String _mapToUserCategory(String type) {
+    switch (type) {
+      case 'sitting':
+      case 'slouching':
+        return 'นั่ง';
+      case 'walking':
+        return 'เดิน';
+      case 'standing':
+      case 'exercise':
+      case 'working':
+      case 'work':
+        return 'ทำงาน'; // Matches "Work" in Statistics
+      case 'laying':
+        return 'นอน';
+      case 'falling':
+      case 'near_fall':
+        return 'ล้ม';
+      default:
+        return 'อื่นๆ';
+    }
   }
 
   IconData _getIconForType(String type) {

@@ -358,10 +358,13 @@ class PoseDetectionService {
 
     double maxAcc = 0;
     double maxDownVel = 0;
+    int reliableHips = 0;
     
-    // Check hips for fall dynamics
+    // Check hips for fall dynamics - must be reliable landmarks
     for (var type in [PoseLandmarkType.leftHip, PoseLandmarkType.rightHip]) {
-      if (person.landmarkPhysics.containsKey(type)) {
+      final landmark = person.smoothedLandmarks[type];
+      if (landmark != null && landmark.likelihood > 0.5 && person.landmarkPhysics.containsKey(type)) {
+        reliableHips++;
         final physics = person.landmarkPhysics[type]!;
         // Use vy (downward) for fall detection
         if (physics.vy > maxDownVel) maxDownVel = physics.vy;
@@ -369,6 +372,8 @@ class PoseDetectionService {
       }
     }
     
+    if (reliableHips == 0) return false;
+
     final torsoAngle = getTorsoAngle(person.smoothedLandmarks);
     // A fall usually involves leaning (torso angle < 60)
     final isLeaning = torsoAngle < 60;
@@ -382,20 +387,30 @@ class PoseDetectionService {
       final nose = landmarks[PoseLandmarkType.nose];
       final leftAnkle = landmarks[PoseLandmarkType.leftAnkle]; 
       final rightAnkle = landmarks[PoseLandmarkType.rightAnkle];
+      final leftHip = landmarks[PoseLandmarkType.leftHip];
+      final rightHip = landmarks[PoseLandmarkType.rightHip];
       
-      final double? y1 = nose?.y;
-      double? y2;
+      final double? yTop = nose?.y;
+      double? yBottom;
       
       if (leftAnkle != null && rightAnkle != null) {
-          y2 = (leftAnkle.y + rightAnkle.y) / 2;
+          yBottom = (leftAnkle.y + rightAnkle.y) / 2;
       } else if (leftAnkle != null) {
-          y2 = leftAnkle.y;
+          yBottom = leftAnkle.y;
       } else if (rightAnkle != null) {
-          y2 = rightAnkle.y;
+          yBottom = rightAnkle.y;
+      } else if (leftHip != null && rightHip != null) {
+          // Estimate height from torso if legs are missing (half body)
+          final midHipY = (leftHip.y + rightHip.y) / 2;
+          if (yTop != null) {
+            final torsoHeight = (midHipY - yTop).abs();
+            // Estimate legs as being at least 1.1x torso height (anatomical average)
+            yBottom = midHipY + (torsoHeight * 1.1); 
+          }
       }
       
-      if (y1 != null && y2 != null) {
-          return (y1 - y2).abs();
+      if (yTop != null && yBottom != null) {
+          return (yTop - yBottom).abs();
       }
       return 100.0;
   }
