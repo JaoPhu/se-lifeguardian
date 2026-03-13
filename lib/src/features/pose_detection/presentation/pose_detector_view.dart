@@ -636,51 +636,6 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
 
   @override
   Widget build(BuildContext context) {
-    // --- Notification Listener ---
-    ref.listen<HealthState>(healthStatusFamily(_registeredCameraId), (previous, next) {
-      if (next.events.isEmpty) return;
-      final currentEvent = next.events.first;
-
-      // Reset sitting warning if it's a new event
-      if (_lastWarnedEventId != currentEvent.id) {
-        _lastWarnedEventId = currentEvent.id;
-        _hasWarnedSittingForCurrentEvent = false;
-      }
-
-      // Check for falling/near_fall
-      if (currentEvent.type == 'falling' || currentEvent.type == 'near_fall') {
-        // Prevent spamming the same fall warning multiple times in a row
-        // We'll use a local variable to track if we've shown it recently for this specific id
-        // Actually, for falling, we want it to show immediately.
-        // We will show it only if the previous state wasn't already falling/near_fall for THIS event
-        final wasAlreadyFalling = previous?.events.isNotEmpty == true &&
-            previous!.events.first.id == currentEvent.id &&
-            (previous.events.first.type == 'falling' || previous.events.first.type == 'near_fall');
-
-        if (!wasAlreadyFalling) {
-          TopNotificationToast.show(
-            context,
-            'ตรวจพบการล้ม! ⚠️',
-            'พบเหตุการณ์ล้มในกล้อง ${currentEvent.cameraId ?? "หลัก"} โปรดตรวจสอบทันที',
-            time: currentEvent.timestamp.split(':').sublist(0, 2).join(':'), 
-          );
-        }
-      }
-
-      // Check for prolonged sitting
-      if (currentEvent.type == 'sitting' && !_hasWarnedSittingForCurrentEvent) {
-        if (currentEvent.durationSeconds != null &&
-            currentEvent.durationSeconds! >= _sittingWarningThresholdSeconds) {
-          _hasWarnedSittingForCurrentEvent = true;
-          TopNotificationToast.show(
-            context,
-            'ระวังออฟฟิศซินโดรมถามหานะครับ! ⚠️',
-            'ลุกขึ้นหมุนหัวไหล่และสะบัดข้อมือสัก 2-3 นาทีดีไหมครับ? 💪',
-            time: currentEvent.timestamp.split(':').sublist(0, 2).join(':'), 
-          );
-        }
-      }
-    });
     // -----------------------------
 
     if (widget.videoPath == null) {
@@ -778,8 +733,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
             ),
           ),
           
-          // Bottom Navigation Placeholder to maintain design consistency
-          _buildBottomNav(),
+          // Bottom Navigation Placeholder removed as requested for Demo mode
         ],
       ),
     );
@@ -795,27 +749,26 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           GestureDetector(
-             onTap: () => context.pop(),
+             onTap: () {
+               // Stop analysis loops and timers
+               _isAnalysisLoopRunning = false;
+               _isAnalyzing = false;
+               _simTimer?.cancel();
+               _videoController?.pause();
+               context.pop();
+             },
              child: const Icon(Icons.arrow_back, color: Colors.white),
           ),
-          const Text(
-            'Demo',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
-          ),
-          Row(
-            children: [
-              const Icon(Icons.notifications, color: Colors.white),
-              const SizedBox(width: 16),
-              Container(
-                width: 36, height: 36,
-                decoration: const BoxDecoration(
-                  color: Colors.white24,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.person, color: Colors.white, size: 20),
+          const Expanded(
+            child: Center(
+              child: Text(
+                'Demo',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
               ),
-            ],
+            ),
           ),
+          // Empty space to balance the back button for centering the title
+          const SizedBox(width: 24),
         ],
       ),
     );

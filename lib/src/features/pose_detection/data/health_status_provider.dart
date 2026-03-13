@@ -492,6 +492,12 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         // don't try to calculate a negative duration. Just start fresh.
         if (nowMs >= startMs) {
           final durationSec = (nowMs - startMs) ~/ 1000;
+          
+          // Update score for simulation jumps
+          if (_isSimulation) {
+            _applyScoreChange(lastEvent.type, durationSec);
+          }
+
           updatedEvents[0] = lastEvent.copyWith(
             durationSeconds: durationSec,
             duration: _formatDurationLabel(durationSec),
@@ -545,20 +551,16 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
   Future<void> _processNewEvent(SimulationEvent newEvent, String activity, List<SimulationEvent> updatedEvents, {Position? position}) async {
     if (activity == 'falling' || activity == 'near_fall') {
-      final penalty = activity == 'falling' ? 600 : 200;
-      final newScore = (state.score - penalty).clamp(0, 1000);
+      _applyScoreChange(activity, 0); // Applies penalty and updates dailyScores
       state = state.copyWith(
-        score: newScore,
         currentActivity: activity,
-        status: _getStatus(newScore),
         events: [newEvent, ...updatedEvents],
       );
       
       // Universal logic for all events: Sync to cloud and upload snapshot if available
-      // UPLOAD FIRST so we have the remote URL for the notification
       await _syncAndUploadSnapshot(newEvent);
 
-      // Additional logic for critical events (Now has remote snapshot URL if successful)
+      // Additional logic for critical events
       _triggerCriticalNotification(activity, newEvent, position: position);
     } else {
       state = state.copyWith(
@@ -566,7 +568,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         events: [newEvent, ...updatedEvents],
         status: state.status == HealthStatus.none ? HealthStatus.normal : state.status,
       );
-      // Still sync regular events - AWAIT to ensure image is uploaded
+      // Still sync regular events
       await _syncAndUploadSnapshot(newEvent);
     }
 
@@ -665,28 +667,35 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
     
     switch (state.currentActivity) {
       case 'sitting':
-        change = -50 / 3600; 
+        change = 30; // Recovery (+30 pts/sec)
         break;
       case 'slouching':
-        change = -150 / 3600; // Worse for posture/spine
+        change = -60; // Warning (-60 pts/sec) - Reaches 799 in ~3.4s
         break;
       case 'laying':
-        change = -75 / 3600;
+        change = -10; // Slow deduction (-10 pts/sec)
         break;
       case 'walking':
-        change = 25 / 3600;
+        change = 30; // Recovery (+30 pts/sec)
         break;
       case 'standing':
-        change = 5 / 3600;
+        change = 30; // Recovery (+30 pts/sec)
         break;
       case 'exercise':
-        change = 500 / 3600; // Direct health benefit
+        change = 60; // Fast recovery (+60 pts/sec)
         break;
+      case 'occluded':
+        change = -10; // Occluded deduction
+        break;
+    }
+
+    if (change <= 0 && state.score < 1000 && state.status == HealthStatus.normal) {
+      if (change == 0) change = 10; // Passive recovery if normal and no active deduction
     }
 
     final int newScore = (state.score + change).round().clamp(0, 1000);
     
-    // Update active event duration
+    // --- TICK LOGIC: Update active event duration ---
     final List<SimulationEvent> updatedEvents = List.from(state.events);
     if (updatedEvents.isNotEmpty) {
       final activeEvent = updatedEvents.first;
@@ -698,12 +707,11 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
            // We crossed midnight! Cap current event to 23:59:59 of start day
            final endOfDay = DateTime(startDateTime.year, startDateTime.month, startDateTime.day, 23, 59, 59, 999);
            final capDurationSec = (endOfDay.millisecondsSinceEpoch - activeEvent.startTimeMs!) ~/ 1000;
-           final capDurationHrs = (capDurationSec / 3600).toStringAsFixed(2);
            
            // Update and save the OLD event
            final cappedEvent = activeEvent.copyWith(
              durationSeconds: capDurationSec,
-             duration: "$capDurationHrs h",
+             duration: _formatDurationLabel(capDurationSec),
            );
            updatedEvents[0] = cappedEvent;
            _eventRepository.syncEvent(cappedEvent);
@@ -711,19 +719,18 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
            // Create a NEW event starting precisely at midnight of the new day
            final midnightNewDay = DateTime(_currentTime.year, _currentTime.month, _currentTime.day, 0, 0, 0);
            final newDurationSec = (_currentTime.millisecondsSinceEpoch - midnightNewDay.millisecondsSinceEpoch) ~/ 1000;
-           final newDurationHrs = (newDurationSec / 3600).toStringAsFixed(2);
            
            final timestamp = "${midnightNewDay.hour.toString().padLeft(2, '0')}:${midnightNewDay.minute.toString().padLeft(2, '0')}";
            final dateStr = "${midnightNewDay.year}-${midnightNewDay.month.toString().padLeft(2, '0')}-${midnightNewDay.day.toString().padLeft(2, '0')}";
 
            final newEvent = SimulationEvent(
-             id: midnightNewDay.millisecondsSinceEpoch.toString(), // new unique ID
+             id: midnightNewDay.millisecondsSinceEpoch.toString(),
              cameraId: activeEvent.cameraId,
              type: activeEvent.type,
              timestamp: timestamp,
              date: dateStr,
              isCritical: activeEvent.isCritical,
-             snapshotUrl: activeEvent.snapshotUrl, // Keep last snapshot
+             snapshotUrl: activeEvent.snapshotUrl,
              startTimeMs: midnightNewDay.millisecondsSinceEpoch,
              durationSeconds: newDurationSec,
              duration: _formatDurationLabel(newDurationSec),
@@ -737,8 +744,6 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         } else {
            // Normal tick processing
            final durationSec = (_currentTime.millisecondsSinceEpoch - activeEvent.startTimeMs!) ~/ 1000;
-           final durationHrs = (durationSec / 3600).toStringAsFixed(2);
-           
            updatedEvents[0] = activeEvent.copyWith(
              durationSeconds: durationSec,
              duration: _formatDurationLabel(durationSec),
@@ -747,46 +752,80 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       }
     }
 
+    _updateStateScore(newScore, updatedEvents);
+  }
+
+  void _applyScoreChange(String type, int durationSec) {
+    double change = 0;
+    switch (type) {
+      case 'sitting': change = 30.0 * durationSec; break;
+      case 'slouching': change = -60.0 * durationSec; break;
+      case 'laying': change = -10.0 * durationSec; break;
+      case 'walking': change = 30.0 * durationSec; break;
+      case 'standing': change = 30.0 * durationSec; break;
+      case 'exercise': change = 60.0 * durationSec; break;
+      case 'falling': change = -1000.0; break; // Drop to 0
+      case 'near_fall': change = -200.0; break; 
+      case 'occluded': change = -10.0 * durationSec; break;
+    }
+    final int newScore = (state.score + change).round().clamp(0, 1000);
+    _updateStateScore(newScore, state.events);
+  }
+
+  void _updateStateScore(int newScore, List<SimulationEvent> updatedEvents) {
+    final now = _currentTime;
+    final dateStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    final updatedDailyScores = Map<String, double>.from(state.dailyScores);
+    updatedDailyScores[dateStr] = newScore.toDouble();
+
     final bool hasEvents = updatedEvents.isNotEmpty && state.events.isNotEmpty;
     final bool durationChanged = hasEvents && updatedEvents.first.durationSeconds != state.events.first.durationSeconds;
 
     if (newScore != state.score || durationChanged) {
-      final now = _currentTime;
-      final dateStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-      final updatedDailyScores = Map<String, double>.from(state.dailyScores);
-      updatedDailyScores[dateStr] = newScore.toDouble();
+      final oldStatus = state.status;
+      final newStatus = _getStatus(newScore, events: updatedEvents);
 
       state = state.copyWith(
         score: newScore,
-        status: _getStatus(newScore),
+        status: newStatus,
         dailyScores: updatedDailyScores,
         events: updatedEvents,
       );
 
-      // Periodically sync active event to Firestore (every 5 simulation minutes = approx 5 seconds)
-      if (durationChanged && updatedEvents.first.durationSeconds != null) {
+      // Handle status transitions
+      if (newStatus != oldStatus) {
+        if (newStatus == HealthStatus.warning && oldStatus == HealthStatus.normal) {
+          _triggerThresholdWarningNotification();
+        } else if (newStatus == HealthStatus.emergency && oldStatus == HealthStatus.warning) {
+          _triggerThresholdEmergencyNotification();
+        }
+      }
+
+      // Periodically sync active event to Firestore (every 30 simulation seconds)
+      if (durationChanged && updatedEvents.isNotEmpty && updatedEvents.first.durationSeconds != null) {
         final duration = updatedEvents.first.durationSeconds!;
-        final previousDuration = state.events.first.durationSeconds ?? 0;
+        final previousDuration = state.events.isNotEmpty ? (state.events.first.durationSeconds ?? 0) : 0;
         
-        // NEW: Suppress minor notifications if in Emergency state or very high simulation jump
         final isEmergency = state.status == HealthStatus.emergency;
         
-        // Trigger sitting notification if they have been sitting for 1 hour (3600 sim-seconds)
-        if (!isEmergency && updatedEvents.first.type == 'sitting' && previousDuration < 3600 && duration >= 3600) {
+        if (!isEmergency && updatedEvents.first.type == 'sitting' && previousDuration < 60 && duration >= 60) {
            _triggerSittingNotification(updatedEvents.first);
         }
-
-        // Trigger Slouching notification if they have been slouching for 1 minute (60 sim-seconds)
         if (!isEmergency && updatedEvents.first.type == 'slouching' && previousDuration < 60 && duration >= 60) {
            _triggerSlouchingNotification(updatedEvents.first);
         }
-
-        // Trigger Walking notification if they have been walking for 30 seconds (30 sim-seconds)
         if (!isEmergency && (updatedEvents.first.type == 'walking' || updatedEvents.first.type == 'walk') && previousDuration < 30 && duration >= 30) {
            _triggerWalkingNotification(updatedEvents.first);
         }
+        if (!isEmergency && updatedEvents.first.type == 'laying' && previousDuration < 120 && duration >= 120) {
+           _triggerLayingNotification(updatedEvents.first);
+        }
 
-        // Periodically sync active event to Firestore (every 30 simulation seconds)
+        // Periodic Health Advice (every 10 minutes of simulation)
+        if (duration % 600 == 0 && duration > 0 && previousDuration < duration) {
+           _triggerHealthAdviceNotification(state.score, state.status);
+        }
+
         if ((duration ~/ 30) > (previousDuration ~/ 30)) {
            _eventRepository.syncEvent(updatedEvents.first);
         }
@@ -810,7 +849,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
       final notification = NotificationModel(
         id: '', // Firestore will generate
-        title: isFalling ? 'ตรวจพบการล้ม!' : 'ตรวจพบอาการเสียหลัก (Near Fall)',
+        title: isFalling ? 'ตรวจพบการล้ม! ⚠️' : 'ตรวจพบอาการเสียหลัก (Near Fall) ⚠️',
         message: isFalling 
             ? 'พบเหตุการณ์ล้มในกล้อง ${event.cameraId ?? "หลัก"} โปรดตรวจสอบทันที'
             : 'พบแนวโน้มการล้มในกล้อง ${event.cameraId ?? "หลัก"} โปรดติดตามสถานะอย่างใกล้ชิด',
@@ -824,8 +863,35 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         cameraId: event.cameraId, // ส่ง cameraId ให้ Cloud Function ใช้ใน LINE alert
       );
 
-      // Save to user's notifications collection
-      await _notificationRepository.addNotification(notification, targetUid: uid);
+      // 1. Save to the person who fell (Private/Internal)
+      final privateNotification = notification.copyWith(
+        message: "${notification.message} (ที่มา: ตนเอง)",
+      );
+      await _notificationRepository.addNotification(privateNotification, targetUid: uid);
+      
+      // 2. Broadcast to group members if it's a fall
+      if (isFalling && uid != 'demo_user') {
+        try {
+          final groupRepo = _ref.read(groupRepoProvider);
+          final group = await groupRepo.getGroupByOwnerUid(uid);
+          
+          if (group != null) {
+            final memberUids = await groupRepo.getMemberUids(group.id);
+            final groupNotification = notification.copyWith(
+              title: "ตรวจพบการล้ม! (${group.name}) ⚠️",
+              message: "${notification.message} (จากกลุ่ม: ${group.name})",
+            );
+
+            for (final memberUid in memberUids) {
+              if (memberUid != uid) {
+                 await _notificationRepository.addNotification(groupNotification, targetUid: memberUid);
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint("Error broadcasting group notification: $e");
+        }
+      }
       
       // Locally show the banner so the user testing the Demo immediately sees it
       try {
@@ -837,7 +903,8 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
         debugPrint("Error showing local app notification: $e");
       }
 
-      debugPrint("Logged critical notification with GPS for $uid");
+      debugPrint("🔔 LOGGED Notification [$uid]: ${notification.title} - ${notification.message}");
+      debugPrint("📍 LocationAttached: ${pos != null}, ImageAttached: ${notification.imageUrl != null}");
     } catch (e) {
       debugPrint("Error triggering notification: $e");
     }
@@ -850,8 +917,8 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
       final notification = NotificationModel(
         id: '', // Firestore will generate
-        title: 'นั่งนิ่งเป็นเวลานาน',
-        message: 'พบว่ามีการนั่งนานเกินสมควรที่กล้อง ${event.cameraId ?? "หลัก"} ควรมีการปรับเปลี่ยนอิริยาบถเพื่อสุขภาพที่ดี',
+        title: 'ระวังออฟฟิศซินโดรมถามหานะครับ! ⚠️',
+        message: 'ลุกขึ้นหมุนหัวไหล่และสะบัดข้อมือสัก 2-3 นาทีดีไหมครับ? 💪 (ที่มา: ตนเอง)',
         type: NotificationType.warning,
         date: _currentTime,
         cameraId: event.cameraId,
@@ -860,7 +927,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       await _notificationRepository.addNotification(notification, targetUid: uid);
       _showLocal(notification);
       
-      debugPrint("Logged sitting notification for $uid");
+      debugPrint("🔔 LOGGED Sitting Notification [$uid]: ${notification.title}");
     } catch (e) {
       debugPrint("Error triggering sitting notification: $e");
     }
@@ -874,7 +941,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       final notification = NotificationModel(
         id: '', 
         title: 'เริ่มกิจกรรมกายบริหาร',
-        message: 'เริ่มกิจกรรมกายบริหาร ขอให้มีสุขภาพแข็งแรง! (จากกล้อง ${event.cameraId ?? "หลัก"})',
+        message: 'เริ่มกิจกรรมกายบริหาร ขอให้มีสุขภาพแข็งแรง! (จากกล้อง ${event.cameraId ?? "หลัก"}) (ที่มา: ตนเอง)',
         type: NotificationType.success,
         date: _currentTime,
         imageUrl: event.remoteImageUrl,
@@ -883,6 +950,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
       await _notificationRepository.addNotification(notification, targetUid: uid);
       _showLocal(notification);
+      debugPrint("🔔 LOGGED Exercise Notification [$uid]: ${notification.title}");
     } catch (e) {
       debugPrint("Error triggering exercise notification: $e");
     }
@@ -896,7 +964,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       final notification = NotificationModel(
         id: '',
         title: 'เดินเพื่อสุขภาพ',
-        message: 'คุณเดินต่อเนื่องมาได้ระยะหนึ่งแล้ว เยี่ยมมาก! (จากกล้อง ${event.cameraId ?? "หลัก"})',
+        message: 'คุณเดินต่อเนื่องมาได้ระยะหนึ่งแล้ว เยี่ยมมาก! (จากกล้อง ${event.cameraId ?? "หลัก"}) (ที่มา: ตนเอง)',
         type: NotificationType.success,
         date: _currentTime,
         cameraId: event.cameraId,
@@ -904,8 +972,74 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
       await _notificationRepository.addNotification(notification, targetUid: uid);
       _showLocal(notification);
+      debugPrint("🔔 LOGGED Walking Notification [$uid]: ${notification.title}");
     } catch (e) {
       debugPrint("Error triggering walking notification: $e");
+    }
+  }
+
+  Future<void> _triggerLayingNotification(SimulationEvent event) async {
+    try {
+      final targetUid = _ref.read(resolvedTargetUidProvider);
+      final uid = targetUid.isEmpty ? 'demo_user' : targetUid;
+
+      final notification = NotificationModel(
+        id: '',
+        title: 'นอนเยอะไปแล้วนะวันนี้',
+        message: 'คุณนอนพักผ่อนมานานกว่า 30 นาทีแล้ว ลองลุกขึ้นขยับร่างกายบ้างจะดีต่อสุขภาพนะครับ (จากกล้อง ${event.cameraId ?? "หลัก"}) (ที่มา: ตนเอง)',
+        type: NotificationType.warning,
+        date: _currentTime,
+        cameraId: event.cameraId,
+      );
+
+      await _notificationRepository.addNotification(notification, targetUid: uid);
+      _showLocal(notification);
+      debugPrint("🔔 LOGGED Laying Notification [$uid]: ${notification.title}");
+    } catch (e) {
+      debugPrint("Error triggering laying notification: $e");
+    }
+  }
+
+  Future<void> _triggerHealthAdviceNotification(int score, HealthStatus status) async {
+    try {
+      final targetUid = _ref.read(resolvedTargetUidProvider);
+      final uid = targetUid.isEmpty ? 'demo_user' : targetUid;
+
+      String title;
+      String message;
+      NotificationType type;
+
+      if (score >= 900) {
+        title = 'สุขภาพดีเยี่ยม! 🌟';
+        message = 'สุขภาพของคุณอยู่ในเกณฑ์ดีเยี่ยม รักษาพฤติกรรมที่ดีแบบนี้ต่อไปนะครับ';
+        type = NotificationType.success;
+      } else if (score >= 800) {
+        title = 'รักษาสุขภาพคนเก่ง 👍';
+        message = 'วันนี้คุณทำได้ดีแล้ว ลองเดินเพิ่มอีกสักนิดเพื่อกระตุ้นการไหลเวียนโลหิตนะครับ';
+        type = NotificationType.success;
+      } else if (score >= 600) {
+        title = 'คำแนะนำสุขภาพ 💡';
+        message = 'ช่วงนี้คุณอาจจะนั่งนานไปหน่อย ลองยืดเส้นยืดสายทุกๆ 1 ชั่วโมงจะช่วยให้สดชื่นขึ้นครับ';
+        type = NotificationType.warning;
+      } else {
+        title = 'เป็นห่วงสุขภาพนะครับ ❤️';
+        message = 'วันนี้คะแนนสุขภาพค่อนข้างต่ำ ลองหาเวลาพักผ่อนและทำกิจกรรมที่เคลื่อนไหวบ้างนะครับ';
+        type = NotificationType.warning;
+      }
+
+      final notification = NotificationModel(
+        id: '',
+        title: title,
+        message: '$message (ที่มา: ตนเอง)',
+        type: type,
+        date: _currentTime,
+      );
+
+      await _notificationRepository.addNotification(notification, targetUid: uid);
+      _showLocal(notification);
+      debugPrint("🔔 LOGGED Health Advice Notification [$uid]: ${notification.title}");
+    } catch (e) {
+      debugPrint("Error triggering health advice notification: $e");
     }
   }
 
@@ -917,7 +1051,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       final notification = NotificationModel(
         id: '',
         title: 'แจ้งเตือนท่านั่ง',
-        message: 'ตรวจพบการนั่งหลังค่อมเป็นเวลานาน โปรดปรับท่านั่งเพื่อสุขภาพหลังครับ (จากกล้อง ${event.cameraId ?? "หลัก"})',
+        message: 'ตรวจพบการนั่งหลังค่อมเป็นเวลานาน โปรดปรับท่านั่งเพื่อสุขภาพหลังครับ (จากกล้อง ${event.cameraId ?? "หลัก"}) (ที่มา: ตนเอง)',
         type: NotificationType.warning,
         date: _currentTime,
         cameraId: event.cameraId,
@@ -925,6 +1059,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
       await _notificationRepository.addNotification(notification, targetUid: uid);
       _showLocal(notification);
+      debugPrint("🔔 LOGGED Slouching Notification [$uid]: ${notification.title}");
     } catch (e) {
       debugPrint("Error triggering slouching notification: $e");
     }
@@ -941,7 +1076,57 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
     }
   }
 
-  HealthStatus _getStatus(int score) {
+  Future<void> _triggerThresholdWarningNotification() async {
+    try {
+      final targetUid = _ref.read(resolvedTargetUidProvider);
+      final uid = targetUid.isEmpty ? 'demo_user' : targetUid;
+
+      final notification = NotificationModel(
+        id: '',
+        title: 'เริ่มตรวจพบความผิดปกติ 🟡',
+        message: 'คะแนนสุขภาพลดลงถึงเกณฑ์เฝ้าระวัง โปรดตรวจสอบผู้ถูกดูแลเบื้องต้น (ที่มา: ตนเอง)',
+        type: NotificationType.warning,
+        date: _currentTime,
+      );
+
+      await _notificationRepository.addNotification(notification, targetUid: uid);
+      _showLocal(notification);
+    } catch (e) {
+      debugPrint("Error triggering threshold warning: $e");
+    }
+  }
+
+  Future<void> _triggerThresholdEmergencyNotification() async {
+    try {
+      final targetUid = _ref.read(resolvedTargetUidProvider);
+      final uid = targetUid.isEmpty ? 'demo_user' : targetUid;
+
+      final notification = NotificationModel(
+        id: '',
+        title: 'เข้าสู่สถานะอันตราย! 🔴',
+        message: 'คะแนนสุขภาพวิกฤต โปรดตรวจสอบสถานที่จริงทันที! (ที่มา: ตนเอง)',
+        type: NotificationType.danger,
+        date: _currentTime,
+      );
+
+      await _notificationRepository.addNotification(notification, targetUid: uid);
+      _showLocal(notification);
+    } catch (e) {
+      debugPrint("Error triggering threshold emergency: $e");
+    }
+  }
+
+  HealthStatus _getStatus(int score, {List<SimulationEvent>? events}) {
+    // Priority 1: Check for active emergency activities in the provided/current event list
+    final listToCheck = events ?? state.events;
+    if (listToCheck.isNotEmpty) {
+      final topEvent = listToCheck.first;
+      if (topEvent.type == 'falling' || topEvent.type == 'near_fall') {
+        return HealthStatus.emergency;
+      }
+    }
+    
+    // Priority 2: Numerical thresholds
     if (score < 500) return HealthStatus.emergency;
     if (score < 800) return HealthStatus.warning;
     return HealthStatus.normal;

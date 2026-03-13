@@ -13,7 +13,7 @@ class StatusScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final healthState = ref.watch(healthStatusFamily(null));
     final user = ref.watch(userProvider);
-    final config = _getStatusConfig(healthState.status, context);
+    final config = _getStatusConfig(healthState.score, healthState.status, context);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D9488),
@@ -242,6 +242,42 @@ class StatusScreen extends ConsumerWidget {
 
                   const SizedBox(height: 24),
 
+                  // Health Status Criteria Guide
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardColor,
+                      borderRadius: BorderRadius.circular(32),
+                      border: Border.all(
+                        color: Theme.of(context).brightness == Brightness.dark 
+                            ? Colors.white.withValues(alpha: 0.05) 
+                            : Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'เกณฑ์การประเมินสุขภาพ',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0D9488),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildCriteriaItem(context, 'ปกติ', '800 - 1000', 'สุขภาพดีเยี่ยม', Colors.green),
+                        const Divider(height: 24),
+                        _buildCriteriaItem(context, 'มีความเสี่ยง', '500 - 799', 'ควรปรับเปลี่ยนท่าทาง', Colors.orange),
+                        const Divider(height: 24),
+                        _buildCriteriaItem(context, 'ฉุกเฉิน', '0 - 499', 'ตรวจพบเหตุสำคัญหรือการล้ม', Colors.red),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
                   // Statistics Button
                   SizedBox(
                     height: 56,
@@ -359,13 +395,15 @@ class StatusScreen extends ConsumerWidget {
     );
   }
 
-  _StatusConfig _getStatusConfig(HealthStatus status, BuildContext context) {
+  _StatusConfig _getStatusConfig(int score, HealthStatus status, BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final scoreText = " ($score/1000)";
+    
     switch (status) {
       case HealthStatus.normal:
         return _StatusConfig(
-          title: 'Status : Normal',
-          description: 'No abnormal behavior detected.',
+          title: 'สถานะ : ปกติ$scoreText',
+          description: 'สุขภาพดี ไม่พบพฤติกรรมเสี่ยง',
           bgColor: isDark ? Colors.green.shade900.withValues(alpha: 0.5) : const Color(0xFF34D399),
           iconBgColor: isDark 
               ? Colors.green.shade800 
@@ -376,8 +414,8 @@ class StatusScreen extends ConsumerWidget {
         );
       case HealthStatus.warning:
         return _StatusConfig(
-          title: 'Status : Warning',
-          description: 'Detect risky behavior.',
+          title: 'สถานะ : มีความเสี่ยง$scoreText',
+          description: 'ตรวจพบพฤติกรรมเสี่ยง โปรดระมัดระวัง',
           bgColor: isDark ? Colors.amber.shade900.withValues(alpha: 0.5) : const Color(0xFFFBBF24),
           iconBgColor: isDark 
               ? Colors.amber.shade800 
@@ -388,8 +426,8 @@ class StatusScreen extends ConsumerWidget {
         );
       case HealthStatus.emergency:
         return _StatusConfig(
-          title: 'Status : Emergency',
-          description: 'Emergency detected.',
+          title: 'สถานะ : ฉุกเฉิน$scoreText',
+          description: 'ตรวจพบเหตุฉุกเฉินหรือการล้ม!',
           bgColor: isDark ? Colors.red.shade900.withValues(alpha: 0.5) : const Color(0xFFEF4444),
           iconBgColor: isDark 
               ? Colors.red.shade800 
@@ -400,8 +438,8 @@ class StatusScreen extends ConsumerWidget {
         );
       case HealthStatus.none:
         return _StatusConfig(
-          title: 'Status : None',
-          description: 'No information.',
+          title: 'สถานะ : ไม่มีข้อมูล',
+          description: 'ยังไม่มีข้อมูลพฤติกรรม',
           bgColor: Theme.of(context).dividerColor.withValues(alpha: 0.05),
           iconBgColor: Colors.transparent,
           icon: null,
@@ -409,6 +447,56 @@ class StatusScreen extends ConsumerWidget {
           iconColor: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
         );
     }
+  }
+
+  Widget _buildCriteriaItem(BuildContext context, String label, String range, String desc, Color color) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Row(
+      children: [
+        Container(
+          width: 8,
+          height: 48,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  Text(
+                    range,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold, 
+                      fontSize: 16,
+                      color: color,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                desc,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
 

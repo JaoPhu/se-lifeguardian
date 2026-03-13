@@ -43,6 +43,7 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
 
         return NotificationItem(
           id: m.id,
+          title: m.title,
           message: m.message,
           type: uiType,
           isNew: isNew,
@@ -61,9 +62,10 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
   }
 
   void markAllAsRead() {
-    final updatedList = state.notifications.map((n) {
+    final List<NotificationItem> updatedList = state.notifications.map((n) {
       return NotificationItem(
         id: n.id,
+        title: n.title,
         message: n.message,
         type: n.type,
         time: n.time,

@@ -5,6 +5,7 @@ import '../data/notification_provider.dart';
 
 class NotificationItem {
   final String id;
+  final String title;
   final String message;
   final String type; // 'success', 'warning', 'error', 'info'
   final bool isNew;
@@ -12,6 +13,7 @@ class NotificationItem {
 
   NotificationItem({
     required this.id,
+    required this.title,
     required this.message,
     required this.type,
     this.isNew = false,
@@ -178,18 +180,29 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
+                                  item.title,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context).brightness == Brightness.dark
+                                        ? Colors.white
+                                        : Colors.black87,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
                                   item.message,
                                   style: TextStyle(
                                     fontSize: 14,
-                                    fontWeight: FontWeight.bold,
+                                    fontWeight: FontWeight.normal,
                                     color: Theme.of(context).brightness == Brightness.dark
-                                        ? Colors.grey.shade300
-                                        : Colors.grey.shade700,
+                                        ? Colors.grey.shade400
+                                        : Colors.grey.shade600,
                                     height: 1.5,
                                   ),
                                 ),
                                 if (item.time.isNotEmpty) ...[
-                                  const SizedBox(height: 4),
+                                  const SizedBox(height: 8),
                                   Text(
                                     item.time,
                                     style: TextStyle(

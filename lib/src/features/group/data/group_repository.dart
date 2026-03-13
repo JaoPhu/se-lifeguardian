@@ -232,7 +232,18 @@ class GroupRepository {
     await _membersCol(groupId).doc(targetUid).delete();
   }
 
-  // ---------- HELPERS ----------
+  // ---------- HELPERS/UTILITIES ----------
+  Future<Group?> getGroupByOwnerUid(String ownerUid) async {
+    final snap = await _db.collection('groups').where('ownerUid', isEqualTo: ownerUid).limit(1).get();
+    if (snap.docs.isEmpty) return null;
+    return Group.fromDoc(snap.docs.first);
+  }
+
+  Future<List<String>> getMemberUids(String groupId) async {
+    final snap = await _membersCol(groupId).get();
+    return snap.docs.map((d) => d.id).toList();
+  }
+
   String _genCode() {
     final num = 1000 + _random.nextInt(9000); // 1000-9999
     return 'LG-$num';
