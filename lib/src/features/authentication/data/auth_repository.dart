@@ -86,7 +86,16 @@ class AuthRepository {
         debugPrint('AuthRepository: Session ID updated');
       } else {
         // If profile doesn't exist but isLogin is true, throw error to prevent ghost login
-        debugPrint('AuthRepository: Profile missing, blocking login');
+        debugPrint('AuthRepository: Profile missing, blocking login and cleaning up Auth record');
+        try {
+          // Force delete the Auth account since it's a ghost (has no profile)
+          await _auth.currentUser?.delete();
+          // Force sign out immediately to avoid ghost session
+          await _auth.signOut();
+        } catch (e) {
+          debugPrint('AuthRepository: Error cleaning up ghost user: $e');
+          await _auth.signOut();
+        }
         throw Exception('user-not-found');
       }
     }
@@ -269,10 +278,18 @@ class AuthRepository {
         throw Exception('รหัสผ่านไม่ถูกต้อง');
       }
       debugPrint('AuthRepository: Firebase Auth error: ${e.code}');
+      // If we failed after re-auth, ensure we sign out so we don't stay in ghost mode
+      await signOut();
       rethrow;
     } catch (e) {
       debugPrint('AuthRepository: Deletion failed: $e');
-      // Rethrow to let UI handle the error (don't leave user in "limbo")
+      // Ensure social SDKs are signed out to force account picker next time
+      try {
+        await GoogleSignIn().signOut();
+      } catch (_) {}
+      
+      // If we failed after re-auth, ensure we sign out so we don't stay in ghost mode
+      await signOut();
       rethrow;
     }
   }
@@ -411,6 +428,27 @@ class AuthRepository {
         final listResult = await eventsRef.listAll();
         for (var item in listResult.items) {
           await item.delete();
+        }
+        for (var prefix in listResult.prefixes) {
+          final subList = await prefix.listAll();
+          for (var item in subList.items) {
+            await item.delete();
+          }
+        }
+      } catch (_) {}
+
+      // 3. Camera thumbnails
+      try {
+        final camerasRef = userRef.child('cameras');
+        final listResult = await camerasRef.listAll();
+        for (var item in listResult.items) {
+          await item.delete();
+        }
+        for (var prefix in listResult.prefixes) {
+          final subList = await prefix.listAll();
+          for (var item in subList.items) {
+            await item.delete();
+          }
         }
       } catch (_) {}
 
