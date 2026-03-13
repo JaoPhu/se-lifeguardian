@@ -77,7 +77,7 @@ class MedicalHistory extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  item['value'] ?? '-',
+                  (item['value'] == null || item['value']!.trim().isEmpty) ? 'None' : item['value']!,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,

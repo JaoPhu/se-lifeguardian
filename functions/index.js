@@ -41,7 +41,7 @@ exports.updateUserPassword = onCall({ cors: true }, async (request) => {
 });
 
 
-exports.sendOTPEmail = onCall({ cors: true }, async (request) => {
+exports.sendOTPEmail = onCall({ cors: true, secrets: ["GMAIL_PASS"] }, async (request) => {
     const { email, otp } = request.data;
 
     // Validate input

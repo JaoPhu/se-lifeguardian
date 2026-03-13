@@ -49,8 +49,8 @@ class ProfileStats extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildStatItem('Age', Text('$age', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.textTheme.bodyLarge?.color)), theme),
-              _buildStatItem('Height', Text('$height', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.textTheme.bodyLarge?.color)), theme),
-              _buildStatItem('Weight', Text('$weight', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.textTheme.bodyLarge?.color)), theme),
+              _buildStatItem('Height', Text(height == 0 ? '-' : '$height', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.textTheme.bodyLarge?.color)), theme),
+              _buildStatItem('Weight', Text(weight == 0 ? '-' : '$weight', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.textTheme.bodyLarge?.color)), theme),
             ],
           ),
         ],
