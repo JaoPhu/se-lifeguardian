@@ -389,6 +389,7 @@ class AuthRepository {
     }
 
     // --- Strict Check ---
+    final user = credential?.user;
     if (user != null) {
       final email = user.email?.trim().toLowerCase();
       
