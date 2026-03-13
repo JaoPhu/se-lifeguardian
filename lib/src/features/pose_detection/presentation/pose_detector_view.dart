@@ -55,7 +55,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   // State for UI
   final List<PersonPose> _persons = [];
   int? _selectedPersonIndex;
-  String _statusText = "Initializing...";
+  String _statusText = "กำลังเตรียมการ...";
   Size? _imageSize;
   InputImageRotation? _imageRotation;
   bool _isLoading = true;
@@ -72,8 +72,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
   bool _isPaused = false;
   bool _isIdentificationMode = false;
   final bool _showDiagnosticInsights = true;
-  final double _healthScore = 98.0;
-  String _diagnosticMessage = "Scanning Systemic Alignment...";
+  String _diagnosticMessage = "กำลังสแกนตำแหน่งร่างกาย...";
 
   // Snapshot state
   VideoPlayerController? _videoController;
@@ -124,7 +123,12 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     
     // Reset health monitoring state for new analysis session
     Future.microtask(() {
-      ref.read(healthStatusFamily(_registeredCameraId).notifier).reset();
+      final notifier = ref.read(healthStatusFamily(_registeredCameraId).notifier);
+      notifier.reset();
+      // Reset toast flags
+      _sittingToastShown = false;
+      _activityStartTime = null;
+      _lastNotifiedActivity = null;
     });
   }
 
@@ -150,7 +154,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
         _imageSize = _videoController!.value.size;
         _imageRotation = InputImageRotation.rotation0deg;
         _isLoading = false; 
-        _statusText = "Video Initialized.";
+        _statusText = "พร้อมสำหรับการวิเคราะห์";
       });
 
       if (!mounted) return;
@@ -206,7 +210,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
       });
 
     } catch (e) {
-      setState(() => _statusText = "Video error: $e");
+      setState(() => _statusText = "ข้อผิดพลาดของวิดีโอ: $e");
     }
   }
 
@@ -224,11 +228,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
 
         if (!_sittingToastShown && (_lastNotifiedActivity == 'sitting' || _lastNotifiedActivity == 'slouching') && simElapsed >= 10) {
           _sittingToastShown = true;
-          ref.read(healthStatusFamily(_registeredCameraId).notifier).recordNotification(
-            title: 'ระวังออฟฟิศซินโดรมถามหานะครับ! ⚠️',
-            message: 'นั่งมานาน ${simElapsed}s แล้ว ลุกขึ้นหมุนหัวไหล่และสะบัดข้อมือสัก 2-3 นาทีดีไหมครับ? 💪',
-            type: NotificationType.warning,
-          );
+          // Note: Notification logic is handled by HealthStatusNotifier based on activity duration
         }
       }
       
@@ -265,7 +265,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
       setState(() {
         _selectedPersonIndex ??= (_persons.isNotEmpty ? 0 : null);
         _isAnalysisComplete = true;
-        _statusText = "Analysis Complete";
+        _statusText = "การวิเคราะห์เสร็จสมบูรณ์";
       });
 
       // Refetch stats data to ensure the Statistics screen is up-to-date
@@ -285,7 +285,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
     setState(() {
       _isAnalyzing = true;
       _isAnalysisComplete = false;
-      _statusText = "Analyzing Scene...";
+      _statusText = "กำลังวิเคราะห์สภาพแวดล้อม...";
     });
 
     final duration = _videoController!.value.duration.inMilliseconds;
@@ -481,23 +481,23 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
             }
             
             if (p.isFalling) {
-               _statusText = "IMPACT DETECTED!";
-               _diagnosticMessage = "CRITICAL: Fall detected";
+               _statusText = "ตรวจพบการกระแทก!";
+               _diagnosticMessage = "วิกฤต: ตรวจพบการล้ม";
             } else if (p.isLaying) {
-              _statusText = "Laying / Fallen";
-              _diagnosticMessage = "Subject horizontal";
+              _statusText = "กราบเรียน / นอนราบ";
+              _diagnosticMessage = "ตรวจหามมุมแนวนอน";
             } else if (p.isSlouching) {
-              _statusText = "Unconscious / Slouching";
-              _diagnosticMessage = "Leaning posture detected";
+              _statusText = "ท่าทางไม่เหมาะสม";
+              _diagnosticMessage = "ตรวจพบท่านั่งหลังค่อม";
             } else if (p.isSitting) {
-              _statusText = "Sitting";
-              _diagnosticMessage = "Resting posture";
+              _statusText = "กำลังนั่ง";
+              _diagnosticMessage = "อยู่ในท่าพักผ่อน";
             } else if (p.isWalking) {
-              _statusText = "Walking / Active";
-              _diagnosticMessage = "Active movement";
+              _statusText = "กำลังเดิน / เคลื่อนไหว";
+              _diagnosticMessage = "มีการทำกิจกรรมอย่างต่อเนื่อง";
             } else {
-              _statusText = "Standing Still";
-              _diagnosticMessage = "Upright position";
+              _statusText = "กำลังยืน";
+              _diagnosticMessage = "อยู่ในท่าแนวตั้ง";
             }
 
             // State Transition & Snapshot Logic
@@ -563,11 +563,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
           // --- DIRECT IN-APP TOAST NOTIFICATIONS ---
           // We trigger toasts here directly since the notifier pipeline may have guards.
           if (detectedActivity == 'falling' || detectedActivity == 'near_fall') {
-            ref.read(healthStatusFamily(_registeredCameraId).notifier).recordNotification(
-              title: detectedActivity == 'falling' ? 'ตรวจพบการล้ม! ⚠️' : 'ตรวจพบอาการเสียหลัก (Near Fall) ⚠️',
-              message: 'พบเหตุการณ์${detectedActivity == 'falling' ? "ล้ม" : "เสียหลัก"}ในกล้อง ${_registeredCameraName ?? 'Demo'} โปรดตรวจสอบทันที',
-              type: detectedActivity == 'falling' ? NotificationType.danger : NotificationType.warning,
-            );
+            // Handled by notifier.updateActivity internally
           }
 
           // Track activity start time for duration-based notifications
@@ -668,7 +664,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
 
     if (widget.videoPath == null) {
       return const Scaffold(
-        body: Center(child: Text("No video path provided.")),
+        body: Center(child: Text("ไม่พบเส้นทางวิดีโอ")),
       );
     }
 
@@ -748,7 +744,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                         shadowColor: (_isPaused ? const Color(0xFF0D9492) : const Color(0xFFD97706)).withValues(alpha: 0.4),
                       ),
                       child: Text(
-                        _isPaused ? 'Start Analysis' : 'Stop Analysis', 
+                        _isPaused ? 'เริ่มการวิเคราะห์' : 'หยุดการวิเคราะห์', 
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
                       ),
                     ),
@@ -823,7 +819,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
           Padding(
             padding: const EdgeInsets.only(left: 20, top: 20, bottom: 12),
             child: Text(
-              widget.displayCameraName ?? 'Camera view : Desk',
+              widget.displayCameraName ?? 'มุมมองกล้อง : โต๊ะทำงาน',
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 color: Color(0xFF0D9492),
@@ -900,7 +896,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
       child: Column(
         children: [
           Text(
-            'Time simulation',
+            'การจำลองเวลา',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -968,12 +964,12 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Speed : ${_videoSpeed.toStringAsFixed(1)}X',
+                'ความเร็ว : ${_videoSpeed.toStringAsFixed(1)}X',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(width: 16),
               Text(
-                'Sim : ${_simMultiplier.toInt()}X',
+                'จำลอง : ${_simMultiplier.toInt()}X',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0D9488)),
               ),
             ],
@@ -983,7 +979,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                '1s video = ${_simMultiplier.toInt()}s simulation',
+                'วิดีโอ 1 วินาที = จำลอง ${_simMultiplier.toInt()} วินาที',
                 style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w500),
               ),
             ],
@@ -1041,7 +1037,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
             ),
             const SizedBox(height: 48),
             Text(
-              'AI Analyzing Video...',
+              'ระบบ AI กำลังวิเคราะห์...',
               style: TextStyle(
                 fontSize: 22, 
                 fontWeight: FontWeight.w800, 
@@ -1053,7 +1049,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 48),
               child: Text(
-                'LifeGuardian AI is detecting events and potential risks.',
+                'LifeGuardian AI กำลังตรวจหาพฤติกรรมเสี่ยงและความปลอดภัย...',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: isDark ? Colors.white54 : const Color(0xFF64748B).withValues(alpha: 0.8),
@@ -1118,14 +1114,19 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
               const Icon(Icons.check_circle, color: Colors.white, size: 80),
               const SizedBox(height: 24),
               Text(
-                _persons.length > 1 && _selectedPersonIndex != null 
-                  ? 'Analysis Completed for Person ${_selectedPersonIndex! + 1}'
-                  : 'Analysis Completed',
+                _persons.length > 1 && _selectedPersonIndex != null && _selectedPersonIndex! < _persons.length
+                  ? 'จบการจำลองสำหรับบุคคลที่ ${_selectedPersonIndex! + 1}'
+                  : 'จบการวิเคราะห์ข้อมูลจำลอง',
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
               ),
+              const SizedBox(height: 8),
+              const Text(
+                '— ผู้ป่วยได้รับการช่วยเหลือพ้นขีดอันตรายแล้ว —',
+                style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600),
+              ),
               const SizedBox(height: 16),
-              if (_persons.length > 1 && _selectedPersonIndex != null)
+              if (_persons.length > 1 && _selectedPersonIndex != null && _selectedPersonIndex! < _persons.length)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
@@ -1141,7 +1142,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                         decoration: BoxDecoration(color: _persons[_selectedPersonIndex!].color, shape: BoxShape.circle),
                       ),
                       const SizedBox(width: 8),
-                      const Text('Identified as your skeleton', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                      const Text('ระบุตัวตนของคุณแล้ว', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
@@ -1155,13 +1156,13 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                 ),
                 child: Column(
                   children: [
-                    _buildSummaryRow('Relax / Rest', sittingCount.toString(), Colors.amber, Icons.weekend),
+                    _buildSummaryRow('นิ่งเฉย / พักผ่อน', sittingCount.toString(), Colors.amber, Icons.weekend),
                     const Divider(color: Colors.white24, height: 1),
-                    _buildSummaryRow('Standing', standingCount.toString(), Colors.blue, Icons.person),
+                    _buildSummaryRow('ยืนปกติ', standingCount.toString(), Colors.blue, Icons.person),
                     const Divider(color: Colors.white24, height: 1),
-                    _buildSummaryRow('Active / Moving', walkingCount.toString(), Colors.green, Icons.directions_run),
+                    _buildSummaryRow('เคลื่อนไหว / ออกกำลัง', walkingCount.toString(), Colors.green, Icons.directions_run),
                     const Divider(color: Colors.white24, height: 1),
-                    _buildSummaryRow('Emergency / Fall', emergencyCount.toString(), Colors.red, Icons.warning_amber),
+                    _buildSummaryRow('เหตุฉุกเฉิน / วิกฤต', emergencyCount.toString(), Colors.red, Icons.warning_amber),
                   ],
                 ),
               ),
@@ -1218,7 +1219,6 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                     // Removed notifier.clearCameras() to respect disconnected box
                     notifier.addCamera(demoCamera);
                     
-                    // Navigate to Dashboard (Overview)
                     context.go('/overview');
                   },
                   style: ElevatedButton.styleFrom(
@@ -1228,7 +1228,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                       borderRadius: BorderRadius.circular(24),
                     ),
                   ),
-                  child: const Text('Finish & View Dashboard', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  child: const Text('เสร็จสิ้นและดูภาพรวมทางสุขภาพ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                 ),
               ),
               const SizedBox(height: 24),
@@ -1301,12 +1301,12 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
               const Icon(Icons.person_search, color: Colors.white, size: 80),
               const SizedBox(height: 32),
               const Text(
-                'Identification Needed',
+                'จำเป็นต้องระบุตัวตน',
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               const SizedBox(height: 16),
               const Text(
-                'Multiple people were detected in the video. Which skeleton is yours?',
+                'ตรวจพบโครงสร้างร่างกายหลายคนในวิดีโอ กรุณาเลือกตัวคุณเพื่อเริ่มติดตาม',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, color: Colors.white70),
               ),
@@ -1378,7 +1378,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        "That's me! ($colorName)",
+                                        "ใช่ตัวฉันเอง! ($colorName)",
                                         style: const TextStyle(
                                           fontSize: 18, 
                                           fontWeight: FontWeight.bold, 
@@ -1387,7 +1387,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        'Tracked as ID #${person.id}',
+                                        'ติดตามโดยใช้รหัส ID #${person.id}',
                                         style: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.7)),
                                       ),
                                     ],
@@ -1488,11 +1488,11 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
               children: [
                 const Text('Health Score', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
                 Text(
-                  '${_healthScore.toStringAsFixed(1)}%',
+                  '${healthState.score.toStringAsFixed(1)}%',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
-                    color: _healthScore < 70 ? Colors.red : const Color(0xFF0D9492),
+                    color: healthState.score < 700 ? Colors.red : const Color(0xFF0D9492),
                   ),
                 ),
               ],
@@ -1501,10 +1501,10 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
             ClipRRect(
               borderRadius: BorderRadius.circular(2),
               child: LinearProgressIndicator(
-                value: _healthScore / 100,
+                value: healthState.score / 1000,
                 backgroundColor: const Color(0xFF0D9492).withValues(alpha: 0.1),
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  _healthScore < 70 ? Colors.red : const Color(0xFF0D9492),
+                  healthState.score < 700 ? Colors.red : const Color(0xFF0D9492),
                 ),
                 minHeight: 4,
               ),
