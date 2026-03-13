@@ -391,7 +391,14 @@ class _DemoSetupScreenState extends ConsumerState<DemoSetupScreen> {
                       onPressed: () => Navigator.pop(builderContext),
                       child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
                     ),
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Expanded(
+                      child: Text(
+                        title, 
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                     TextButton(
                       onPressed: () => Navigator.pop(builderContext),
                       child: const Text('Done', style: TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.bold)),
