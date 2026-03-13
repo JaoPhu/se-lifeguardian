@@ -1,6 +1,6 @@
+const functions = require("firebase-functions/v1");
 const { onCall, HttpsError, onRequest } = require("firebase-functions/v2/https");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
-const { onUserDeleted } = require("firebase-functions/v2/identity");
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
 const axios = require('axios');
@@ -596,8 +596,8 @@ exports.lineWebhook = onRequest({
 });
 
 // ===== Background Account Deletion Cleanup =====
-exports.onUserDeletedCleanup = onUserDeleted({ region: 'us-central1' }, async (event) => {
-    const uid = event.data.uid;
+exports.onUserDeletedCleanup = functions.auth.user().onDelete(async (user) => {
+    const uid = user.uid;
     console.log(`🗑️ Starting cleanup for deleted user UID: ${uid}`);
 
     const userRef = db.collection('users').doc(uid);
