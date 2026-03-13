@@ -49,6 +49,16 @@ exports.sendOTPEmail = onCall({ cors: true }, async (request) => {
         throw new HttpsError('invalid-argument', 'Email and OTP are required');
     }
 
+    // 0. Verify if user actually exists in Auth so we don't send emails to unregistered users
+    try {
+        await admin.auth().getUserByEmail(email);
+    } catch (error) {
+        if (error.code === 'auth/user-not-found') {
+            throw new HttpsError('not-found', 'user-not-found');
+        }
+        throw new HttpsError('internal', 'Error checking user existence');
+    }
+
     // --- 1. Store OTP in Firestore ---
     try {
         // Store in 'otp_requests' collection, using email as ID
@@ -325,7 +335,7 @@ async function sendLineEmergencyAlert(lineUserId, notiData) {
 
         // จำลองสถานะเจ้าหน้าที่ตอบรับ (Rescue Status Simulation)
         const rescueUpdates = [
-            { delayMs: 5000,  text: `🚑 รับทราบเหตุการณ์แล้ว กำลังส่งเจ้าหน้าที่ไปยังจุดเกิดเหตุ\n\n👤 ผู้ป่วย: ${patientName}\n📷 กล้อง: ${cameraId}` },
+            { delayMs: 5000, text: `🚑 รับทราบเหตุการณ์แล้ว กำลังส่งเจ้าหน้าที่ไปยังจุดเกิดเหตุ\n\n👤 ผู้ป่วย: ${patientName}\n📷 กล้อง: ${cameraId}` },
             { delayMs: 15000, text: `🚗 เจ้าหน้าที่กำลังเดินทางไปยังพิกัดที่ตรวจพบ\n📍 ${locationText}` },
             { delayMs: 30000, text: `📍 เจ้าหน้าที่ถึงที่เกิดเหตุแล้ว กำลังเข้าตรวจสอบสถานการณ์` },
             { delayMs: 45000, text: `✅ ผู้ป่วยได้รับการช่วยเหลือเรียบร้อยแล้ว\n\nเหตุการณ์: ${notiData.title || 'ตรวจพบการล้ม'}\n👤 ผู้ป่วย: ${patientName}\n🕐 เวลา: ${timeText}\n\n— เหตุการณ์ปิด —` },
@@ -411,7 +421,7 @@ exports.onNotificationCreated = onDocumentCreated("users/{uid}/notifications/{no
         // ดึง LINE User ID ของเจ้าหน้าที่จาก Firestore config
         const configDoc = await db.collection('app_config').doc('line_settings').get();
         let emergencyLineId = null;
-        
+
         if (configDoc.exists) {
             emergencyLineId = configDoc.data().emergencyContactLineId;
             console.log(`Found config doc. Line ID: ${emergencyLineId}`);
@@ -446,7 +456,7 @@ exports.onNotificationCreated = onDocumentCreated("users/{uid}/notifications/{no
         console.log(`Attempting to send LINE alert to: ${emergencyLineId}`);
 
         const success = await sendLineEmergencyAlert(emergencyLineId, enrichedNotiData);
-        
+
         if (success) {
             console.log(`✅ Emergency LINE alert sent successfully`);
         } else {
@@ -462,7 +472,7 @@ exports.lineWebhook = onRequest({ cors: true }, async (req, res) => {
     const signature = req.headers['x-line-signature'];
     const body = JSON.stringify(req.body);
     const hash = crypto.createHmac('sha256', LINE_CHANNEL_SECRET).update(body).digest('base64');
-    
+
     if (signature !== hash) {
         console.error('LINE webhook signature mismatch');
         return res.status(403).send('Forbidden');

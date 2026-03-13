@@ -19,8 +19,14 @@ class EmailService {
         'otp': otp,
       });
       
-      debugPrint('OTP email sent successfully: ${result.data}');
-      return result.data['success'] == true;
+      debugPrint('OTP email sent successfully: ${result?.data}');
+      return true;
+    } on FirebaseFunctionsException catch (e) {
+      if (e.code == 'not-found' && e.message == 'user-not-found') {
+        throw Exception('user-not-found');
+      }
+      debugPrint('Firebase Functions Error sending OTP email: ${e.code} - ${e.message}');
+      return false;
     } catch (e) {
       debugPrint('Error sending OTP email: $e');
       return false;
