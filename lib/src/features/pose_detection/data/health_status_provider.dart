@@ -99,6 +99,11 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
   StreamSubscription? _eventsSubscription;
   StreamSubscription? _userDocSubscription;
 
+  // Simulation support fields
+  DateTime _lastWallClockTime = DateTime.now();
+  int _partialMillisecondBuffer = 0;
+  static const double _simulationMultiplier = 60.0; // Default: 1s video = 60s sim
+
   HealthStatusNotifier(this._eventRepository, this._notificationRepository, this._ref, {this.cameraId}) : super(HealthState.initial()) {
     if (cameraId != null) {
       _startTimer();
@@ -260,23 +265,38 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
     if (!_isSimulation || _lastScoreUpdateTime == null) {
       _isSimulation = true;
       _lastScoreUpdateTime = time;
+      _lastWallClockTime = DateTime.now();
     }
     
-    // Calculate how many simulation seconds have passed
-    final elapsedSec = time.difference(_lastScoreUpdateTime!).inSeconds;
+    final now = DateTime.now();
+    final realElapsedMs = now.difference(_lastWallClockTime).inMilliseconds;
+    _lastWallClockTime = now;
+
+    // Use the simulation multiplier to calculate how much simulated time has passed
+    final simElapsedMs = (realElapsedMs * _simulationMultiplier).round();
     
-    if (elapsedSec >= 1) {
-       // Advance time incrementally and update score/status for EACH simulation second
-       // This ensures threshold-based notifications (like sitting 10s) trigger correctly
-       for (int i = 0; i < elapsedSec; i++) {
-         _currentTime = _lastScoreUpdateTime!.add(const Duration(seconds: 1));
-         _updateScoreBasedOnActivity();
-         _lastScoreUpdateTime = _currentTime;
-       }
-    } else {
-       // Just update current time if less than a second passed
-       _currentTime = time;
+    int catchupSeconds = simElapsedMs ~/ 1000;
+    _partialMillisecondBuffer += simElapsedMs % 1000;
+    
+    if (_partialMillisecondBuffer >= 1000) {
+      catchupSeconds += 1;
+      _partialMillisecondBuffer -= 1000;
     }
+
+    if (catchupSeconds <= 0) return;
+
+    // Cap the catch-up to 60 seconds of processing per tick to avoid UI freezing
+    // while still correctly advancing the simulation time.
+    if (catchupSeconds > 60) {
+      debugPrint("⏳ Simulation Catch-up: $catchupSeconds s - Capping to 60s for performance.");
+      catchupSeconds = 60;
+    }
+
+    for (int i = 0; i < catchupSeconds; i++) {
+       _currentTime = _currentTime.add(const Duration(seconds: 1));
+       _updateScoreBasedOnActivity();
+    }
+    _lastScoreUpdateTime = _currentTime;
   }
 
   Future<Position?> _getCurrentLocation() async {
@@ -875,7 +895,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
       // 1. Save to the person who fell (Private/Internal)
       final privateNotification = notification.copyWith(
-        message: "${notification.message} (ที่มา: ตนเอง)",
+        message: "${notification.message} (ที่มา: การจำลองผ่านกล้อง ${event.cameraId ?? "หลัก"})",
       );
       await _notificationRepository.addNotification(privateNotification, targetUid: uid);
       
@@ -889,7 +909,12 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
             final memberUids = await groupRepo.getMemberUids(group.id);
             final groupNotification = notification.copyWith(
               title: "ตรวจพบการล้ม! (${group.name}) ⚠️",
-              message: "${notification.message} (จากกลุ่ม: ${group.name})",
+              message: "${notification.message} (จากกลุ่ม: ${group.name} - การจำลองผ่านกล้อง ${event.cameraId ?? "หลัก"})",
+              // ✅ Fix: carry over location, camera, and image so LINE alert shows correct info
+              cameraId: notification.cameraId,
+              latitude: notification.latitude,
+              longitude: notification.longitude,
+              imageUrl: notification.imageUrl,
             );
 
             for (final memberUid in memberUids) {
@@ -927,8 +952,8 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
       final notification = NotificationModel(
         id: '', // Firestore will generate
-        title: 'ระวังออฟฟิศซินโดรมถามหานะครับ! ⚠️',
-        message: 'ลุกขึ้นหมุนหัวไหล่และสะบัดข้อมือสัก 2-3 นาทีดีไหมครับ? 💪 (ที่มา: ตนเอง)',
+        title: 'ระวังออฟฟิศซินโดรม! ⚠️',
+        message: 'ท่านั่งของคุณมีความเสี่ยง ลุกขึ้นยืดเส้นยืดสายสักนิดดีไหมครับ? (การจำลองผ่านกล้อง ${event.cameraId ?? "หลัก"})',
         type: NotificationType.warning,
         date: _currentTime,
         cameraId: event.cameraId,
@@ -950,8 +975,8 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
       final notification = NotificationModel(
         id: '', 
-        title: 'เริ่มกิจกรรมกายบริหาร',
-        message: 'เริ่มกิจกรรมกายบริหาร ขอให้มีสุขภาพแข็งแรง! (จากกล้อง ${event.cameraId ?? "หลัก"}) (ที่มา: ตนเอง)',
+        title: 'เริ่มกิจกรรมกายบริหาร 🏃',
+        message: 'เริ่มกิจกรรมกายบริหาร ขอให้มีสุขภาพแข็งแรง! (การจำลองผ่านกล้อง ${event.cameraId ?? "หลัก"})',
         type: NotificationType.success,
         date: _currentTime,
         imageUrl: event.remoteImageUrl,
@@ -973,8 +998,8 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
       final notification = NotificationModel(
         id: '',
-        title: 'เดินเพื่อสุขภาพ',
-        message: 'คุณเดินต่อเนื่องมาได้ระยะหนึ่งแล้ว เยี่ยมมาก! (จากกล้อง ${event.cameraId ?? "หลัก"}) (ที่มา: ตนเอง)',
+        title: 'เดินเพื่อสุขภาพ ✨',
+        message: 'คุณเดินต่อเนื่องมาได้ระยะหนึ่งแล้ว เยี่ยมมาก! (การจำลองผ่านกล้อง ${event.cameraId ?? "หลัก"})',
         type: NotificationType.success,
         date: _currentTime,
         cameraId: event.cameraId,
@@ -995,8 +1020,8 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
       final notification = NotificationModel(
         id: '',
-        title: 'นอนเยอะไปแล้วนะวันนี้',
-        message: 'คุณนอนพักผ่อนมานานกว่า 30 นาทีแล้ว ลองลุกขึ้นขยับร่างกายบ้างจะดีต่อสุขภาพนะครับ (จากกล้อง ${event.cameraId ?? "หลัก"}) (ที่มา: ตนเอง)',
+        title: 'นอนนานเป็นพิเศษ 💤',
+        message: 'คุณอยู่ท่าเดิมมานานกว่า 30 นาทีแล้ว ลองขยับร่างกายบ้างจะดีต่อสุขภาพนะครับ (การจำลองผ่านกล้อง ${event.cameraId ?? "หลัก"})',
         type: NotificationType.warning,
         date: _currentTime,
         cameraId: event.cameraId,
@@ -1040,7 +1065,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       final notification = NotificationModel(
         id: '',
         title: title,
-        message: '$message (ที่มา: ตนเอง)',
+        message: '$message (สรุปจากระบบจำลอง)',
         type: type,
         date: _currentTime,
       );
@@ -1060,8 +1085,8 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
       final notification = NotificationModel(
         id: '',
-        title: 'แจ้งเตือนท่านั่ง',
-        message: 'ตรวจพบการนั่งหลังค่อมเป็นเวลานาน โปรดปรับท่านั่งเพื่อสุขภาพหลังครับ (จากกล้อง ${event.cameraId ?? "หลัก"}) (ที่มา: ตนเอง)',
+        title: 'แจ้งเตือนท่านั่ง 🪑',
+        message: 'ตรวจพบท่านั่งที่ไม่เหมาะสมเป็นเวลานาน โปรดปรับเพื่อสุขภาพหลังครับ (การจำลองผ่านกล้อง ${event.cameraId ?? "หลัก"})',
         type: NotificationType.warning,
         date: _currentTime,
         cameraId: event.cameraId,
@@ -1077,10 +1102,10 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
 
   void _showLocal(NotificationModel notification) {
     try {
-      _ref.read(notificationServiceProvider).showLocalAppNotification(
+      unawaited(_ref.read(notificationServiceProvider).showLocalAppNotification(
         title: notification.title,
         body: notification.message,
-      );
+      ));
 
       // Also show in-app toast for users without OS notification permissions (e.g. no Apple Dev account)
       final context = rootNavigatorKey.currentContext;
@@ -1104,7 +1129,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       final notification = NotificationModel(
         id: '',
         title: 'เริ่มตรวจพบความผิดปกติ 🟡',
-        message: 'คะแนนสุขภาพลดลงถึงเกณฑ์เฝ้าระวัง โปรดตรวจสอบผู้ถูกดูแลเบื้องต้น (ที่มา: ตนเอง)',
+        message: 'คะแนนสุขภาพลดลงถึงเกณฑ์เฝ้าระวัง โปรดตรวจสอบผู้ถูกดูแลเบื้องต้น (การจำลองผ่านกล้อง)',
         type: NotificationType.warning,
         date: _currentTime,
       );
@@ -1124,7 +1149,7 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
       final notification = NotificationModel(
         id: '',
         title: 'เข้าสู่สถานะอันตราย! 🔴',
-        message: 'คะแนนสุขภาพวิกฤต โปรดตรวจสอบสถานที่จริงทันที! (ที่มา: ตนเอง)',
+        message: 'คะแนนสุขภาพวิกฤต โปรดตรวจสอบสถานการณ์จริงทันที! (การจำลองผ่านกล้อง)',
         type: NotificationType.danger,
         date: _currentTime,
       );
@@ -1216,6 +1241,9 @@ final healthStatusFamily = StateNotifierProvider.family<HealthStatusNotifier, He
   ref.listen(resolvedTargetUidProvider, (previous, next) {
     notifier.loadState(next);
   }, fireImmediately: true);
+
+  // Ensure explicit cleanup when provider is no longer needed
+  ref.onDispose(() => notifier.dispose());
 
   return notifier;
 });

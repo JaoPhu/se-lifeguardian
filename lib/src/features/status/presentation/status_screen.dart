@@ -267,11 +267,11 @@ class StatusScreen extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _buildCriteriaItem(context, 'ปกติ', '800 - 1000', 'สุขภาพดีเยี่ยม', Colors.green),
+                        _buildCriteriaItem(context, 'ปกติ (Normal)', '800-1000', 'สุขภาพดีเยี่ยม ไม่พบพฤติกรรมเสี่ยง', const Color(0xFF0D9488)),
                         const Divider(height: 24),
-                        _buildCriteriaItem(context, 'มีความเสี่ยง', '500 - 799', 'ควรปรับเปลี่ยนท่าทาง', Colors.orange),
+                        _buildCriteriaItem(context, 'มีความเสี่ยง (Warning)', '500-799', 'พฤติกรรมเสี่ยงสะสม ควรปรับเปลี่ยนท่าทาง', Colors.orange),
                         const Divider(height: 24),
-                        _buildCriteriaItem(context, 'ฉุกเฉิน', '0 - 499', 'ตรวจพบเหตุสำคัญหรือการล้ม', Colors.red),
+                        _buildCriteriaItem(context, 'ฉุกเฉิน (Emergency)', '0-499', 'วิกฤต: ตรวจพบเหตุฉุกเฉินหรือการล้ม', Colors.red),
                       ],
                     ),
                   ),
@@ -399,54 +399,96 @@ class StatusScreen extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final scoreText = " ($score/1000)";
     
-    switch (status) {
-      case HealthStatus.normal:
-        return _StatusConfig(
-          title: 'สถานะ : ปกติ$scoreText',
-          description: 'สุขภาพดี ไม่พบพฤติกรรมเสี่ยง',
-          bgColor: isDark ? Colors.green.shade900.withValues(alpha: 0.5) : const Color(0xFF34D399),
-          iconBgColor: isDark 
-              ? Colors.green.shade800 
-              : const Color(0xFF10B981).withValues(alpha: 0.3),
-          icon: Icons.check,
-          textColor: isDark ? Colors.green.shade100 : const Color(0xFF064E3B),
-          iconColor: isDark ? Colors.green.shade100 : const Color(0xFF064E3B),
-        );
-      case HealthStatus.warning:
-        return _StatusConfig(
-          title: 'สถานะ : มีความเสี่ยง$scoreText',
-          description: 'ตรวจพบพฤติกรรมเสี่ยง โปรดระมัดระวัง',
-          bgColor: isDark ? Colors.amber.shade900.withValues(alpha: 0.5) : const Color(0xFFFBBF24),
-          iconBgColor: isDark 
-              ? Colors.amber.shade800 
-              : const Color(0xFFF59E0B).withValues(alpha: 0.3),
-          icon: Icons.warning_amber_rounded,
-          textColor: isDark ? Colors.amber.shade100 : const Color(0xFF78350F),
-          iconColor: isDark ? Colors.amber.shade100 : const Color(0xFF78350F),
-        );
-      case HealthStatus.emergency:
-        return _StatusConfig(
-          title: 'สถานะ : ฉุกเฉิน$scoreText',
-          description: 'ตรวจพบเหตุฉุกเฉินหรือการล้ม!',
-          bgColor: isDark ? Colors.red.shade900.withValues(alpha: 0.5) : const Color(0xFFEF4444),
-          iconBgColor: isDark 
-              ? Colors.red.shade800 
-              : const Color(0xFFDC2626).withValues(alpha: 0.3),
-          icon: Icons.add,
-          textColor: Colors.white,
-          iconColor: Colors.white,
-        );
-      case HealthStatus.none:
-        return _StatusConfig(
-          title: 'สถานะ : ไม่มีข้อมูล',
-          description: 'ยังไม่มีข้อมูลพฤติกรรม',
-          bgColor: Theme.of(context).dividerColor.withValues(alpha: 0.05),
-          iconBgColor: Colors.transparent,
-          icon: null,
-          textColor: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
-          iconColor: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
-        );
+    // Determine if there's an emergency based on the HealthStatus
+    final bool hasEmergency = status == HealthStatus.emergency;
+
+    String scoreDescription = '';
+    if (status == HealthStatus.normal) {
+      if (score >= 900) {
+        scoreDescription = 'สุขภาพดีเยี่ยม ไม่พบพฤติกรรมเสี่ยง';
+      } else {
+        scoreDescription = 'สุขภาพดี ควรขยับร่างกายบ้างเพื่อความสดชื่น';
+      }
+    } else if (status == HealthStatus.warning) {
+      if (score >= 650) {
+        scoreDescription = 'พฤติกรรมเสี่ยงระดับต่ำ โปรดระวังท่านั่งและการเคลื่อนไหว';
+      } else {
+        scoreDescription = 'พฤติกรรมเสี่ยงระดับกลาง โปรดปรับเปลี่ยนอิริยาบถทันที';
+      }
+    } else { // HealthStatus.emergency
+      scoreDescription = 'วิกฤต: ตรวจพบเหตุฉุกเฉินหรือพฤติกรรมเสี่ยงสูงมาก';
     }
+
+    // Re-evaluate the status based on the score and emergency flag for the final config
+    HealthStatus finalStatus;
+    if (hasEmergency) {
+      finalStatus = HealthStatus.emergency;
+    } else if (score >= 800) {
+      finalStatus = HealthStatus.normal;
+    } else if (score >= 500) {
+      finalStatus = HealthStatus.warning;
+    } else {
+      finalStatus = HealthStatus.emergency; // Fallback for scores below 500 if not already emergency
+    }
+
+    Color bgColor;
+    Color iconBgColor;
+    IconData? icon;
+    Color textColor;
+    Color iconColor;
+    String title;
+
+    switch (finalStatus) {
+      case HealthStatus.normal:
+        title = 'สถานะ : ปกติ$scoreText';
+        bgColor = isDark ? Colors.green.shade900.withValues(alpha: 0.5) : const Color(0xFF34D399);
+        iconBgColor = isDark 
+            ? Colors.green.shade800 
+            : const Color(0xFF10B981).withValues(alpha: 0.3);
+        icon = Icons.check_circle;
+        textColor = isDark ? Colors.green.shade100 : const Color(0xFF064E3B);
+        iconColor = isDark ? Colors.green.shade100 : const Color(0xFF064E3B);
+        break;
+      case HealthStatus.warning:
+        title = 'สถานะ : มีความเสี่ยง$scoreText';
+        bgColor = isDark ? Colors.amber.shade900.withValues(alpha: 0.5) : const Color(0xFFFBBF24);
+        iconBgColor = isDark 
+            ? Colors.amber.shade800 
+            : const Color(0xFFF59E0B).withValues(alpha: 0.3);
+        icon = Icons.warning_amber_rounded;
+        textColor = isDark ? Colors.amber.shade100 : const Color(0xFF78350F);
+        iconColor = isDark ? Colors.amber.shade100 : const Color(0xFF78350F);
+        break;
+      case HealthStatus.emergency:
+        title = 'สถานะ : ฉุกเฉิน$scoreText';
+        bgColor = isDark ? Colors.red.shade900.withValues(alpha: 0.5) : const Color(0xFFEF4444);
+        iconBgColor = isDark 
+            ? Colors.red.shade800 
+            : const Color(0xFFDC2626).withValues(alpha: 0.3);
+        icon = Icons.error;
+        textColor = Colors.white;
+        iconColor = Colors.white;
+        break;
+      case HealthStatus.none:
+      default:
+        title = 'สถานะ : ไม่มีข้อมูล';
+        bgColor = Theme.of(context).dividerColor.withValues(alpha: 0.05);
+        iconBgColor = Colors.transparent;
+        icon = null;
+        textColor = isDark ? Colors.grey.shade500 : Colors.grey.shade500;
+        iconColor = isDark ? Colors.grey.shade600 : Colors.grey.shade400;
+        break;
+    }
+
+    return _StatusConfig(
+      title: title,
+      description: scoreDescription,
+      bgColor: bgColor,
+      iconBgColor: iconBgColor,
+      icon: icon,
+      textColor: textColor,
+      iconColor: iconColor,
+    );
   }
 
   Widget _buildCriteriaItem(BuildContext context, String label, String range, String desc, Color color) {

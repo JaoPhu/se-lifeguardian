@@ -167,8 +167,9 @@ exports.resetPasswordWithOTP = onCall({ cors: true }, async (request) => {
 });
 
 
-// LINE Messaging API Configuration
-const LINE_CHANNEL_ACCESS_TOKEN = 'xue62ZGHj3gL0Z+cQGI9XJzDWQkJpwwW6cDnfZ0fH4N7aEu0MDcxwTvCeXJfPOwBXY6J3IshPCIraG+q34OdXcqyzqs3LIWS5Lb2sWgacz/uvatNTwaZ3wZ7zlFrX0rhGsO/an4wXY4Mt4hO2gI8wQdB04t89/1O/w1cDnyilFU=';
+// LINE Messaging API Configuration (Hiding secrets for security)
+const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+const LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET;
 
 /**
  * ส่งข้อความ LINE Push Message (plain text)
@@ -325,10 +326,10 @@ async function sendLineEmergencyAlert(lineUserId, notiData) {
 
         // จำลองสถานะเจ้าหน้าที่ตอบรับ (Rescue Status Simulation)
         const rescueUpdates = [
-            { delayMs: 5000,  text: `🚑 รับทราบเหตุการณ์แล้ว กำลังส่งเจ้าหน้าที่ไปยังจุดเกิดเหตุ\n\n👤 ผู้ป่วย: ${patientName}\n📷 กล้อง: ${cameraId}` },
+            { delayMs: 5000,  text: `🚑 รับทราบเหตุการณ์แล้ว กำลังส่งเจ้าหน้าที่ไปยังจุดเกิดเหตุ\n\n👤 ผู้ป่วย: ${patientName}\n📷 ที่มา: การจำลองผ่านกล้อง ${cameraId}` },
             { delayMs: 15000, text: `🚗 เจ้าหน้าที่กำลังเดินทางไปยังพิกัดที่ตรวจพบ\n📍 ${locationText}` },
             { delayMs: 30000, text: `📍 เจ้าหน้าที่ถึงที่เกิดเหตุแล้ว กำลังเข้าตรวจสอบสถานการณ์` },
-            { delayMs: 45000, text: `✅ ผู้ป่วยได้รับการช่วยเหลือเรียบร้อยแล้ว\n\nเหตุการณ์: ${notiData.title || 'ตรวจพบการล้ม'}\n👤 ผู้ป่วย: ${patientName}\n🕐 เวลา: ${timeText}\n\n— เหตุการณ์ปิด —` },
+            { delayMs: 45000, text: `✅ ผู้ป่วยได้รับการช่วยเหลือเรียบร้อยแล้ว\n\nเหตุการณ์: ${notiData.title || 'ตรวจพบการล้ม'}\n👤 ผู้ป่วย: ${patientName}\n🕐 เวลา: ${timeText}` },
         ];
 
         for (const update of rescueUpdates) {
@@ -344,9 +345,12 @@ async function sendLineEmergencyAlert(lineUserId, notiData) {
     }
 }
 
-const LINE_CHANNEL_SECRET = 'bde20a66f5d8671fd86709c212fa60a1';
+// Secrets are handled via environment variables now
 
-exports.onNotificationCreated = onDocumentCreated("users/{uid}/notifications/{notiId}", async (event) => {
+exports.onNotificationCreated = onDocumentCreated({
+    document: "users/{uid}/notifications/{notiId}",
+    secrets: ["LINE_CHANNEL_ACCESS_TOKEN", "LINE_CHANNEL_SECRET"]
+}, async (event) => {
     const snapshot = event.data;
     if (!snapshot) return;
 
@@ -458,7 +462,10 @@ exports.onNotificationCreated = onDocumentCreated("users/{uid}/notifications/{no
 });
 
 // ===== LINE Webhook Handler =====
-exports.lineWebhook = onRequest({ cors: true }, async (req, res) => {
+exports.lineWebhook = onRequest({ 
+    cors: true,
+    secrets: ["LINE_CHANNEL_ACCESS_TOKEN", "LINE_CHANNEL_SECRET"]
+}, async (req, res) => {
     const signature = req.headers['x-line-signature'];
     const body = JSON.stringify(req.body);
     const hash = crypto.createHmac('sha256', LINE_CHANNEL_SECRET).update(body).digest('base64');
