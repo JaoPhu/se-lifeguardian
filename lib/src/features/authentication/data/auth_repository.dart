@@ -80,9 +80,9 @@ class AuthRepository {
       // 3. Update Session ID for single-session enforcement (ONLY if profile exists)
       if (profileExists) {
         final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
-        await _firestore.collection('users').doc(firebaseUser.uid).update({
+        await _firestore.collection('users').doc(firebaseUser.uid).set({
           'sessionId': sessionId,
-        });
+        }, SetOptions(merge: true));
         debugPrint('AuthRepository: Session ID updated');
       } else {
         // If profile doesn't exist but isLogin is true, throw error to prevent ghost login
@@ -389,7 +389,6 @@ class AuthRepository {
     }
 
     // --- Strict Check ---
-    final user = credential?.user;
     if (user != null) {
       final email = user.email?.trim().toLowerCase();
       
@@ -417,25 +416,16 @@ class AuthRepository {
       }
       
       if (isLogin) {
-        // Login Flow: Even if profile missing, we let them in. 
-        // Redirection logic in router will guide them to complete profile.
-
+        // Login Flow: Even if profile missing, we let them in.
+        // The router will handle directing them to finish setup if needed.
         if (profileExists) {
           final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
-          await _firestore.collection('users').doc(user.uid).update({
+          await _firestore.collection('users').doc(user.uid).set({
             'sessionId': sessionId,
-          });
+          }, SetOptions(merge: true));
           debugPrint('AuthRepository: Session ID updated (Google)');
         } else {
-          debugPrint('AuthRepository: Profile missing (Google), blocking login and deleting orphan Auth record');
-          try {
-            await user.delete(); // ✅ Delete the Firebase account since they haven't registered
-            await GoogleSignIn().signOut();
-          } catch (e) {
-            debugPrint('AuthRepository: Failed to delete orphan user: $e');
-            await signOut();
-          }
-          throw Exception('user-not-found');
+          debugPrint('AuthRepository: Profile missing (Google), allowing login (onboarding check will follow)');
         }
       } else {
         // Register Flow: Must NOT have data already
@@ -494,23 +484,15 @@ class AuthRepository {
       }
       
       if (isLogin) {
-        // Login Flow: Let them in even if profile missing.
-        
+        // Login Flow: Allow login even if profile missing.
         if (profileExists) {
           final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
-          await _firestore.collection('users').doc(user.uid).update({
+          await _firestore.collection('users').doc(user.uid).set({
             'sessionId': sessionId,
-          });
+          }, SetOptions(merge: true));
           debugPrint('AuthRepository: Session ID updated (Apple)');
         } else {
-          debugPrint('AuthRepository: Profile missing (Apple), blocking login and deleting orphan Auth record');
-          try {
-            await user.delete(); // ✅ Delete the Firebase account since they haven't registered
-          } catch (e) {
-            debugPrint('AuthRepository: Failed to delete orphan user: $e');
-            await signOut();
-          }
-          throw Exception('user-not-found');
+          debugPrint('AuthRepository: Profile missing (Apple), allowing login');
         }
       } else {
         if (profileExists) {
