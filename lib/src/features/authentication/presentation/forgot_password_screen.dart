@@ -42,46 +42,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Check if user exists
-      final authRepo = ref.read(authRepositoryProvider);
-      final exists = await authRepo.checkUserExists(email);
-
-      if (!exists) {
-        if (!mounted) return;
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            title: const Center(
-              child: Text(
-                'Account Not Found',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-              ),
-            ),
-            content: const Text(
-              'There is no account associated with this email address. Please check your email or register a new account.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14),
-            ),
-            actions: [
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => context.pop(),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0D9488),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                  ),
-                  child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ],
-          ),
-        );
-        setState(() => _isLoading = false);
-        return;
-      }
+      // 1. Generate and Send OTP (Removed account existence check to circumvent unauthenticated permission issues)
 
       // 2. Generate and Send OTP
       if (!mounted) return;
