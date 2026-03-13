@@ -9,22 +9,20 @@ class PreLoginScreen extends StatelessWidget {
     final screenHeight = MediaQuery.of(context).size.height;
     final isSmallScreen = screenHeight < 700;
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
-      backgroundColor: isDark ? Colors.black : Colors.white,
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: Padding(
           padding: const EdgeInsets.only(left: 16.0),
           child: IconButton(
-            icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.black),
+            icon: const Icon(Icons.arrow_back, color: Colors.black),
             onPressed: () => context.go('/welcome'),
             style: IconButton.styleFrom(
-              backgroundColor: Theme.of(context).cardColor,
+              backgroundColor: Colors.white,
               shape: const CircleBorder(),
-              side: BorderSide(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+              side: BorderSide(color: Colors.grey.shade200),
             ),
           ),
         ),
