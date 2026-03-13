@@ -43,6 +43,8 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
 
     try {
       // Generate and Send OTP
+      // Note: checkUserExists is intentionally skipped here to avoid unauthenticated Firestore query issues.
+      // Validation is handled on the server side (Cloud Functions) inside sendOTP.
       final otp = EmailService.generateOTP();
       bool success = false;
       
@@ -96,7 +98,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
           'email': email,
         });
       } else {
-        // Fallback option
+        // Fallback option for general failures
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
