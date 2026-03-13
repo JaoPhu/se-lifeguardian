@@ -417,8 +417,7 @@ class AuthRepository {
       }
       
       if (isLogin) {
-        // Login Flow: Even if profile missing, we let them in.
-        // The router will handle directing them to finish setup if needed.
+        // Login Flow: MUST have an existing profile
         if (profileExists) {
           final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
           await _firestore.collection('users').doc(user.uid).set({
@@ -426,10 +425,18 @@ class AuthRepository {
           }, SetOptions(merge: true));
           debugPrint('AuthRepository: Session ID updated (Google)');
         } else {
-          debugPrint('AuthRepository: Profile missing (Google), allowing login (onboarding check will follow)');
+          debugPrint('AuthRepository: Profile missing (Google), blocking login');
+          try {
+            // Force sign out immediately since they are trying to "Login" to a non-existent account
+            await _auth.signOut();
+            await GoogleSignIn().signOut();
+          } catch (e) {
+            debugPrint('AuthRepository: Cleanup error: $e');
+          }
+          throw Exception('user-not-found');
         }
       } else {
-        // Register Flow: Must NOT have data already
+        // Register Flow: MUST NOT have an existing profile
         if (profileExists) {
           throw Exception('account-already-exists');
         }
@@ -485,7 +492,7 @@ class AuthRepository {
       }
       
       if (isLogin) {
-        // Login Flow: Allow login even if profile missing.
+        // Login Flow: MUST have an existing profile
         if (profileExists) {
           final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
           await _firestore.collection('users').doc(user.uid).set({
@@ -493,9 +500,16 @@ class AuthRepository {
           }, SetOptions(merge: true));
           debugPrint('AuthRepository: Session ID updated (Apple)');
         } else {
-          debugPrint('AuthRepository: Profile missing (Apple), allowing login');
+          debugPrint('AuthRepository: Profile missing (Apple), blocking login');
+          try {
+            await _auth.signOut();
+          } catch (e) {
+            debugPrint('AuthRepository: Cleanup error: $e');
+          }
+          throw Exception('user-not-found');
         }
       } else {
+        // Register Flow: MUST NOT have an existing profile
         if (profileExists) {
           throw Exception('account-already-exists');
         }
