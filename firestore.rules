@@ -29,13 +29,7 @@ service cloud.firestore {
              exists(/databases/$(database)/documents/groups/$(ownerGroupId)/members/$(request.auth.uid));
     }
 
-    function isMemberOf(targetUserId) {
-      let targetUser = get(/databases/$(database)/documents/users/$(targetUserId)).data;
-      let ownerGroupId = targetUser.ownerGroupId;
-      return isAuthenticated() && 
-             ownerGroupId != null && ownerGroupId != "" &&
-             exists(/databases/$(database)/documents/groups/$(ownerGroupId)/members/$(request.auth.uid));
-    }
+
 
     // User Collection
     match /users/{userId} {
@@ -59,7 +53,12 @@ service cloud.firestore {
     
     // Global lists for searches
     match /users {
-      allow list: if isAuthenticated();
+      allow list: if isAuthenticated() || (
+        request.query.limit <= 1 &&
+        request.query.filters.size() == 1 &&
+        request.query.filters[0].op == 'EQUAL' &&
+        request.query.filters[0].field == 'email'
+      );
     }
     match /groups {
       allow list: if isAuthenticated();
