@@ -68,3 +68,4 @@ ml/data/raw/**/*.csv
 ml/data/processed/*.csv
 ml/models/*.pkl
 !ml/data/raw/**/.gitkeep
+node_modules

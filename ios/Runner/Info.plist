@@ -37,10 +37,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>This app needs access to location when open to provide GPS coordinates during emergency alerts.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>This app needs access to location even in the background to provide accurate GPS data for fall detection alerts.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app needs access to location when open to provide GPS coordinates during emergency alerts.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs access to your gallery to select video clips for pose detection or pick a profile picture.</string>
 	<key>UIApplicationSceneManifest</key>
