@@ -40,8 +40,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     // if it's a fresh wipe test.
     if (err.contains('user-not-found') ||
         err.contains('no user record') ||
-        err.contains('user not found') ||
-        err.contains('invalid-credential')) {
+        err.contains('user not found')) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -92,7 +91,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
       );
     } else if (err.contains('wrong-password') || err.contains('invalid-credential')) {
-      _showSnack('รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง');
+      _showSnack('อีเมลหรือรหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง');
     } else {
       _showSnack(e.toString());
     }
