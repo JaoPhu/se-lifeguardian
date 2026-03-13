@@ -53,7 +53,8 @@ class DailyStatsModel {
 
     for (var event in events) {
       final type = (event.type as String).toLowerCase();
-      final durationHrs = (event.durationSeconds as int? ?? 0) / 3600.0;
+      final durationSeconds = (event.durationSeconds as int? ?? 0);
+      final durationHrs = (durationSeconds < 0 ? 0 : durationSeconds) / 3600.0;
       
       if (type == 'sitting' || type == 'laying' || type == 'relax') {
         relax += durationHrs;

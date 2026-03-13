@@ -258,10 +258,37 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
     
     _currentTime = time;
     
-    // Only update score if at least 1 simulation second has passed
+    // Update current event duration in real-time if 1s has passed
+    if (state.events.isNotEmpty) {
+      final lastEvent = state.events.first;
+      if (lastEvent.startTimeMs != null) {
+        final nowMs = _currentTime.millisecondsSinceEpoch;
+        final startMs = lastEvent.startTimeMs!;
+        
+        // Only update if time is moving forward
+        if (nowMs > startMs) {
+          final durationSec = (nowMs - startMs) ~/ 1000;
+          
+          // Update local state frequently for smooth UI
+          final updatedEvents = List<SimulationEvent>.from(state.events);
+          updatedEvents[0] = lastEvent.copyWith(
+            durationSeconds: durationSec,
+            duration: _formatDurationLabel(durationSec),
+          );
+          
+          state = state.copyWith(events: updatedEvents);
+          
+          // Sync to Firestore periodically (e.g., every 5 simulation seconds) to avoid spamming
+          if (durationSec % 5 == 0) {
+            _eventRepository.syncEvent(updatedEvents[0]);
+          }
+        }
+      }
+    }
+    
+    // Only update health score if at least 1 simulation second has passed
     final elapsedSec = _currentTime.difference(_lastScoreUpdateTime!).inSeconds;
     if (elapsedSec >= 1) {
-       // Loop to handle potential jumps > 1s (though rare in frame-by-frame)
        for (int i = 0; i < elapsedSec; i++) {
          _updateScoreBasedOnActivity();
        }
@@ -919,10 +946,18 @@ class HealthStatusNotifier extends StateNotifier<HealthState> {
   }
 
   String _formatDurationLabel(int seconds) {
+    if (seconds < 0) return "0s";
     if (seconds < 60) return "${seconds}s"; 
-    final minutes = seconds / 60;
-    if (minutes < 60) return "${minutes.truncate()}m";
-    return "${(seconds / 3600).toStringAsFixed(2)}h";
+    
+    if (seconds < 3600) {
+      final m = seconds ~/ 60;
+      final s = seconds % 60;
+      return s == 0 ? "${m}m" : "${m}m ${s}s";
+    }
+    
+    final h = seconds ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
+    return m == 0 ? "${h}h" : "${h}h ${m}m";
   }
 
   @override
