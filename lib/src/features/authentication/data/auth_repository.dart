@@ -187,10 +187,8 @@ class AuthRepository {
       
       await user.reauthenticateWithCredential(credential);
       await user.updatePassword(newPassword);
-      
-      // Update the stored password for seamless re-auth later
+      // Sync with local storage for re-auth features (like delete account)
       await _storage.write(key: _passwordKey, value: newPassword);
-      
       debugPrint('Password changed successfully for logged-in user');
     } on FirebaseAuthException catch (e) {
       if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
