@@ -191,7 +191,7 @@ class AuthRepository {
       await _storage.write(key: _passwordKey, value: newPassword);
       debugPrint('Password changed successfully for logged-in user');
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'wrong-password') {
+      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
         throw Exception('รหัสผ่านเดิมไม่ถูกต้อง');
       } else if (e.code == 'weak-password') {
         throw Exception('รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร');

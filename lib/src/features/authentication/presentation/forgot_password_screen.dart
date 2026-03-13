@@ -42,67 +42,67 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Check if user exists
-      final authRepo = ref.read(authRepositoryProvider);
-      final exists = await authRepo.checkUserExists(email);
-
-      if (!exists) {
-        if (!mounted) return;
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            title: const Center(
-              child: Text(
-                'Account Not Found',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-              ),
-            ),
-            content: const Text(
-              'There is no account associated with this email address. Please check your email or register a new account.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14),
-            ),
-            actions: [
-              Column(
-                children: [
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        context.pop();
-                        _sendResetLink(email);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0D9488),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                      ),
-                      child: const Text('Send Reset Link Anyway', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextButton(
-                      onPressed: () => context.pop(),
-                      child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      // 2. Generate and Send OTP
-      if (!mounted) return;
-      
+      // Generate and Send OTP
+      // Note: checkUserExists is intentionally skipped here to avoid unauthenticated Firestore query issues.
+      // Validation is handled on the server side (Cloud Functions) inside sendOTP.
       final otp = EmailService.generateOTP();
-      final success = await EmailService.sendOTP(email, otp);
+      bool success = false;
+      
+      try {
+        success = await EmailService.sendOTP(email, otp);
+      } catch (e) {
+        if (e.toString().contains('user-not-found')) {
+          if (!mounted) return;
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: const Center(
+                child: Text(
+                  'Account Not Found',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+              ),
+              content: const Text(
+                'There is no account associated with this email address. Please check your email or register a new account.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14),
+              ),
+              actions: [
+                Column(
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          context.pop();
+                          _sendResetLink(email);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0D9488),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                        ),
+                        child: const Text('Send Reset Link Anyway', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: TextButton(
+                        onPressed: () => context.pop(),
+                        child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+          return;
+        }
+        rethrow;
+      }
 
       if (!mounted) return;
       if (success) {
@@ -113,7 +113,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
           'email': email,
         });
       } else {
-        // Fallback option
+        // Fallback option for general failures
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
