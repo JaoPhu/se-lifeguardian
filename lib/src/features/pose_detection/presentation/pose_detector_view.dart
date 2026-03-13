@@ -1435,6 +1435,7 @@ class _PoseDetectorViewState extends ConsumerState<PoseDetectorView> with Ticker
 
   Widget _buildDiagnosticOverlay() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final healthState = ref.watch(healthStatusFamily(_registeredCameraId));
     return Positioned(
       top: 16,
       right: 16,
